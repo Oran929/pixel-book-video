@@ -1,0 +1,7 @@
+.DS_Store
+node_modules/
+out/
+*.wav
+*.mp4
+.claude/settings.local.json
+docs
