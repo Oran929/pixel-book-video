@@ -6,7 +6,7 @@
 
 **Type:** HITL（我负责试听和选择）
 
-**Status:** ready-for-human
+**Status:** done
 
 - [x] 模型下载和首次运行的步骤写进 README
 - [x] 试听命令生成每个候选音色的音频，文件名能看出是哪个音色

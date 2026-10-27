@@ -6,7 +6,7 @@
 
 **Type:** AFK
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] 目录分层符合 spec 和 `decisions.md` 第 10 节（读音表和项目默认音色配置放在仓库根目录；书配置、锁定音色、缓存放在书目录里）
 - [x] `.gitignore` 忽略原书文件、转换出的全文、配音缓存、wav、mp4、Remotion 的产物目录
