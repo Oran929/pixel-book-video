@@ -21,3 +21,5 @@ books/*/cache/
 # Remotion 产物
 out/
 video/public/episode/
+# 选定的参考音频要提交（ADR-0005：音色一致）
+!voices/*.wav
