@@ -655,10 +655,17 @@ def test_lines_heard_as_spoken_pass_on_the_first_take(tmp_path, script_path):
     )
 
     assert engine.texts == ["今天读一本书", "它讲怎样写好代码", "不要重复你自己"]
-    assert _report(script_path) == {"asr_failures": []}
+    assert _report(script_path) == {"asr_failures": [], "asr_pinyin_passes": []}
     for text, info in _cache_records(script_path).items():
         assert info["verification"]["passed"] is True
-        assert info["verification"]["attempts"] == [{"heard": text, "diff_rate": 0}]
+        assert info["verification"]["attempts"] == [
+            {
+                "heard": text,
+                "diff_rate": 0,
+                "pinyin_diff_rate": None,
+                "passed_by": "chars",
+            }
+        ]
 
 
 def test_format_differences_in_what_is_heard_do_not_trigger_a_retry(
@@ -672,7 +679,7 @@ def test_format_differences_in_what_is_heard_do_not_trigger_a_retry(
     )
 
     assert engine.texts.count("今天读一本书") == 1
-    assert _report(script_path) == {"asr_failures": []}
+    assert _report(script_path) == {"asr_failures": [], "asr_pinyin_passes": []}
 
 
 def test_a_misheard_line_is_regenerated_until_it_passes(tmp_path, script_path):
@@ -684,7 +691,7 @@ def test_a_misheard_line_is_regenerated_until_it_passes(tmp_path, script_path):
     )
 
     assert engine.texts.count("它讲怎样写好代码") == 3
-    assert _report(script_path) == {"asr_failures": []}
+    assert _report(script_path) == {"asr_failures": [], "asr_pinyin_passes": []}
     verification = _cache_records(script_path)["它讲怎样写好代码"]["verification"]
     assert verification["passed"] is True
     assert [a["heard"] for a in verification["attempts"]] == [
@@ -730,6 +737,7 @@ def test_a_line_failing_every_retry_keeps_its_closest_take_and_is_reported(
         "spoken": "今天读一本好书",
         "heard": "今天读一本好书啊",
         "diff_rate": pytest.approx(1 / 7),
+        "pinyin_diff_rate": pytest.approx(1 / 7),
     }
     # 想重新生成就删掉这个文件；路径相对书的目录
     assert re.fullmatch(r"cache/tts/[0-9a-f]{16}\.wav", cached)
@@ -773,7 +781,7 @@ def test_a_line_with_handwritten_speech_is_checked_against_the_speech(
     )
 
     assert engine.texts.count("不要重复你自己") == 1
-    assert _report(script_path) == {"asr_failures": []}
+    assert _report(script_path) == {"asr_failures": [], "asr_pinyin_passes": []}
 
 
 def test_retry_count_is_configurable(tmp_path, script_path):
@@ -813,3 +821,101 @@ def test_retries_change_a_fixed_random_seed(tmp_path, script_path):
     )
 
     assert engine.seeds == [7, 8, 9, 7, 7]
+
+
+# ---- 复核分两步：先比字，不通过再比拼音（票 07，2026-10-28 用户决定） ----
+
+
+def strict(asr=None, max_retries=2):
+    """阈值 0：规范化后一字不差，或者拼音一个不差。"""
+    return Verifier(asr or FakeAsrEngine(), max_diff_rate=0, max_retries=max_retries)
+
+
+def test_a_homophone_misheard_passes_on_pinyin_without_a_retry(tmp_path, script_path):
+    asr = FakeAsrEngine(mishear={"它讲怎样写好代码": ["他讲怎样写好代码"]})
+    engine = FakeTtsEngine()
+
+    voice_episode(
+        script_path, engine, VOICE, tmp_path / "public", {}, verifier=strict(asr)
+    )
+
+    assert engine.texts.count("它讲怎样写好代码") == 1
+    verification = _cache_records(script_path)["它讲怎样写好代码"]["verification"]
+    assert verification["passed"] is True
+    assert verification["attempts"] == [
+        {
+            "heard": "他讲怎样写好代码",
+            "diff_rate": 1 / 8,
+            "pinyin_diff_rate": 0,
+            "passed_by": "pinyin",
+        }
+    ]
+    report = _report(script_path)
+    assert report["asr_failures"] == []
+    # 靠拼音通过的句子也列进报告，方便查同音字
+    [passed] = report["asr_pinyin_passes"]
+    cached = passed.pop("cache")
+    assert passed == {
+        "id": "s01-l02",
+        "text": "它讲怎样写好代码",
+        "spoken": "它讲怎样写好代码",
+        "heard": "他讲怎样写好代码",
+        "diff_rate": 1 / 8,
+        "pinyin_diff_rate": 0,
+    }
+    assert (script_path.parents[2] / cached).is_file()
+
+
+def test_a_single_misread_character_fails_both_chars_and_pinyin(tmp_path, script_path):
+    # 03 里真实出现过的误读："写"读成了"选"，字和拼音都不同
+    script_path.write_text(SCRIPT.replace("今天读一本书", "所以每条知识只写一次"))
+    asr = FakeAsrEngine(mishear={"所以每条知识只写一次": ["所以每条知识只选一次"] * 3})
+    engine = FakeTtsEngine()
+
+    voice_episode(
+        script_path, engine, VOICE, tmp_path / "public", {}, verifier=strict(asr)
+    )
+
+    assert engine.texts.count("所以每条知识只写一次") == 3
+    verification = _cache_records(script_path)["所以每条知识只写一次"]["verification"]
+    assert verification["passed"] is False
+    assert verification["attempts"][0] == {
+        "heard": "所以每条知识只选一次",
+        "diff_rate": 0.1,
+        "pinyin_diff_rate": 0.1,
+        "passed_by": None,
+    }
+    report = _report(script_path)
+    assert report["asr_pinyin_passes"] == []
+    [failure] = report["asr_failures"]
+    assert failure["id"] == "s01-l01"
+    assert failure["diff_rate"] == 0.1
+    assert failure["pinyin_diff_rate"] == 0.1
+
+
+def test_cache_written_before_the_pinyin_step_is_reused_and_reported(
+    tmp_path, script_path
+):
+    public = tmp_path / "public"
+    asr = FakeAsrEngine(mishear={"它讲怎样写好代码": ["它讲怎样写坏代码"] * 3})
+    voice_episode(script_path, FakeTtsEngine(), VOICE, public, {}, verifier=strict(asr))
+    # 改回两步复核之前的格式：每一版只有识别结果和字符差异率
+    cache = script_path.parents[2] / "cache" / "tts"
+    for path in cache.glob("*.json"):
+        record = json.loads(path.read_text())
+        record["verification"]["attempts"] = [
+            {"heard": a["heard"], "diff_rate": a["diff_rate"]}
+            for a in record["verification"]["attempts"]
+        ]
+        path.write_text(json.dumps(record, ensure_ascii=False))
+
+    engine = FakeTtsEngine()
+    voice_episode(script_path, engine, VOICE, public, {}, verifier=strict())
+
+    assert engine.texts == []
+    report = _report(script_path)
+    assert report["asr_pinyin_passes"] == []
+    [failure] = report["asr_failures"]
+    assert failure["id"] == "s01-l02"
+    assert failure["diff_rate"] == 1 / 8
+    assert failure["pinyin_diff_rate"] is None

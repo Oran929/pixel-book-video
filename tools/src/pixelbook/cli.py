@@ -49,22 +49,39 @@ def _print_report(report: dict[str, Any], out_dir: Path) -> None:
         print(f"  估算一期（100 句）：约 {minutes:.0f} 分钟")
 
 
-def _print_asr_failures(report_path: Path) -> None:
-    failures = json.loads(report_path.read_text())["asr_failures"]
-    if not failures:
+def _print_asr_report(report_path: Path) -> None:
+    report = json.loads(report_path.read_text())
+    if passes := report["asr_pinyin_passes"]:
+        print(f"\n{len(passes)} 句靠拼音通过（字不同、拼音相同，多半是同音字识别错）：")
+        for item in passes:
+            print(f"  {item['id']}  {_rates(item)}\n{_texts(item)}")
+    if not (failures := report["asr_failures"]):
         return
     print(
         f"\n{len(failures)} 句复核未通过（已用差异率最低的一版；详见 {report_path}）："
     )
     for item in failures:
         print(
-            f"  {item['id']}  差异率 {item['diff_rate']:.0%}\n"
-            f"    字幕：{item['text']}\n    朗读：{item['spoken']}\n"
-            f"    识别：{item['heard']}\n    缓存：{item['cache']}"
+            f"  {item['id']}  {_rates(item)}\n{_texts(item)}\n    缓存：{item['cache']}"
         )
     print(
         "确实读错了，就删掉这句的缓存 wav（在书的目录下）再配音，或者改写这句；"
         "是识别错了就不用管。之后每次配音都会继续列出它。"
+    )
+
+
+def _rates(item: dict) -> str:
+    rates = f"字符差异率 {item['diff_rate']:.0%}"
+    # 两步复核之前缓存的句子没有算过拼音
+    if item["pinyin_diff_rate"] is not None:
+        rates += f"  拼音差异率 {item['pinyin_diff_rate']:.0%}"
+    return rates
+
+
+def _texts(item: dict) -> str:
+    return (
+        f"    字幕：{item['text']}\n    朗读：{item['spoken']}\n"
+        f"    识别：{item['heard']}"
     )
 
 
@@ -144,7 +161,7 @@ def main(argv: list[str] | None = None) -> int:
                 f"合成清单 {args.script.parent / 'episode.json'}，"
                 f"已复制到 {VIDEO_PUBLIC / 'episode'}"
             )
-            _print_asr_failures(script.parent / REPORT_NAME)
+            _print_asr_report(script.parent / REPORT_NAME)
         elif args.command == "terms":
             table = load_pronunciation(PRONUNCIATION)
             script = args.script.resolve()

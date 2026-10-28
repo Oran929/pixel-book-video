@@ -18,7 +18,7 @@ from typing import Any
 
 from pixelbook import REPO_ROOT
 from pixelbook.tts import SynthesisStats, TtsEngine
-from pixelbook.verification import Verifier, difference_rate
+from pixelbook.verification import Verifier
 from pixelbook.voice import Voice
 
 # 每次生成都可能不同、但不改变"这是哪一句、用什么音色"的参数，不进指纹。
@@ -66,7 +66,9 @@ def normalized_voice(voice: Voice) -> dict[str, Any]:
 @dataclass(frozen=True)
 class CachedLine:
     wav: Path
-    # 复核结果：`passed`、每次生成的 `attempts`（识别结果和差异率）、选中的 `chosen`
+    # 复核结果：`passed`、每次生成的 `attempts`（识别结果、字符差异率、拼音差异率、
+    # 靠哪一步通过）、选中的 `chosen`。票 07 改成两步复核之前写的缓存，`attempts`
+    # 里没有 `pinyin_diff_rate` 和 `passed_by`
     verification: dict[str, Any]
 
 
@@ -108,18 +110,25 @@ class TtsCache:
                 voice = _reseeded(self.voice, attempt)
                 stats.append(self.engine.synthesize(text, voice, takes[-1]))
                 heard = self.verifier.asr.transcribe(takes[-1])
-                attempts.append(
-                    {"heard": heard, "diff_rate": difference_rate(text, heard)}
-                )
-                if attempts[-1]["diff_rate"] <= self.verifier.max_diff_rate:
+                attempts.append(self.verifier.check(text, heard))
+                if attempts[-1]["passed_by"]:
                     break
-            chosen = min(range(len(attempts)), key=lambda i: attempts[i]["diff_rate"])
+            chosen = len(attempts) - 1
+            if not attempts[chosen]["passed_by"]:
+                # 都不通过（每版都算了拼音）：选拼音差异率最低的一版，再比字符差异率
+                chosen = min(
+                    range(len(attempts)),
+                    key=lambda i: (
+                        attempts[i]["pinyin_diff_rate"],
+                        attempts[i]["diff_rate"],
+                    ),
+                )
             takes[chosen].replace(wav)
         finally:
             for tmp in takes:
                 tmp.unlink(missing_ok=True)
         verification = {
-            "passed": attempts[chosen]["diff_rate"] <= self.verifier.max_diff_rate,
+            "passed": attempts[chosen]["passed_by"] is not None,
             "chosen": chosen,
             "attempts": attempts,
             "max_diff_rate": self.verifier.max_diff_rate,

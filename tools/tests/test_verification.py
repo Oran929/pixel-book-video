@@ -10,6 +10,7 @@ from pixelbook.verification import (
     difference_rate,
     load_verification_config,
     normalize,
+    pinyin_difference_rate,
 )
 
 
@@ -84,3 +85,25 @@ def test_bad_verification_config_names_the_field(tmp_path, text, field):
         load_verification_config(path)
     assert str(path) in str(error.value)
     assert f"`{field}`" in str(error.value)
+
+
+@pytest.mark.parametrize(
+    ("spoken", "heard", "rate"),
+    [
+        # 同音字：字不同，拼音相同
+        ("它讲的是怎样把代码写好", "他讲的是怎样把代码写好", 0),
+        # 声调不同也算相同
+        ("只写一次", "只谢一次", 0),
+        # 读成别的音
+        ("所以每条知识只写一次", "所以每条知识只选一次", 0.1),
+        # 英文字母和数字不转拼音，每个字符算一个单位，先按规范化统一格式
+        ("DRY原则", "d.r.y. 原则", 0),
+        ("KV Cache", "kv cash", 2 / 7),
+        ("第2章", "第二章", 0),
+        ("第2章", "第3章", 1 / 3),
+        # 漏读
+        ("意思是不要重复你自己", "意思是不要重复", pytest.approx(0.3)),
+    ],
+)
+def test_pinyin_difference_rate_ignores_homophones_and_tones(spoken, heard, rate):
+    assert pinyin_difference_rate(spoken, heard) == rate

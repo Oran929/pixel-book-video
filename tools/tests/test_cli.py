@@ -156,3 +156,18 @@ def test_voice_with_a_bad_verification_config_names_the_field(
 
     assert "`max_retries`" in capsys.readouterr().out
     assert engine.texts == []
+
+
+def test_voice_lists_lines_that_passed_only_on_pinyin(repo, engine, asr, capsys):
+    asr.mishear = {"今天读一本 D R Y 的书": ["今天读一本 D R Y 得输"]}
+
+    assert cli.main(["voice", _script(repo)]) == 0
+
+    assert engine.texts == ["今天读一本 D R Y 的书"]
+    out = capsys.readouterr().out
+    assert "复核未通过" not in out
+    assert "1 句靠拼音通过" in out
+    assert "今天读一本 D R Y 得输" in out
+    # 规范化后 10 个字错 2 个，拼音全对
+    assert "字符差异率 20%" in out
+    assert "拼音差异率 0%" in out

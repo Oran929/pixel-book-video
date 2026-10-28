@@ -47,7 +47,8 @@ def voice_episode(
     朗读文本按读音表 `pronunciation` 生成（手写的 `speech` 优先）。
 
     每句配音经 `verifier` 的语音识别复核，和朗读文本对比；重试后仍不通过的
-    句子照常使用，并列进期目录里的检查报告 `report.json`（每次运行都列出）。
+    句子照常使用，并列进期目录里的检查报告 `report.json`（每次运行都列出）；
+    字符对比不通过、靠拼音对比通过的句子（多半是同音字）也列进报告，单独一项。
     """
     script = load_script(script_path)
     if terms := find_new_terms(script, pronunciation):
@@ -62,7 +63,7 @@ def voice_episode(
     if not revoice and (differences := lock_mismatch(book_dir, locked)):
         raise PipelineError(voice_lock_message(script_path, book_dir, differences))
 
-    segments, scenes, lines, failures = [], [], [], []
+    segments, scenes, lines, failures, pinyin_passes = [], [], [], [], []
     wavs: dict[str, Path] = {}
     for segment in script.segments:
         segments.append({"id": segment.id, "title": segment.title})
@@ -72,18 +73,23 @@ def voice_episode(
                 spoken = spoken_text(line, pronunciation)
                 cached = cache.line(spoken)
                 wav = cached.wav
-                if not (verification := cached.verification)["passed"]:
-                    chosen = verification["attempts"][verification["chosen"]]
-                    failures.append(
-                        {
-                            "id": line.id,
-                            "text": line.text,
-                            "spoken": spoken,
-                            "heard": chosen["heard"],
-                            "diff_rate": chosen["diff_rate"],
-                            "cache": wav.relative_to(book_dir).as_posix(),
-                        }
-                    )
+                verification = cached.verification
+                chosen = verification["attempts"][verification["chosen"]]
+                # 两步复核之前的缓存只比过字：通过的就是靠字符通过的
+                passed_by = chosen.get(
+                    "passed_by", "chars" if verification["passed"] else None
+                )
+                if passed_by != "chars":
+                    entry = {
+                        "id": line.id,
+                        "text": line.text,
+                        "spoken": spoken,
+                        "heard": chosen["heard"],
+                        "diff_rate": chosen["diff_rate"],
+                        "pinyin_diff_rate": chosen.get("pinyin_diff_rate"),
+                        "cache": wav.relative_to(book_dir).as_posix(),
+                    }
+                    (pinyin_passes if passed_by == "pinyin" else failures).append(entry)
                 # 文件名带内容哈希：内容变了，Studio 就不会播放浏览器缓存里的旧音频
                 digest = hashlib.sha256(wav.read_bytes()).hexdigest()[:8]
                 audio = f"{STAGE_DIR}/{line.id}-{digest}.wav"
@@ -109,7 +115,12 @@ def voice_episode(
     )
 
     (script_path.parent / REPORT_NAME).write_text(
-        json.dumps({"asr_failures": failures}, ensure_ascii=False, indent=2) + "\n"
+        json.dumps(
+            {"asr_failures": failures, "asr_pinyin_passes": pinyin_passes},
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n"
     )
 
     stage = public_dir / STAGE_DIR

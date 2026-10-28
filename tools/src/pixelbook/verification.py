@@ -2,17 +2,24 @@
 
 对比对象是朗读文本（读音替换之后的文本，或手写的 `speech`），不是字幕文本。
 两边都用同一个 `normalize`，所以格式差异不会被当成读错。
+
+复核分两步（2026-10-28 用户决定）：先比字，字符差异率不超过阈值就通过；
+不通过再把两边转成不带声调的拼音比，拼音差异率不超过同一个阈值也算通过
+（识别模型把"它"听成"他"这类同音字不算读错）。两步都不通过才算不通过。
 """
 
 import unicodedata
 import warnings
+from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
+from typing import Any
 
 import cn2an
 import opencc
 import yaml
+from pypinyin import Style, lazy_pinyin
 
 from pixelbook.asr import AsrEngine
 from pixelbook.mlx_asr import ASR_MODELS
@@ -47,7 +54,22 @@ def difference_rate(spoken: str, heard: str) -> float:
     return _edit_distance(expected, actual) / max(len(expected), 1)
 
 
-def _edit_distance(a: str, b: str) -> int:
+def pinyin_difference_rate(spoken: str, heard: str) -> float:
+    """拼音差异率 = 不带声调的拼音序列的编辑距离 ÷ 朗读文本的字数（规范化之后）。
+
+    规范化之后每个汉字转成一个拼音音节（多音字按词语上下文取读音），英文字母
+    和数字不转，每个字符原样算一个单位。所以分母和字符差异率相同，同音字的差别
+    消失，读成别的音（"写"读成"选"）仍然算一次编辑。
+    """
+    expected, actual = _syllables(normalize(spoken)), _syllables(normalize(heard))
+    return _edit_distance(expected, actual) / max(len(expected), 1)
+
+
+def _syllables(text: str) -> list[str]:
+    return lazy_pinyin(text, style=Style.NORMAL, errors=lambda chunk: list(chunk))
+
+
+def _edit_distance(a: Sequence[str], b: Sequence[str]) -> int:
     previous = list(range(len(b) + 1))
     for i, ca in enumerate(a, 1):
         current = [i]
@@ -66,6 +88,27 @@ class Verifier:
     asr: AsrEngine
     max_diff_rate: float
     max_retries: int
+
+    def check(self, spoken: str, heard: str) -> dict[str, Any]:
+        """一版配音的复核结果：识别结果、字符差异率、拼音差异率、靠哪一步通过。
+
+        字符对比通过时不算拼音（`pinyin_diff_rate` 为 None）；`passed_by` 是
+        `"chars"`、`"pinyin"`，两步都不通过时为 None。
+        """
+        rate = difference_rate(spoken, heard)
+        pinyin_rate, passed_by = None, None
+        if rate <= self.max_diff_rate:
+            passed_by = "chars"
+        else:
+            pinyin_rate = pinyin_difference_rate(spoken, heard)
+            if pinyin_rate <= self.max_diff_rate:
+                passed_by = "pinyin"
+        return {
+            "heard": heard,
+            "diff_rate": rate,
+            "pinyin_diff_rate": pinyin_rate,
+            "passed_by": passed_by,
+        }
 
 
 @dataclass(frozen=True)
