@@ -6,7 +6,7 @@
 
 **Type:** AFK
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] 书配置 `books/<书>/book.yaml` 里可以覆盖音色，写法是引用一份音色配置文件：`voice: voices/yujie.yaml`（相对仓库根目录，格式与 `voice.yaml` 相同）。不覆盖时使用项目默认音色 `voice.yaml`
 - [x] 首次正式配音时写入锁定音色，内容是完整的音色设置和参考音频内容的指纹
