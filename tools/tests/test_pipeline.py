@@ -396,3 +396,23 @@ def test_interrupted_generation_leaves_no_broken_cache_file(tmp_path, script_pat
     engine = FakeTtsEngine()
     voice_episode(script_path, engine, VOICE, tmp_path / "public", {})
     assert engine.texts == ["它讲怎样写好代码", "不要重复你自己"]
+
+
+def test_manifest_records_the_voice_fingerprint_used(tmp_path, script_path):
+    public = tmp_path / "public"
+    first = voice_episode(script_path, FakeTtsEngine(), VOICE, public, {})
+    reseeded = replace(VOICE, params={**VOICE.params, "seed": 7})
+    same = voice_episode(script_path, FakeTtsEngine(), reseeded, public, {})
+    other = voice_episode(
+        script_path, FakeTtsEngine(), replace(VOICE, model="other"), public, {}
+    )
+
+    assert re.fullmatch(r"[0-9a-f]{16}", first["voice_fingerprint"])
+    assert same["voice_fingerprint"] == first["voice_fingerprint"]
+    assert other["voice_fingerprint"] != first["voice_fingerprint"]
+    # 和每句缓存旁边 json 里记的是同一个值
+    cache = tmp_path / "books" / "demo" / "cache" / "tts"
+    recorded = {
+        json.loads(p.read_text())["voice_fingerprint"] for p in cache.glob("*.json")
+    }
+    assert recorded == {first["voice_fingerprint"], other["voice_fingerprint"]}

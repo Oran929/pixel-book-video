@@ -67,7 +67,12 @@ def voice_episode(
                     }
                 )
 
-    manifest = {"segments": segments, "scenes": scenes, "lines": lines}
+    manifest = {
+        "voice_fingerprint": cache.voice_fingerprint,
+        "segments": segments,
+        "scenes": scenes,
+        "lines": lines,
+    }
     (script_path.parent / MANIFEST_NAME).write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n"
     )
