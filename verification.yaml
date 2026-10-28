@@ -6,5 +6,5 @@
 # max_diff_rate：字符级差异率（编辑距离 ÷ 朗读文本字数）超过它就不通过
 # max_retries：不通过时最多重新生成几次；仍不通过就用差异率最低的一版，列进检查报告
 asr: qwen3-asr
-max_diff_rate: 0.1
+max_diff_rate: 0
 max_retries: 2
