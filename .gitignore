@@ -18,6 +18,9 @@ books/*/cache/
 *.wav
 *.mp4
 
+# 期目录里生成的合成清单
+books/*/*/*/episode.json
+
 # Remotion 产物
 out/
 video/public/episode/
