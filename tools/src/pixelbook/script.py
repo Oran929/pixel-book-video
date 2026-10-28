@@ -22,11 +22,6 @@ class Line:
     cite: str
     speech: str | None = None
 
-    @property
-    def spoken(self) -> str:
-        """交给 TTS 的朗读文本。读音表在 04 加入。"""
-        return self.speech if self.speech is not None else self.text
-
 
 @dataclass(frozen=True)
 class Scene:

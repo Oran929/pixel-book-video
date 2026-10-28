@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from pixelbook.audio import wav_seconds
+from pixelbook.pronunciation import find_new_terms, spoken_text
 from pixelbook.script import load_script
 from pixelbook.tts import TtsEngine
 from pixelbook.voice import Voice
@@ -24,10 +25,19 @@ class PipelineError(Exception):
 
 
 def voice_episode(
-    script_path: Path, engine: TtsEngine, voice: Voice, public_dir: Path
+    script_path: Path,
+    engine: TtsEngine,
+    voice: Voice,
+    public_dir: Path,
+    pronunciation: dict[str, str],
 ) -> dict[str, Any]:
-    """为 `script_path` 这一期逐句配音，写出期目录里的合成清单并返回它。"""
+    """为 `script_path` 这一期逐句配音，写出期目录里的合成清单并返回它。
+
+    朗读文本按读音表 `pronunciation` 生成（手写的 `speech` 优先）。
+    """
     script = load_script(script_path)
+    if terms := find_new_terms(script, pronunciation):
+        raise PipelineError(new_terms_message(script_path, terms))
     # 旁白稿在 books/<书>/<章>/<期>/script.yaml；03 还没有缓存，按旁白句 ID 命名
     tts_dir = script_path.parents[2] / "cache" / "tts"
     tts_dir.mkdir(parents=True, exist_ok=True)
@@ -40,7 +50,7 @@ def voice_episode(
             scenes.append({"id": scene.id, "segment": segment.id})
             for line in scene.lines:
                 wav = tts_dir / f"{line.id}.wav"
-                engine.synthesize(line.spoken, voice, wav)
+                engine.synthesize(spoken_text(line, pronunciation), voice, wav)
                 # 文件名带内容哈希：内容变了，Studio 就不会播放浏览器缓存里的旧音频
                 digest = hashlib.sha256(wav.read_bytes()).hexdigest()[:8]
                 audio = f"{STAGE_DIR}/{line.id}-{digest}.wav"
@@ -68,6 +78,16 @@ def voice_episode(
         shutil.copyfile(wav, public_dir / audio)
     stage_episode(script_path.parent, public_dir)
     return manifest
+
+
+def new_terms_message(script_path: Path, terms: dict[str, list[str]]) -> str:
+    listing = "\n".join(f"  {term}：{'、'.join(ids)}" for term, ids in terms.items())
+    return (
+        f"{script_path}: 有 {len(terms)} 个新术语不在读音表里，拒绝配音：\n"
+        f"{listing}\n"
+        f"先用 `pixelbook terms {script_path}` 试听，再把读法写进 pronunciation.yaml"
+        "（读法不变就写成 `术语: 术语`），或者给所在旁白句手写 `speech`。"
+    )
 
 
 def stage_episode(episode_dir: Path, public_dir: Path) -> None:

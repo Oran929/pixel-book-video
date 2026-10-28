@@ -6,6 +6,7 @@ import pytest
 
 from pixelbook import REPO_ROOT
 from pixelbook.pipeline import PipelineError, stage_episode, voice_episode
+from pixelbook.pronunciation import load_pronunciation
 from pixelbook.script import ScriptError
 from pixelbook.tts import FakeTtsEngine
 from pixelbook.voice import Voice
@@ -48,7 +49,7 @@ def script_path(tmp_path):
 
 
 def test_manifest_lists_segments_scenes_and_lines_in_order(tmp_path, script_path):
-    voice_episode(script_path, FakeTtsEngine(), VOICE, tmp_path / "public")
+    voice_episode(script_path, FakeTtsEngine(), VOICE, tmp_path / "public", {})
 
     manifest = json.loads((script_path.parent / "episode.json").read_text())
     assert manifest["segments"] == [
@@ -78,7 +79,7 @@ def test_public_dir_holds_only_this_episode_and_every_audio_exists(
     (public / "fonts").mkdir()
     (public / "fonts" / "pixel.ttf").write_bytes(b"font")
 
-    manifest = voice_episode(script_path, FakeTtsEngine(), VOICE, public)
+    manifest = voice_episode(script_path, FakeTtsEngine(), VOICE, public, {})
 
     audio = [line["audio"] for line in manifest["lines"]]
     assert all(
@@ -96,9 +97,9 @@ def test_public_dir_holds_only_this_episode_and_every_audio_exists(
 
 
 def test_audio_file_name_changes_with_its_content(tmp_path, script_path):
-    first = voice_episode(script_path, FakeTtsEngine(), VOICE, tmp_path / "public")
+    first = voice_episode(script_path, FakeTtsEngine(), VOICE, tmp_path / "public", {})
     script_path.write_text(SCRIPT.replace("今天读一本书", "今天读一本好书"))
-    second = voice_episode(script_path, FakeTtsEngine(), VOICE, tmp_path / "public")
+    second = voice_episode(script_path, FakeTtsEngine(), VOICE, tmp_path / "public", {})
 
     assert first["lines"][0]["audio"] != second["lines"][0]["audio"]
     assert first["lines"][1]["audio"] == second["lines"][1]["audio"]
@@ -106,7 +107,7 @@ def test_audio_file_name_changes_with_its_content(tmp_path, script_path):
 
 def test_stage_recopies_episode_json_and_leaves_audio_alone(tmp_path, script_path):
     public = tmp_path / "public"
-    manifest = voice_episode(script_path, FakeTtsEngine(), VOICE, public)
+    manifest = voice_episode(script_path, FakeTtsEngine(), VOICE, public, {})
     edited = script_path.parent / "episode.json"
     edited.write_text(edited.read_text().replace("开场", "序章"))
 
@@ -125,7 +126,7 @@ def test_stage_without_a_manifest_says_to_voice_first(tmp_path):
 def _rejected(script_path, public, text):
     script_path.write_text(text)
     with pytest.raises(ScriptError) as error:
-        voice_episode(script_path, FakeTtsEngine(), VOICE, public)
+        voice_episode(script_path, FakeTtsEngine(), VOICE, public, {})
     assert not (script_path.parent / "episode.json").exists()
     assert not (public / "episode").exists()
     return str(error.value)
@@ -186,7 +187,9 @@ def test_text_up_to_20_characters_not_counting_whitespace_passes(
 ):
     script_path.write_text(SCRIPT.replace("今天读一本书", text))
 
-    manifest = voice_episode(script_path, FakeTtsEngine(), VOICE, tmp_path / "public")
+    manifest = voice_episode(
+        script_path, FakeTtsEngine(), VOICE, tmp_path / "public", {"KV Cache": "KV"}
+    )
 
     assert manifest["lines"][0]["text"] == text
 
@@ -213,8 +216,12 @@ def test_sample_book_script_is_valid(tmp_path):
     script_path = tmp_path / "books" / "sample" / "ch01" / "ep01" / "script.yaml"
     script_path.parent.mkdir(parents=True)
     shutil.copyfile(sample, script_path)
+    table = load_pronunciation(REPO_ROOT / "pronunciation.yaml")
 
-    manifest = voice_episode(script_path, FakeTtsEngine(), VOICE, tmp_path / "public")
+    # 样例旁白稿在仓库的读音表下没有新术语，能正式配音
+    manifest = voice_episode(
+        script_path, FakeTtsEngine(), VOICE, tmp_path / "public", table
+    )
 
     assert len(manifest["segments"]) == 2
     assert 6 <= len(manifest["lines"]) <= 8

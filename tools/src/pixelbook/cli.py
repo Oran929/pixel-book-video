@@ -7,12 +7,14 @@ from typing import Any
 from pixelbook import REPO_ROOT
 from pixelbook.audition import AuditionError, choose_voice, run_audition
 from pixelbook.pipeline import PipelineError, stage_episode, voice_episode
+from pixelbook.pronunciation import PronunciationError, load_pronunciation
 from pixelbook.script import ScriptError
 from pixelbook.voice import VoiceConfigError, load_voice_config
 
 AUDITION_PLAN = REPO_ROOT / "voices" / "audition.yaml"
 AUDITION_OUT = REPO_ROOT / "out" / "audition"
 VIDEO_PUBLIC = REPO_ROOT / "video" / "public"
+PRONUNCIATION = REPO_ROOT / "pronunciation.yaml"
 
 
 def _print_report(report: dict[str, Any], out_dir: Path) -> None:
@@ -71,7 +73,11 @@ def main(argv: list[str] | None = None) -> int:
 
             default_voice = load_voice_config(REPO_ROOT / "voice.yaml")
             manifest = voice_episode(
-                args.script.resolve(), QwenTtsEngine(), default_voice, VIDEO_PUBLIC
+                args.script.resolve(),
+                QwenTtsEngine(),
+                default_voice,
+                VIDEO_PUBLIC,
+                load_pronunciation(PRONUNCIATION),
             )
             total = sum(line["seconds"] for line in manifest["lines"])
             print(
@@ -82,7 +88,13 @@ def main(argv: list[str] | None = None) -> int:
         else:
             stage_episode(args.episode.resolve(), VIDEO_PUBLIC)
             print(f"已复制到 {VIDEO_PUBLIC / 'episode'}")
-    except (AuditionError, ScriptError, PipelineError, VoiceConfigError) as error:
+    except (
+        AuditionError,
+        ScriptError,
+        PipelineError,
+        PronunciationError,
+        VoiceConfigError,
+    ) as error:
         print(error)
         return 1
     return 0
