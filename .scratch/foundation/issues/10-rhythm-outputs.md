@@ -17,3 +17,13 @@
 - [ ] 总时长报告的数值与时间轴的总帧数换算结果一致
 - [ ] 有分镜停顿覆盖时，`timeline.json` 和试听音轨都反映了覆盖（试听音轨时长仍与时间轴相差不超过一帧）
 - [ ] TS 测试覆盖：打点时间表的格式（含 59:59、1:00:00 两个边界）和时间、向下取整、总时长的范围判断（3:59、4:00、6:00、6:01）
+
+## Comments
+
+- 来自 12（2026-10-28）：时间轴导出命令已经有了，结构上给这张票留了位置：
+  - 逻辑在 `video/src/episode/export-timeline.ts` 的 `exportTimeline(期目录, { storyboard?, out? })`，它读合成清单和分镜、算时间轴、写 `timeline.json` 并返回 `Timeline`。打点时间表 `segments.txt` 建议在这里一并写到期目录（`timeline.segments` 已有每段 `startFrame`、`title`），格式化和范围判断写成纯函数，方便测边界值。
+  - 命令行外壳 `video/src/episode/timeline-cli.ts` 的打印处有一行注释"票 10 在这里加"：总时长（`m:ss`）和 4:00–6:00 的判断从这里打印；样片阶段只报告，保持退出码 0。
+  - 判断结果要写进 `timeline.json`：直接在 `Timeline` 外再包一层或加一个字段都行，Python 的 `pixelbook mix` 只校验 `fps`、`totalFrames`、`lines[].id/audio/startFrame`，多出来的字段不影响它。不要改这几个字段的名字。
+  - `--no-storyboard --out <路径>` 写到期目录以外时，`segments.txt` 写不写、写到哪里需要定一下（建议：只在默认输出到期目录时写，或者跟着 `--out` 的目录走）。
+  - 验收第 4 项"有分镜停顿覆盖时，`timeline.json` 和试听音轨都反映了覆盖"在 12 里已经成立（`exportTimeline` 的测试覆盖了停顿覆盖；样例的两条试听音轨 565 帧 / 553 帧，相差正是 s01-l04 之后 1.2 秒对 0.8 秒的 12 帧）。
+

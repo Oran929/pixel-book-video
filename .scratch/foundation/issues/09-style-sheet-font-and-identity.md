@@ -35,3 +35,5 @@
 - 来自 07（2026-10-28）：配音流水线的检查报告已经有了：`voice_episode` 每次运行都重写期目录里的 `report.json`（被 git 忽略），现在只有 `{"asr_failures": [...]}` 一个键。缺字检查可以加一个并列的键（如 `missing_glyphs: [{id, char}]`），`cli.py` 的 `voice` 分支里 `_print_asr_failures` 旁边再打印它。注意 Python 一侧要能找到字体文件（`video/public/fonts/`），`voice_episode` 现在不知道字体在哪，需要加参数或从 `public_dir` 推出。
 - 来自 08（2026-10-28）：要换成风格表常量的写死值在 `video/src/components/PixelBlock.tsx`（方块 320px、描边 16px、阴影偏移 16px、字号 96、颜色 `#e07a3f` / `#2b2b3a` / `#f4ecd8`、`fontWeight: bold`）和 `video/src/episode/Episode.tsx`（字幕框，以及出现动画的 `ENTER_SECONDS = 0.4`、`SLIDE_DISTANCE = 160`）。位移距离和组件尺寸也应是像素网格的整数倍，否则落下过程中会出现非整像素位置。新组件要在 `video/src/components/registry.ts` 登记（参数的 zod schema + 实现）。
 - 来自 07（2026-10-28，复核改为两步）：`report.json` 现在是 `{"asr_failures": [...], "asr_pinyin_passes": [...]}` 两个键；`cli.py` 里打印报告的函数从 `_print_asr_failures` 改名为 `_print_asr_report`，缺字检查的打印放在它旁边。
+- 来自 12（2026-10-28）：组件参数格式从 `PixelBlock.tsx` 挪到了 `video/src/components/schemas.ts`（`PixelBlockProps`、`COMPONENT_PROPS`、`COMPONENT_SCHEMAS`），`registry.ts` 只登记实现。原因是时间轴导出命令在 Node 里校验分镜，不能加载 .tsx 和 remotion。新组件要登记两处（类型检查会提示缺哪处）；`schemas.ts` 里不要 import 风格表以外会拉进 React/remotion 的东西——风格表常量如果放在纯 .ts 文件里就没问题。
+
