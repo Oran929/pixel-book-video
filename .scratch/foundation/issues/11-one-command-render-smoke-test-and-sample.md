@@ -8,12 +8,12 @@
 
 **Status:** ready-for-agent
 
-- [ ] 一键命令在任何一步失败时都会停下，并指出是哪一步、原因是什么
-- [ ] 冒烟测试是一条单独的命令，不放进每次都跑的统一检查（`make check`）里
-- [ ] 冒烟测试用假 TTS 引擎（静音 wav）和假语音识别引擎，加上一份固定的小样例旁白稿，不加载任何真实模型；它验证的是"渲染管线和时长"，不是音质
-- [ ] 冒烟测试用 ffprobe 读 MP4 **视频流**的帧数，与 `timeline.json` 的总帧数比较，相差不超过一帧；不比较音频流时长（最后一句的音频可能比视频短）
+- [x] 一键命令在任何一步失败时都会停下，并指出是哪一步、原因是什么
+- [x] 冒烟测试是一条单独的命令，不放进每次都跑的统一检查（`make check`）里
+- [x] 冒烟测试用假 TTS 引擎（静音 wav）和假语音识别引擎，加上一份固定的小样例旁白稿，不加载任何真实模型；它验证的是"渲染管线和时长"，不是音质
+- [x] 冒烟测试用 ffprobe 读 MP4 **视频流**的帧数，与 `timeline.json` 的总帧数比较，相差不超过一帧；不比较音频流时长（最后一句的音频可能比视频短）
 - [ ] 样片：默认音色、字幕逐句同步、组件在指定的旁白句出现、风格表和频道形象初版都生效
-- [ ] README 写明从旁白稿到 MP4 的完整操作步骤
+- [x] README 写明从旁白稿到 MP4 的完整操作步骤
 - [ ] 人工验收：我验收样片后，写一份简短回顾，记下哪些假设被推翻、哪些需要调整，作为阶段 3–4 spec 的输入
 
 ## Comments
@@ -33,3 +33,13 @@
   - `Root.tsx` 现在有两个合成：`Episode` 和风格样张 `StyleSheet`。一键命令渲染时要明确写 `Episode`（`npm run render` 已经是 `remotion render Episode`）。
   - 中间帧改成了 PNG，渲染会比 JPEG 慢一点、MP4 没变大多少（样例 1.1 MB）。字体在第一帧前用 `delayRender` 加载，冒烟测试不需要特别处理。
 - 来自 09（2026-10-28）：旁白稿顶层多了必填字段 `title`（这一期的书名或主题名，显示在画面左上角，缺了 `voice` 报错）。冒烟测试的固定小样例旁白稿要带上它。合成清单 `episode.json` 也多了顶层 `title`，TS 校验要求非空。验收项"风格表和频道形象初版都生效"里的频道形象，现在指左上角的书名/主题名（不再是写死的频道名），小人按用户意见不常驻画面。
+- 来自 11 实现（2026-10-28）：
+  - 一键命令是 `uv run pixelbook render <旁白稿> [--out <mp4>] [--revoice]`（`tools/src/pixelbook/render.py` 的 `render_episode`），默认输出 `out/<书>-<章>-<期>.mp4`。四步：配音 → 时间轴（`npm --prefix video run timeline`）→ 渲染（`npx remotion render Episode`）→ 核对时长（ffprobe 数视频流帧数，和 `timeline.json` 的 `totalFrames` 比，相差超过一帧算失败）。任何一步失败抛 `RenderError`，打印"第 N 步「步名」失败：原因"，退出码 1；外部命令失败时附上它输出的最后 30 行。读配置出错（`verification.yaml`、`voice.yaml`、读音表）、新术语、音色锁定不一致、缺字都算"配音"一步失败；`--revoice` 原样透传给 `voice_episode`。`asr_failures`、`duration.verdict` 不让命令失败，只列进汇总；`asr_pinyin_passes` 只列句子 ID 备查。
+  - 汇总报告只打印，不另写文件（`report.json`、`timeline.json`、`segments.txt` 已经在期目录里）。汇总里不重复写 4:00–6:00 这个数，只说"在目标范围之内 / 太短 / 太长"，范围只在 TS 的 `DURATION_RANGE` 一处定义。
+  - 冒烟测试：`make smoke`（`cd tools && uv run pytest smoke`）。测试放在 `tools/smoke/`，不在 pytest 的 `testpaths`（`tests`）里，所以 `make check` 不跑它；ruff 照常检查它。固定小样例在 `tools/smoke/episode/`（4 句、2 段 3 个画面、`title`、分镜两个组件一处停顿覆盖）。它经 `cli.main(["render", ...])` 走一键命令本身，把 `QwenTtsEngine` / `MlxAsrEngine` 换成假引擎，仓库根目录换成临时目录（`voice.yaml` 用假的预设音色，不需要参考音频），所以配音缓存和 `voice.lock` 写在临时的书目录里，不碰 `books/sample/voice.lock`。Remotion 静态目录也换成临时目录：复制 `video/public/`（字体、小人图）但不带 `episode/`，渲染时传 `--public-dir`，所以冒烟测试不会覆盖上屏的那一期。断言：退出码 0、`totalFrames` 在 225–232（按假 TTS 每字 0.2 秒和停顿手算约 228）、ffprobe **解码**数出的视频流帧数和 `totalFrames` 相差不超过一帧、`segments.txt` 两行、`verdict` 为 `too-short`。本机（M5 Max）约 3.5 秒（Remotion 打包有缓存；第一次会慢一些）。
+  - 一键命令的核对一步用 ffprobe `-count_packets`（不解码，长视频也快；H.264 一帧一个包），冒烟测试独立用 `-count_frames`（解码）再核一次，不依赖一键命令自己的核对。
+  - 07 留言里没验证的一点现在验证了：假 TTS 的 wav 末尾带自定义 RIFF 块，Remotion 渲染时正常读取，不报错。
+  - 修了 12 的一个缺口：`npm run timeline` 只校验分镜格式和停顿，没有排组件触发帧，所以"触发帧落在画面之外"要到 `remotion render` 才报错（写冒烟样例时撞到）。现在 `exportTimeline` 也调用 `scheduleCues`，在时间轴一步就报错，和 12 留言说的"和 Remotion 用同一个分镜校验"一致了。加了一条 Vitest。
+  - 测试：`tests/test_render.py`（新术语、缺字、锁定不一致和 `--revoice`、分镜不合格各停在哪一步；帧数相差一帧通过、两帧失败）和 `tests/test_cli.py` 两条（配置错报成"配音"一步、`--revoice` 透传）。这些都在时间轴一步之前或当时停下，不进入渲染，所以放在 `make check` 里也只多约 1 秒。
+  - 渲染时 Remotion 在 stderr 打印版本不一致警告：`zod` 装的是 4.6.7，Remotion 4.0.539 要求 4.5.4（`package.json` 写的是 `^4.6.7`）。目前不影响渲染（冒烟测试和样片都通过），一键命令成功时不显示，只有渲染失败时会出现在附带的输出里。要不要按提示把 zod 固定到 4.5.4 请用户决定。
+  - 样片：`uv run pixelbook render ../books/sample/ch01/ep01/script.yaml`，默认音色 tianmei（`voice.yaml` 和 `books/sample/voice.lock` 一致，不需要 `--revoice`），7 句全部命中配音缓存（缓存目录前后都是 14 个文件），`voice.lock` 未改动。产出 `out/sample-ch01-ep01.mp4`：视频流 565 帧 = 时间轴 565 帧，18.83 秒（30fps，1920×1080），音频流 18.84 秒；总时长 0:18 太短（只报告）；复核未通过：无。抽帧看过：左上角「读一本8bit像素书」、字幕逐句切换、DRY 方块在 s01-l03 触发帧之后出现、「一次」方块在 s02-l03 出现、调色板和像素字体生效。没有逐句听音画是否对齐，所以"样片"这一项留给人工验收时一起勾。
