@@ -1,0 +1,38 @@
+# 在 PR 和推送到 main 时跑 make check。
+# Linux 上不装 mlx-audio（pyproject 里限定 darwin），所以 check 若意外依赖 MLX 会直接失败。
+name: check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: video/package-lock.json
+
+      # setup-uv 不发布 v10 这种主版本标签，只能写完整版本号
+      # 锁定 Python 3.12：镜像自带的是 3.12 就直接用，换了版本 uv 会自己下载
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: "3.12"
+
+      # test_render.py 里有两个测试在没有 ffmpeg 时会跳过
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - run: make install
+
+      # 日志里列出装了哪些 Python 包，可以直接看到没有 mlx
+      - name: List Python packages
+        run: cd tools && uv pip list
+
+      - run: make check
