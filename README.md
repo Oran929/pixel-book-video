@@ -74,7 +74,7 @@ npm run render -- ../out/sample-ch01-ep01.mp4                  # 渲染 MP4
 
 改 `verification.yaml` 不影响声音，不会被音色锁定拦下，也不会让已缓存的句子重新复核。
 
-只想重新复制合成清单、不重新配音时，用 `uv run pixelbook stage ../books/sample/ch01/ep01`。
+只想重新复制合成清单和分镜、不重新配音时（比如改了分镜），用 `uv run pixelbook stage ../books/sample/ch01/ep01`。
 
 ### 书的音色与锁定
 
@@ -103,6 +103,31 @@ uv run pixelbook terms ../books/sample/ch01/ep01/script.yaml   # 每个新术语
 ```
 
 听完把读法写进 `pronunciation.yaml`。读法没问题的也要登记成原样不变的条目（如 `DRY: DRY`），表示"已确认"。
+
+### 分镜
+
+每期可以有一份分镜 `books/<书>/<章>/<期>/storyboard.json`（提交到 git），写每个画面用哪些组件、在哪句旁白出现，不写绝对时间。`voice` 和 `stage` 把它复制到 `video/public/episode/`；没有分镜时照常渲染，只有字幕。
+
+```json
+{
+  "scenes": [
+    {
+      "scene": "s01-c02",
+      "components": [{ "id": "dry", "component": "PixelBlock", "props": { "label": "DRY" } }],
+      "triggers": [
+        { "target": "dry", "line": "s01-l03", "offset": 1.2, "action": "enter", "animation": "slide" }
+      ]
+    }
+  ],
+  "pauses": [{ "after": "s01-l04", "seconds": 1.2 }]
+}
+```
+
+- `scene`：合成清单里的画面 ID。`components`：本画面用的组件，`id` 是本画面里的名字，`component` 是组件注册表（`video/src/components/registry.ts`）里的组件名，`props` 按该组件的格式校验。
+- `triggers`：每个组件恰好一个 `enter`，`animation` 是 `fade`（淡入）或 `slide`（落下）。`line` 必须是本画面的旁白句。触发帧 = 这句的开始帧 + `offset` 秒 × 帧率，四舍五入到整帧；`offset` 可以为负，但触发帧必须落在本画面之内，否则渲染前报错。组件从触发帧显示到画面结束（下一个画面的第一句开始）。
+- `pauses`：覆盖 `after` 这句之后的停顿（秒，≥ 0），优先于默认规则（句间 0.3 秒、换画面 0.8 秒）。
+
+分镜在 Remotion 读取时校验，出错时报出第几个画面、第几个组件或触发、哪个字段。
 
 ## 检查
 
