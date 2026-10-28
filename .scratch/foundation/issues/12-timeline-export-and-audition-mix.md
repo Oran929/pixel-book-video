@@ -8,14 +8,14 @@
 
 **Type:** HITL（agent 做完后，我听试听音轨，决定停顿默认值是否要改）
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] TS 命令行入口（用 tsx 或 Node 自带的类型剥离运行，由实现者选）输出 `timeline.json`；它调用的就是 Remotion 里用的同一个时间轴函数
 - [x] `timeline.json` 的格式在 Python 一侧有校验；Python 里不出现停顿秒数等时间轴规则
 - [x] 试听拼接：每句 wav 从"开始帧 ÷ 帧率"秒处开始；音轨总时长与 `timeline.json` 的总时长相差不超过一帧（命令自己检查，超出就报错）
 - [x] TS 测试：同一份合成清单导出的 `timeline.json` 与直接调用时间轴函数的结果相同
 - [x] Python 测试：用假引擎生成的 wav 和一份手写的 `timeline.json` 拼接，检查总时长；`timeline.json` 格式错误时报错并指出字段
-- [ ] 人工验收：用真实配音跑样例旁白稿，听试听音轨；停顿默认值要改的话，改 TS 里的默认值，并在 Comments 里记下改成了多少、为什么
+- [x] 人工验收：用真实配音跑样例旁白稿，听试听音轨；停顿默认值要改的话，改 TS 里的默认值，并在 Comments 里记下改成了多少、为什么
 
 ## Comments
 
@@ -45,3 +45,4 @@
       ```
     - 改停顿默认值：改 `video/src/episode/timeline.ts` 的 `DEFAULT_PAUSES`，再跑上面四条命令即可（不用重新配音）。
 
+- 用户试听（2026-10-28）：默认停顿（句间 0.3 秒、换画面 0.8 秒）目前可以接受，不改。票关闭。
