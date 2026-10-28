@@ -21,3 +21,4 @@
 - 已在 `feat/foundation` 实现。统一检查命令是 `make check`，安装命令是 `make install`。
 - 项目默认音色配置的文件留给 02 创建，因为它的格式由 02 确定。样例书（书 → 章 → 期的实际目录）由 03 创建。
 - `make check` 直接调用 `tools/.venv/bin/*`，不用 `uv run`。这样在不能写 uv 缓存的沙盒里也能运行。
+- 更正（2026-10-28，代码审查）：上面"`make check` 直接调用 `tools/.venv/bin/*`"已经过时。现在的 Makefile 用 `uv run`（`cd tools && uv run pytest` 等），`make smoke` 也一样。
