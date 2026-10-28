@@ -3,11 +3,14 @@
 真实 TTS 引擎换成记录音色的假引擎，仓库根目录换成临时目录。
 """
 
+import json
+
 import pytest
 import yaml
 
 from pixelbook import cli
 from pixelbook.asr import FakeAsrEngine
+from pixelbook.audio import wav_seconds
 from pixelbook.tts import FakeTtsEngine
 from pixelbook.voice import Voice, save_voice_config
 
@@ -171,3 +174,38 @@ def test_voice_lists_lines_that_passed_only_on_pinyin(repo, engine, asr, capsys)
     # 规范化后 10 个字错 2 个，拼音全对
     assert "字符差异率 20%" in out
     assert "拼音差异率 0%" in out
+
+
+def test_mix_writes_the_audition_track_under_out(repo, engine, asr, capsys):
+    assert cli.main(["voice", _script(repo)]) == 0
+    episode = repo / "books" / "demo" / "ch01" / "ep01"
+    manifest = json.loads((episode / "episode.json").read_text())
+    # 一句：朗读文本"今天读一本 D R Y 的书"15 个字，假引擎 3 秒 = 90 帧
+    (episode / "timeline.json").write_text(
+        json.dumps(
+            {
+                "fps": 30,
+                "totalFrames": 90,
+                "lines": [
+                    {
+                        "id": "s01-l01",
+                        "audio": manifest["lines"][0]["audio"],
+                        "startFrame": 0,
+                    }
+                ],
+            }
+        )
+    )
+
+    assert cli.main(["mix", str(episode / "timeline.json")]) == 0
+
+    out = repo / "out" / "mix" / "demo-ch01-ep01.wav"
+    assert wav_seconds(out) == pytest.approx(3.0)
+    assert str(out) in capsys.readouterr().out
+
+
+def test_mix_reports_a_malformed_timeline(repo, tmp_path, capsys):
+    (tmp_path / "timeline.json").write_text('{"fps": 30, "lines": []}')
+
+    assert cli.main(["mix", str(tmp_path / "timeline.json")]) == 1
+    assert "totalFrames: 缺少" in capsys.readouterr().out

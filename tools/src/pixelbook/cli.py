@@ -7,6 +7,7 @@ from typing import Any
 
 from pixelbook import REPO_ROOT
 from pixelbook.audition import AuditionError, choose_voice, run_audition
+from pixelbook.mix import MixError, mix_timeline
 from pixelbook.pipeline import (
     REPORT_NAME,
     PipelineError,
@@ -125,6 +126,21 @@ def main(argv: list[str] | None = None) -> int:
     )
     stage.add_argument("episode", type=Path, help="books/<书>/<章>/<期>/")
 
+    mix = commands.add_parser(
+        "mix",
+        help="按 timeline.json 把一期的逐句配音拼成一条试听音轨（不是正式产物）",
+    )
+    mix.add_argument(
+        "timeline",
+        type=Path,
+        help="`npm run timeline` 导出的 timeline.json（通常在期目录里）",
+    )
+    mix.add_argument(
+        "--out",
+        type=Path,
+        help="试听音轨写到哪里，默认 out/mix/<书>-<章>-<期>.wav",
+    )
+
     args = parser.parse_args(argv)
     try:
         if args.command == "audition":
@@ -182,11 +198,20 @@ def main(argv: list[str] | None = None) -> int:
                         f"（{'、'.join(item['lines'])}）"
                     )
                 print(f"听完把读法写进 {PRONUNCIATION}（读法不变就写成 `术语: 术语`）")
+        elif args.command == "mix":
+            timeline = args.timeline.resolve()
+            # timeline.json 默认在期目录 books/<书>/<章>/<期>/ 里
+            out = args.out or REPO_ROOT / "out" / "mix" / (
+                "-".join(timeline.parent.parts[-3:]) + ".wav"
+            )
+            seconds = mix_timeline(timeline, VIDEO_PUBLIC, out)
+            print(f"试听音轨 {out}：{seconds:.2f} 秒")
         else:
             stage_episode(args.episode.resolve(), VIDEO_PUBLIC)
             print(f"已复制到 {VIDEO_PUBLIC / 'episode'}")
     except (
         AuditionError,
+        MixError,
         ScriptError,
         PipelineError,
         PronunciationError,
