@@ -1,0 +1,29 @@
+[project]
+name = "pixelbook"
+version = "0.1.0"
+description = "旁白稿 → 配音 → 合成清单的 Python 工具"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "cn2an>=0.5.24",
+    "fonttools[woff]>=4.60",
+    "mlx-audio==0.6.2",
+    "opencc>=1.4.2",
+    "pypinyin>=0.55.0",
+    "pyyaml>=6.0.3",
+]
+
+[project.scripts]
+pixelbook = "pixelbook.cli:main"
+
+[dependency-groups]
+dev = ["pytest", "ruff"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"

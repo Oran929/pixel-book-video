@@ -1,0 +1,31 @@
+# 冒烟测试的固定小样例（票 11）：两段、三个画面、带一份分镜。
+# 用假 TTS（静音 wav，每字 0.2 秒）配音，只验证渲染管线和时长，不验证音质。
+title: 冒烟样例
+segments:
+  - id: s01
+    title: 开场
+    scenes:
+      - id: s01-c01
+        description: 只有字幕
+        lines:
+          - id: s01-l01
+            text: 今天读一本书。
+            cite: ch01-¶001
+      - id: s01-c02
+        description: 一个方块落下
+        lines:
+          - id: s01-l02
+            text: 第一条原则。
+            cite: ch01-¶002
+          - id: s01-l03
+            text: 不要重复你自己。
+            cite: ch01-¶003
+  - id: s02
+    title: 结尾
+    scenes:
+      - id: s02-c01
+        description: 一个方块淡入
+        lines:
+          - id: s02-l01
+            text: 每条知识只写一次。
+            cite: ch01-¶004

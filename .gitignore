@@ -1,7 +1,31 @@
 .DS_Store
-node_modules/
-out/
-*.wav
-*.mp4
 .claude/settings.local.json
 workflow_record.md
+
+# 依赖与工具缓存
+node_modules/
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+
+# 原书与转换出的全文（版权内容，不提交）
+books/*/source.*
+books/*/chapters/
+
+# 配音缓存与生成的音视频
+books/*/cache/
+*.wav
+*.mp4
+
+# 期目录里生成的合成清单、检查报告、时间轴和打点时间表
+books/*/*/*/episode.json
+books/*/*/*/report.json
+books/*/*/*/timeline.json
+books/*/*/*/segments.txt
+
+# Remotion 产物
+out/
+video/public/episode/
+# 选定的参考音频要提交（ADR-0005：音色一致）
+!voices/*.wav

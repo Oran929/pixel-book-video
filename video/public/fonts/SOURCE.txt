@@ -1,0 +1,15 @@
+字幕与画面用的中文像素字体（票 09）
+
+字体：Fusion Pixel Font（缝合像素字体），12px 设计尺寸，比例宽度（proportional），简体中文字形（zh_hans）
+文件：fusion-pixel-12px-proportional-zh_hans.otf.woff2（未修改）
+来源：https://github.com/TakWolf/fusion-pixel-font
+版本：2026.10.25（GitHub Release）
+下载：https://github.com/TakWolf/fusion-pixel-font/releases/download/2026.10.25/fusion-pixel-font-12px-proportional-otf.woff2-v2026.10.25.zip
+zip 的 sha256：0501b4f770887eef5fc5ac94401b3b7bb38253ffed3a549e2cb0be89a0a03fe3
+下载日期：2026-10-28
+
+许可：SIL Open Font License 1.1（OFL.txt），允许商用、嵌入和随作品分发；不能单独出售字体文件。
+字体合并了其他像素字体的字形，它们的许可在 LICENSES/ 里，随 zip 一起提供：
+  ark-pixel/OFL.txt     Ark Pixel Font，OFL 1.1
+  cubic-11/OFL.txt      Cubic 11（含 JF Dot M+H 12、M+ BITMAP FONTS 的自由许可），OFL 1.1
+  galmuri/LICENSE.txt   Galmuri，OFL 1.1

@@ -1,0 +1,26 @@
+# 音色试听方案：`uv run pixelbook audition` 用每个候选音色读同一段测试旁白。
+# 测试旁白故意保留原样的术语（不套读音表），用来发现读错的术语。
+lines:
+  - 这条原则叫 DRY，意思是不要重复你自己。
+  - 正交性说的是，改动一个模块，不应该影响到另一个模块。
+  - 大模型推理时，KV Cache 会占掉大量显存。
+# 设计音色另读这一句，选中后存成参考音频，供 Base 模型克隆；不要放术语
+reference_text: 今天我们一起读一本书，看看作者是怎样一步一步，把一个复杂的问题讲清楚的。
+params:
+  language: chinese
+candidates:
+  - name: vivian
+    model: mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-bf16
+    speaker: Vivian
+  - name: serena
+    model: mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-bf16
+    speaker: Serena
+  - name: uncle-fu
+    model: mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-bf16
+    speaker: Uncle_Fu
+  - name: design-calm-male
+    model: mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16
+    instruct: 沉稳温和的青年男声，普通话标准，语速适中，像在给朋友讲一本书，亲切但不夸张。
+  - name: design-bright-female
+    model: mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16
+    instruct: 清亮自然的青年女声，普通话标准，语速适中，吐字清晰，带一点轻松的讲解感。
