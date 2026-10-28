@@ -6,7 +6,7 @@
 
 **Type:** AFK
 
-**Status:** ready-for-agent
+**Status:** done
 
 **新术语规则（2026-10-28 审查后补充）：**
 
