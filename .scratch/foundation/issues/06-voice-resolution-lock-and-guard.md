@@ -31,3 +31,4 @@
   - 测试接缝（未能事先和用户确认，按票面选的）：`voice_lock.resolve_book_voice(book_dir, repo_root)`、`pipeline.voice_episode(..., revoice=)`、`cli.main([...])`（把 `QwenTtsEngine` 换成记录音色的假引擎、仓库根目录换成临时目录，见 `tools/tests/test_cli.py`）。
   - 05 里"换音色后全部重新生成"的几个测试改成了加 `revoice=True`（同一本书里换音色现在必须确认）。
   - `pixelbook.tts_cache._normalized` 改名为公开的 `normalized_voice`，锁定内容复用它。
+- 用户确认（2026-10-28）：只有换音色配置或参考音频才触发守卫，引擎设置不进锁定；`--revoice` 只管指定的那一期即可，不做整本书重配（书的更新频率不定，同一本书里前后期音色不同也可以接受）。
