@@ -22,6 +22,8 @@ character/           频道形象设定图原图（Q.png、M.png）和裁图脚�
 make install
 ```
 
+`mlx-audio`（配音和语音识别复核）只在 macOS 上安装；在别的系统上 `make install` 不装它，`make check` 照常能跑，但配音和复核用不了。
+
 ## 配音模型
 
 配音用本机的 Qwen3-TTS 1.7B bf16，通过 mlx-audio 运行（ADR-0002），需要 Apple Silicon。模型第一次使用时会自动从 Hugging Face 下载到 `~/.cache/huggingface/`；也可以先手动下载（每个约 4 GB）：
@@ -203,6 +205,8 @@ make check
 ```
 
 依次运行 pytest、ruff（lint + 格式）、`tsc`、ESLint、Vitest，任何一项失败就以非零码退出。"做完了"的标准就是这条命令通过。
+
+GitHub Actions（`.github/workflows/check.yml`）在每个 PR 和推送到 main 时，在 Linux 上跑同一条 `make check`。私有仓库设不了「合并前必须通过」，合并 PR 前自己看一眼 Checks 是否全绿。
 
 冒烟测试单独一条命令（要真实渲染，慢一些，所以不在 `make check` 里）：
 

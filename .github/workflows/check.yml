@@ -1,4 +1,4 @@
-# 在 PR 和 main 上跑 make check。私有仓库设不了「合并前必须通过」，合并前自己看 Checks。
+# 在 PR 和推送到 main 时跑 make check。
 # Linux 上不装 mlx-audio（pyproject 里限定 darwin），所以 check 若意外依赖 MLX 会直接失败。
 name: check
 
@@ -19,12 +19,20 @@ jobs:
           cache: npm
           cache-dependency-path: video/package-lock.json
 
-      # Python 版本由 uv 按 tools/pyproject.toml 的 requires-python 安装
+      # setup-uv 不发布 v10 这种主版本标签，只能写完整版本号
+      # 写明 Python 版本，不依赖 runner 镜像自带的 python3
       - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: "3.12"
 
       # test_render.py 里有两个测试在没有 ffmpeg 时会跳过
       - name: Install ffmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - run: make install
+
+      # 日志里列出装了哪些 Python 包，可以直接看到没有 mlx
+      - name: List Python packages
+        run: cd tools && uv pip list
+
       - run: make check
