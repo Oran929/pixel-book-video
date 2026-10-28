@@ -8,7 +8,8 @@ import {
   staticFile,
   useCurrentFrame,
 } from "remotion";
-import { COMPONENT_SCHEMAS, componentNamed } from "../components/registry";
+import { componentNamed } from "../components/registry";
+import { COMPONENT_SCHEMAS } from "../components/schemas";
 import { VIDEO } from "../video-config";
 import { parseManifest } from "./manifest";
 import {

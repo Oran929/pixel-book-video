@@ -1,13 +1,9 @@
 import { AbsoluteFill } from "remotion";
-import { z } from "zod";
+import type { z } from "zod";
+import type { PixelBlockProps } from "./schemas";
 
 // 样片用的简单组件：一个带字的像素方块。
 // 颜色和尺寸是临时值，票 09 换成风格表常量。
-export const PixelBlockProps = z.strictObject({
-  /** 方块上的字，例如 "DRY" */
-  label: z.string().min(1),
-});
-
 export const PixelBlock: React.FC<z.infer<typeof PixelBlockProps>> = ({
   label,
 }) => (
