@@ -20,7 +20,7 @@ jobs:
           cache-dependency-path: video/package-lock.json
 
       # Python 版本由 uv 按 tools/pyproject.toml 的 requires-python 安装
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.3.2
 
       # test_render.py 里有两个测试在没有 ffmpeg 时会跳过
       - name: Install ffmpeg
