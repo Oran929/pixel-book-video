@@ -32,3 +32,4 @@
 
 - 来自 03（2026-10-28）：字幕框的颜色、边框、字号现在直接写在 `video/src/episode/Episode.tsx` 里（米白 `#f4ecd8`、深色 `#2b2b3a`、64px 系统字体），09 要换成风格表常量和像素字体。
 - 来自 03 人工验收（2026-10-28）：用户觉得字幕偏大，已从 64 临时改成 48。定字号时以此为参考，并满足"像素字体设计尺寸的整数倍"。
+- 来自 07（2026-10-28）：配音流水线的检查报告已经有了：`voice_episode` 每次运行都重写期目录里的 `report.json`（被 git 忽略），现在只有 `{"asr_failures": [...]}` 一个键。缺字检查可以加一个并列的键（如 `missing_glyphs: [{id, char}]`），`cli.py` 的 `voice` 分支里 `_print_asr_failures` 旁边再打印它。注意 Python 一侧要能找到字体文件（`video/public/fonts/`），`voice_episode` 现在不知道字体在哪，需要加参数或从 `public_dir` 推出。

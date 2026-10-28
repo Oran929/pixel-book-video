@@ -20,3 +20,4 @@
 ## Comments
 
 - 来自 03（2026-10-28）：时间轴函数是 `video/src/episode/timeline.ts` 的 `computeTimeline(manifest, DEFAULT_PAUSES, VIDEO.fps)`，合成清单用 `manifest.ts` 的 `parseManifest` 校验。`Timeline` 里帧区间起含止不含；每句 `endFrame` 是音频结束（不含停顿），总帧数 = 最后一句音频结束、末尾不加停顿。导出的 `timeline.json` 可以直接序列化这个结构。tsconfig 的 lib 已经是 ES2023。
+- 来自 07（2026-10-28）：Python 测试里用 `FakeTtsEngine` 生成的 wav 现在 data 块后面多一个自定义 RIFF 块（记录朗读文字，给假识别引擎用）。`wave`、ffprobe、ffmpeg 都会跳过它，时长不变；拼接时如果自己按字节处理 wav，要按块解析，不要假设 data 块就是文件结尾。另外 `voice_episode` 多了必填参数 `verifier`，测试里可以用 `Verifier(FakeAsrEngine(), max_diff_rate=0, max_retries=0)`。

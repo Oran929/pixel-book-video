@@ -26,14 +26,14 @@
 
 **验收：**
 
-- [ ] 语音识别引擎作为适配器传入：测试用假引擎（可以设定某句返回错误文字，或者"前几次错、之后对"），真实运行用 mlx-audio 的 Whisper 或 Qwen3-ASR（配置里选）
-- [ ] 阈值、重试次数、识别模型写在配置里；实现时先取一个保守的初始值，在 Comments 里写明
-- [ ] 规范化规则可以测试，并且不会把格式差异误判为失败
-- [ ] Python 测试，规范化的例子：`今天讀書` 与 `今天读书` 相等；`第2章` 与 `第二章` 相等；`DRY原则` 与 `d.r.y. 原则` 相等；`KV Cache` 与 `kv cache` 相等
-- [ ] 复核通过的结果也缓存起来，缓存命中的句子不再重复识别
-- [ ] 超过重试次数的句子出现在检查报告里，附带字幕文本、朗读文本、识别结果、差异率；再次运行时不重新生成，报告里仍然列出
-- [ ] Python 测试覆盖：通过、重试后通过、最终失败（缓存了差异率最低的一版、再次运行不调用 TTS、报告仍然列出）、规范化等价
-- [ ] Python 测试：手写了 `speech` 的句子（识别结果与 `speech` 一致、与字幕文本不同）能正常通过
+- [x] 语音识别引擎作为适配器传入：测试用假引擎（可以设定某句返回错误文字，或者"前几次错、之后对"），真实运行用 mlx-audio 的 Whisper 或 Qwen3-ASR（配置里选）
+- [x] 阈值、重试次数、识别模型写在配置里；实现时先取一个保守的初始值，在 Comments 里写明
+- [x] 规范化规则可以测试，并且不会把格式差异误判为失败
+- [x] Python 测试，规范化的例子：`今天讀書` 与 `今天读书` 相等；`第2章` 与 `第二章` 相等；`DRY原则` 与 `d.r.y. 原则` 相等；`KV Cache` 与 `kv cache` 相等
+- [x] 复核通过的结果也缓存起来，缓存命中的句子不再重复识别
+- [x] 超过重试次数的句子出现在检查报告里，附带字幕文本、朗读文本、识别结果、差异率；再次运行时不重新生成，报告里仍然列出
+- [x] Python 测试覆盖：通过、重试后通过、最终失败（缓存了差异率最低的一版、再次运行不调用 TTS、报告仍然列出）、规范化等价
+- [x] Python 测试：手写了 `speech` 的句子（识别结果与 `speech` 一致、与字幕文本不同）能正常通过
 - [ ] 人工验收：用真实识别模型（Whisper 和 Qwen3-ASR 各一遍）跑样例旁白稿，记录每句的差异率和误报、漏报情况，写进 Comments；由我据此确认阈值、重试次数和默认识别模型
 
 ## Comments
@@ -41,3 +41,46 @@
 - 来自 04（2026-10-28）：对比用的朗读文本就是 `pixelbook.pronunciation.spoken_text(line, table)` 的结果，和交给 TTS 的是同一个，不要另算。
 - 来自 05（2026-10-28）：缓存在 `pixelbook.tts_cache.TtsCache.wav(text)`，目前是"生成 → 改名提交 wav → 写 `<指纹>.json`"一步完成，wav 和 json 都在才算命中，json 最后写（它是"缓存完整"的标记）。07 要把复核和重试放在提交之前（临时文件里生成、识别、选版本，再改名），复核结果写进同一个 json，并沿用先写临时文件再改名的做法（`tts_cache._staged`）。`seed` 已经不进指纹（`tts_cache.UNFINGERPRINTED_PARAMS`），但它还不在 `voice.PARAM_KEYS` 里，`QwenTtsEngine` 会把 `params` 原样传给 mlx-audio 的 `generate`，它认不认 `seed` 要查；现在每次采样本来就随机，不固定种子也能重试。`FakeTtsEngine.texts` 记录了每次调用的朗读文本，可以直接数调用次数。
 - 来自 06（2026-10-28）：守卫在 `voice_episode` 里、生成任何一句之前运行；锁定在整期成功之后才写。重试换种子不影响锁定（`seed` 不进锁定，见 `voice_lock.lock_record`）。如果 07 新增会影响声音的参数进 `Voice.params`，它会同时进锁定和缓存键；只影响复核、不影响声音的设置（阈值、识别模型）不要放进 `Voice`，否则改了会被守卫拦下要求 `--revoice`。
+- 实现记录（07，2026-10-28）：自动验收项都已完成，`make check` 通过；人工验收项未勾，数据见下。没有改 `Status:`。
+  - **结构**：
+    - `pixelbook.verification`：`normalize`、`difference_rate`（规范化后的字符级编辑距离 ÷ 朗读文本字数，多读也算，可能大于 1）、`Verifier`（识别引擎 + 阈值 + 重试次数）、`load_verification_config`。
+    - `pixelbook.asr`：识别引擎接口 `AsrEngine`（`transcribe(wav) -> str`，加一个 `settings`）和 `FakeAsrEngine`。`pixelbook.mlx_asr.MlxAsrEngine(name)`：mlx-audio 的 Whisper / Qwen3-ASR，第一次识别时才加载模型（整期命中缓存时不加载）。
+    - `voice_episode(script_path, engine, voice, public_dir, pronunciation, verifier, revoice=False)`：多了必填的 `verifier`。复核和重试放在 `TtsCache.line(text)` 里（原来的 `wav(text)`），返回 wav 和复核结果。
+  - **规范化顺序**：NFKC（全角半角）→ OpenCC t2s（繁转简）→ 小写 → cn2an `transform`（中文数字转阿拉伯数字）→ 只留 Unicode 类别为字母/数字的字符。数字转换放在去标点之前，`百分之五十` 和 `50%` 都变成 `50`。cn2an 对它认为格式不对的数字（如 `一二三四五`）原样保留并发警告，警告已屏蔽；两边同一个函数，这种情况只会在识别结果写成 `12345` 时误报。新依赖：`opencc`（官方包，有 macOS arm64 wheel）、`cn2an`。
+  - **配置**：仓库根目录 `verification.yaml`（`asr`、`max_diff_rate`、`max_retries`），不放进 `Voice`（见 06 的留言）：改它不触发守卫、不让缓存失效。识别模型在配置里只写 `whisper` / `qwen3-asr`，具体模型 ID 写在 `mlx_asr.ASR_MODELS` 里。
+  - **初始值**：`asr: qwen3-asr`、`max_diff_rate: 0`（规范化后必须一字不差）、`max_retries: 2`（最多生成 3 次）。阈值取 0 的原因见下面的数据：字幕不超过 20 字，读错 1 个字的差异率在 0.05–0.1 之间，任何大于 0 的阈值都会漏掉一部分单字读错。代价是同音字识别错（如"它"听成"他"）也算不通过。
+  - **"阈值"是"超过才不通过"**：差异率 ≤ 阈值算通过。
+  - **重试换种子**：音色参数里固定了 `seed` 时，第 n 次重试用 `seed + n`；没固定就原样重来（每次采样本来随机）。`seed` 仍不在 `voice.PARAM_KEYS` 里，`voice.yaml` 还写不了种子，`QwenTtsEngine` 也没处理它：等真的要固定种子时再加（要查 mlx-audio 的 `generate` 认不认，不认就用 `mx.random.seed`）。
+  - **缓存与 `<指纹>.json`**：每一版先生成到同目录的临时文件、识别、选版本，选中的那版改名成 `<指纹>.wav`，其余删掉；json 最后写，多了 `verification`（`passed`、`chosen`、每一版的 `attempts: [{heard, diff_rate}]`、当时的 `max_diff_rate`、识别引擎 `asr`），以及含重试的 `total_elapsed_seconds`。05 时写的、没有 `verification` 的缓存当作没有缓存，会重新生成。命中缓存的句子沿用 json 里记下的 `passed`，**不按新阈值重新判断**：改了阈值想重新复核，删掉对应缓存。
+  - **检查报告**：期目录里的 `report.json`（已加进 `.gitignore`），每次 `voice` 都重写：`{"asr_failures": [{id, text, spoken, heard, diff_rate, cache}]}`，`cache` 是选中那版的缓存 wav（相对书的目录），想重新生成就删它。`pixelbook voice` 把这些句子打印出来，仍以 0 退出（合成清单照常可用）。09 的缺字检查、11 的汇总可以往这个文件里加键。
+  - **假引擎**：`FakeTtsEngine` 在 wav 的 data 块后面附一个自定义 RIFF 块（`pbsp`），记下"说了什么"；`FakeAsrEngine` 读它，原样返回，`mishear={"朗读文本": ["第1次听成的", "第2次听成的"]}` 设定前几次听错。音频本身仍是静音，`wave`、ffprobe、ffmpeg 都会跳过这个块（已验证）。
+  - **测试接缝**（未能事先和用户确认，按票面选的）：`verification.normalize` / `difference_rate` / `load_verification_config`、`pipeline.voice_episode`（假 TTS + 假识别）、`cli.main`（把 `MlxAsrEngine` 换成假的）。
+  - **因环境改变实现方式**：主会话诊断 03 时，mlx-audio 加载 `mlx-community/whisper-large-v3-turbo` 后识别报 `Processor not found`。原因是那个仓库只有权重、没有分词器，mlx-audio 的 Whisper 需要带 HuggingFace processor 的版本。改用 mlx-audio 文档里的 `mlx-community/whisper-large-v3-turbo-asr-fp16`（已下载到本机，约 1.6 GB）就能正常识别。所以**没有加 mlx-whisper 依赖**，Whisper 和 Qwen3-ASR 都走 mlx-audio。Qwen3-ASR 用的是本机缓存里的 `Qwen/Qwen3-ASR-1.7B`（原版 bf16，mlx-audio 能直接加载）。没有试 `mlx-community/Qwen3-ASR-*-8bit` 量化版。
+  - **人工验收数据（M5 Max，样例旁白稿 7 句，tianmei 音色，2026-10-28）**：
+    1. 用 `pixelbook voice` 各跑一遍（`max_diff_rate: 0`、`max_retries: 2`，每遍前把样例书的缓存挪走）。守卫通过，`books/sample/voice.lock` 没有变化。
+       - Whisper：6 句第一次就是 0；s01-l02"它讲的是怎样把代码写好"3 次都听成"**他**讲……"（0.091），最终不通过，列进报告。整期 9.8 秒（含加载两个模型）。
+       - Qwen3-ASR：6 句第一次就是 0；s01-l02 第 1 次听成"他"（0.091），重试一次听成"它"，通过。整期 8.4 秒。
+       - 再运行一次：0.1 秒，不调用 TTS 也不加载识别模型，报告仍列出 Whisper 那遍没通过的 s01-l02。
+    2. 另外用脚本放大样本：每句正常生成 5 版（35 版），再让 TTS 故意读 6 种错句、各 2 版（12 版），两个模型都识别一遍。"差异率"是和应读的朗读文本比：
+
+       | 情况 | Whisper | Qwen3-ASR |
+       |---|---|---|
+       | 正常 35 版：差异率 0 | 30 | 31 |
+       | 正常 35 版：s01-l02 把"它"听成"他"（0.091） | 5/5 | 4/5 |
+       | 故意读"所以每条知识只**选**一次"（03 里真实出现过的误读） | 2/2，0.1 | 2/2，0.1 |
+       | 故意读"写在**三**个地方" | 2/2，0.1 | 2/2，0.1 |
+       | 故意读"把代码写**坏**" | 2/2，0.18 | 0.18 / 0.09 |
+       | 故意漏读"你自己" | 2/2，0.3 | 2/2，0.3 |
+       | 故意读"就会**记得**改"（2 字，意思相反） | 2/2，0.167 | 2/2，0.167 |
+       | 故意读"一本**树**" | 两版都听成"书"，0 | 两版都听成"书"，0 |
+
+       音频在 `/private/tmp/claude-501/-Users-oranjuuuu-Repo-pixel-book-video/b5157d6a-44d2-4df3-81b7-06d1ba3c1a89/scratchpad/takes/`（`<句>-take<n>.wav` 是正常版，`<句>-bad<n>.wav` 是故意读错的版本，`results.json` 是两个模型的全部结果）。我没有听，"一本树"那两版到底读成了 shù 还是 shū，要你听 `s01-l01-bad0.wav`、`s01-l01-bad1.wav` 才知道是漏报还是 TTS 本来就读成了"书"。
+    3. **误报**（读对了却不通过）：只有同音字，"它/他"一种，两个模型都有，Whisper 更稳定地听成"他"。**漏报**（读错了却通过）：阈值取 0 时，可识别的 10 版错句全部抓到；"一本树"两个模型都听不出差别（待你听）。如果阈值取 0.1，"只选一次""三个地方"这两种单字读错（各 0.1）**全部漏掉**。
+    4. 关键结论：**单字读错和同音字误报的差异率完全重叠**（10–11 字的句子里都是 0.09–0.1）。字符级差异率只能二选一：阈值 0 抓得住单字读错、但同音字会误报；阈值 ≥ 0.1 不误报、但漏掉单字读错。
+    5. 我另外用 pypinyin 试算了"转成拼音再比"（只是试算，没进代码）：上面 47 版里，正常版全部是 0（"它/他"同音，误报消失），可识别的 10 版错句仍然全部 > 0（"只选一次"0.1，"写坏"0.09，"三个地方"0.1……）。
+  - **建议（待你确认）**：
+    - 默认识别模型：**`qwen3-asr`**。两者抓错能力相同；Qwen3-ASR 同音字误报略少（重试一次就通过了），本机已有缓存。识别速度两者都约 0.1 秒/句，相对 TTS 可以忽略。
+    - 阈值：按票面的字符级对比，建议 **0**，接受同音字误报（每次报告都会列出，你听过后不用管）。更好的办法是**在规范化最后加一步转拼音（不带声调）再比**，阈值仍然取 0：样例数据里没有误报，也不漏单字读错。这改动了票面的规范化规则（多一条依赖 pypinyin），所以没有直接做；你同意的话可以单开一张小票，或者在本票里补上。
+    - 重试次数：**2**。正常生成的 35 版里没有出现真正读错的情况，重试主要用来应对同音字误报（Qwen3-ASR 重试一次就听对了）。真实读错的频率要等正式一期（约 100 句）才看得出来。
+  - **其他需要你决定的**：同音字误报的句子会在每次配音的报告里出现。如果不改成拼音对比，以后可能需要一个"我听过了，这句没问题"的标记（例如在缓存 json 里记一笔），让报告不再列出它。现在没做。
+  - 样例书原来的 `books/sample/cache/`（03 留下的按旁白句 ID 命名的 wav，05 以后不再使用）挪到了 `/private/tmp/claude-501/-Users-oranjuuuu-Repo-pixel-book-video/b5157d6a-44d2-4df3-81b7-06d1ba3c1a89/scratchpad/old-sample-cache/`；Whisper 那遍的缓存在同目录的 `whisper-run-cache/`。现在样例书的缓存是 Qwen3-ASR 那遍，全部通过；`video/public/episode/` 也是这一遍。

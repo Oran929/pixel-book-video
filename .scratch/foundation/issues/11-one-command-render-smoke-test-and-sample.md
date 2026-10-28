@@ -20,3 +20,7 @@
 
 - 来自 03（2026-10-28）：渲染命令是 `cd video && npm run render -- <输出路径>`（即 `remotion render Episode`）。合成 ID 是 `Episode`，总帧数由 `calculateMetadata` 读 `video/public/episode/episode.json` 后算出，没有这个文件时渲染会报错并提示先运行 `pixelbook voice` / `stage`。03 的实测：样例 7 句渲染 673 帧，约 23 秒（M5 Max）。
 - 来自 06（2026-10-28）：`voice_episode` 多了 `revoice` 参数，音色和书的 `voice.lock` 不一致时抛 `PipelineError`（一键命令应把它当作"配音"这一步失败报出来，并把 `--revoice` 透传）。冒烟测试的固定小样例如果放在一本书目录下，首次运行会写 `voice.lock`；用临时目录或忽略它，不要污染 `books/sample/voice.lock`。样例书的 `voice.lock` 已按当前 `voice.yaml`（tianmei）写好，改默认音色后出样片需要 `--revoice`。`--revoice` 目前只重配指定的一期，如果一键命令要支持"整本书重配"，需要定一期上屏到 `video/public/episode/`。
+- 来自 07（2026-10-28）：
+  - `voice_episode` 多了必填参数 `verifier`（`pixelbook.verification.Verifier(asr, max_diff_rate, max_retries)`），CLI 从仓库根目录的 `verification.yaml` 读设置，用 `pixelbook.mlx_asr.MlxAsrEngine(name)` 做真实识别。冒烟测试用 `Verifier(FakeAsrEngine(), ...)`；`FakeAsrEngine` 只认 `FakeTtsEngine` 生成的 wav（wav 末尾有一个记录文字的自定义 RIFF 块，音频仍是静音，ffprobe/ffmpeg 正常读取，Remotion 里浏览器播放应当也会跳过它，但没验证过）。
+  - 检查报告是期目录里的 `report.json`，目前只有 `asr_failures`（复核未通过的句子：`id`、`text`、`spoken`、`heard`、`diff_rate`、`cache`）。复核未通过**不是**失败：`voice` 仍以 0 退出，合成清单照常可用；一键命令汇总报告时把它列出来，不要因此停下。
+  - 真实运行时识别模型在第一次识别时才加载（整期命中缓存时不加载）；样例 7 句全新配音加复核约 8–10 秒（M5 Max）。
