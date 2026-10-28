@@ -343,3 +343,56 @@ def test_deleting_the_cache_rebuilds_every_line(tmp_path, script_path):
     assert second == first
     for line in second["lines"]:
         assert (public / line["audio"]).is_file()
+
+
+def test_each_cached_wav_has_a_same_named_json_with_generation_info(
+    tmp_path, script_path
+):
+    voice_episode(script_path, FakeTtsEngine(), VOICE, tmp_path / "public", {})
+
+    cache = tmp_path / "books" / "demo" / "cache" / "tts"
+    wavs = sorted(p.stem for p in cache.glob("*.wav"))
+    infos = {p.stem: json.loads(p.read_text()) for p in cache.glob("*.json")}
+    assert sorted(infos) == wavs
+    assert all(re.fullmatch(r"[0-9a-f]{16}", stem) for stem in wavs)
+    assert sorted(info["text"] for info in infos.values()) == sorted(
+        ["今天读一本书", "它讲怎样写好代码", "不要重复你自己"]
+    )
+    for info in infos.values():
+        assert info["voice"]["model"] == "base-model"
+        assert info["engine"] == {"engine": "fake"}
+        # 假引擎每个字 0.1 秒
+        assert info["elapsed_seconds"] == pytest.approx(len(info["text"]) * 0.1)
+
+
+class InterruptedEngine(FakeTtsEngine):
+    """写到一半就中断（例如按了 Ctrl-C），留下半个文件。"""
+
+    def __init__(self, fail_on):
+        super().__init__()
+        self.fail_on = fail_on
+
+    def synthesize(self, text, voice, out):
+        if text == self.fail_on:
+            out.write_bytes(b"RIFF half a wav")
+            raise KeyboardInterrupt
+        return super().synthesize(text, voice, out)
+
+
+def test_interrupted_generation_leaves_no_broken_cache_file(tmp_path, script_path):
+    with pytest.raises(KeyboardInterrupt):
+        voice_episode(
+            script_path,
+            InterruptedEngine(fail_on="它讲怎样写好代码"),
+            VOICE,
+            tmp_path / "public",
+            {},
+        )
+
+    cache = tmp_path / "books" / "demo" / "cache" / "tts"
+    # 只剩中断之前已经完整生成的第一句
+    assert sorted(p.suffix for p in cache.iterdir()) == [".json", ".wav"]
+
+    engine = FakeTtsEngine()
+    voice_episode(script_path, engine, VOICE, tmp_path / "public", {})
+    assert engine.texts == ["它讲怎样写好代码", "不要重复你自己"]

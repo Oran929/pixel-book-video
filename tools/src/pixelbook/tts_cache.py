@@ -7,6 +7,11 @@
 
 import hashlib
 import json
+import os
+import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -30,7 +35,11 @@ def voice_fingerprint(voice: Voice, engine: TtsEngine) -> str:
     参考音频按文件内容算指纹（路径不算），所以同一路径换了内容也会换指纹。
     参考音频不存在时抛 `FileNotFoundError`。
     """
-    return _digest({"voice": _normalized(voice), "engine": engine.settings})
+    return _digest(_settings(voice, engine))
+
+
+def _settings(voice: Voice, engine: TtsEngine) -> dict[str, Any]:
+    return {"voice": _normalized(voice), "engine": engine.settings}
 
 
 def _normalized(voice: Voice) -> dict[str, Any]:
@@ -56,13 +65,48 @@ class TtsCache:
         self.directory = directory
         self.engine = engine
         self.voice = voice
-        self.voice_fingerprint = voice_fingerprint(voice, engine)
+        self._settings = _settings(voice, engine)
+        self.voice_fingerprint = _digest(self._settings)
 
     def wav(self, text: str) -> Path:
-        """返回朗读 `text` 的 wav；缓存里没有时才调用 TTS 引擎生成。"""
+        """返回朗读 `text` 的 wav；缓存里没有时才调用 TTS 引擎生成。
+
+        `<指纹>.json` 最后写出，有它才算缓存命中。
+        """
         key = _digest({"text": text, "voice": self.voice_fingerprint})
         wav = self.directory / f"{key}.wav"
-        if not wav.is_file():
-            self.directory.mkdir(parents=True, exist_ok=True)
-            self.engine.synthesize(text, self.voice, wav)
+        info = self.directory / f"{key}.json"
+        if wav.is_file() and info.is_file():
+            return wav
+        self.directory.mkdir(parents=True, exist_ok=True)
+        with _staged(wav) as tmp:
+            stats = self.engine.synthesize(text, self.voice, tmp)
+        record = {
+            "text": text,
+            "voice_fingerprint": self.voice_fingerprint,
+            **self._settings,
+            "elapsed_seconds": stats.elapsed_seconds,
+            "peak_memory_bytes": stats.peak_memory_bytes,
+            "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
+        }
+        with _staged(info) as tmp:
+            tmp.write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n")
         return wav
+
+
+@contextmanager
+def _staged(target: Path) -> Iterator[Path]:
+    """先写同目录下的临时文件，写完再改名成 `target`；中途出错就删掉临时文件。
+
+    临时文件保留原扩展名（音频库按扩展名决定格式），以 `.` 开头。
+    """
+    fd, name = tempfile.mkstemp(
+        dir=target.parent, prefix=f".{target.stem}-", suffix=target.suffix
+    )
+    os.close(fd)
+    tmp = Path(name)
+    try:
+        yield tmp
+        tmp.replace(target)
+    finally:
+        tmp.unlink(missing_ok=True)
