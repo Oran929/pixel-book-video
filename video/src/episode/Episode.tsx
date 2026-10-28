@@ -47,7 +47,7 @@ const Subtitle: React.FC<{ timeline: Timeline }> = ({ timeline }) => {
           border: "8px solid #f4ecd8",
           outline: "8px solid #2b2b3a",
           color: "#f4ecd8",
-          fontSize: 64,
+          fontSize: 48,
           lineHeight: 1.3,
           textAlign: "center",
         }}

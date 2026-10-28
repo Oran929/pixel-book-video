@@ -20,3 +20,4 @@
 ## Comments
 
 - 来自 03（2026-10-28）：03 把每句 wav 写到 `books/<书>/cache/tts/<旁白句ID>.wav`，书目录由旁白稿路径推出（`script_path.parents[2]`）；`voice_episode(script_path, engine, voice, public_dir)` 每次都调用引擎。复制到 `video/public/episode/` 的部分（清空、按内容哈希命名、复制合成清单）已经有测试，05 改缓存命名时不用动它。合成清单里还没有音色指纹字段，05 加上时，TS 一侧的 zod schema（`video/src/episode/manifest.ts`）也要加。
+- 来自 03 人工验收（2026-10-28）：`QwenTtsEngine` 会在参考音频首尾补静音（`REF_PAD_SECONDS`），这会影响生成结果。指纹里的"生成参数"要把它算进去，否则以后改这个值，缓存不会失效。

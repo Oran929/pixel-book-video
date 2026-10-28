@@ -3,20 +3,35 @@
 只在真实运行时导入 mlx-audio，测试一律使用假引擎，不加载模型。
 """
 
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
 
 from pixelbook import REPO_ROOT
+from pixelbook.audio import pad_wav
 from pixelbook.tts import SynthesisStats
 from pixelbook.voice import Voice
 
 
 class QwenTtsEngine:
     WARM_UP_TEXT = "你好。"
+    # Base 克隆把参考音频和生成的音频一起解码，再按比例切掉参考部分。参考音频
+    # 首尾贴着说话声时，切点附近会留下参考音频结尾的字（听到一声"的"），生成
+    # 的句子也会照着参考音频的样子戛然而止。首尾补上静音就没有这两个问题。
+    REF_PAD_SECONDS = (0.2, 0.6)
 
     def __init__(self) -> None:
         self._models: dict[str, Any] = {}
+        self._padded_refs: dict[Path, Path] = {}
+        self._tmp = tempfile.TemporaryDirectory(prefix="pixelbook-ref-")
+
+    def _padded_ref(self, ref_audio: Path) -> Path:
+        if ref_audio not in self._padded_refs:
+            padded = Path(self._tmp.name) / f"{len(self._padded_refs)}-{ref_audio.name}"
+            pad_wav(ref_audio, padded, *self.REF_PAD_SECONDS)
+            self._padded_refs[ref_audio] = padded
+        return self._padded_refs[ref_audio]
 
     def _model(self, model_id: str, warm_up_kwargs: dict[str, Any]) -> Any:
         if model_id not in self._models:
@@ -46,7 +61,7 @@ class QwenTtsEngine:
         if voice.instruct:
             kwargs["instruct"] = voice.instruct
         if voice.ref_audio:
-            kwargs["ref_audio"] = str(REPO_ROOT / voice.ref_audio)
+            kwargs["ref_audio"] = str(self._padded_ref(REPO_ROOT / voice.ref_audio))
             kwargs["ref_text"] = voice.ref_text
         model = self._model(voice.model, kwargs)
 
