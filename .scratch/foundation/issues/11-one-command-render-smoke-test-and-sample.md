@@ -50,3 +50,10 @@
   2. **标点影响观感。** 字幕去掉分句标点（`，。、；`）以后，效果很好。
   3. **配音连贯性。** 刚开始切句、拼接时有截断，或者插进了不恰当的音节；经过读音表、停顿规则、两步复核等调整，现在整体比较连贯。
 - 用户确认（2026-10-28）：样片验收通过，回顾已记录，票关闭。
+- 代码审查修复（2026-10-28）：
+  - 缺字检查移到配音之前：有缺字时 `voice_episode` 抛 `PipelineError`（列出旁白句 ID / `title` 和字），不调用 TTS，不写合成清单，不改 `video/public/episode/` 和 `voice.lock`；`report.json` 只写 `missing_glyphs` 一项。原来先配音、写清单、复制到静态目录、写锁定之后才报缺字。`pixelbook voice` 和一键命令的报错都来自这条消息，CLI 和 `render.py` 里各自的缺字打印删掉了。09 留言里"合成清单照常写出"已不成立。
+  - Remotion 的 `calculateEpisodeMetadata` 和时间轴导出共用 `video/src/episode/episode-plan.ts` 的 `planEpisode`（不引用 React/remotion）。`COMPONENT_SCHEMAS` 别名去掉，直接用 `COMPONENT_PROPS`（`satisfies ComponentSchemas`）。
+  - 总时长判断的说明文字只在 `rhythm.ts` 定义，写进 `timeline.json` 的 `duration.verdictText`；`npm run timeline` 和一键命令的汇总都原样打印它（汇总现在写"太短（目标 4:00–6:00，只报告）"，范围仍只在 TS 定义）。原有字段名不变。`timeline-cli.ts` 里重复的 `mss` 删掉。
+  - 改名：`_print_report` → `_print_audition_report`，测试辅助 `checked()` → `fake_asr_verifier()`；复核未通过句子的打印共用 `_asr_failure`。
+  - 文档：术语表补了合成清单、时间轴、触发 / Cue、复核、打点时间表，"外壳"按 ADR-0009 收窄；ADR-0004 补充 `timeline.json` 是第二个只读交接；新增 ADR-0009（只常驻字幕和左上角小标题）；票 01 追加更正。
+  - `make check`、`make smoke` 通过；样片重新渲染：7 句命中配音缓存（缓存 14 个文件不变），`voice.lock` 未改动，视频流 565 帧 = 时间轴 565 帧。
