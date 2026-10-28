@@ -1,20 +1,20 @@
 ## Agent skills
 
-### Issue tracker
+### 工单追踪
 
-Issues live as local markdown files under `.scratch/<feature>/`. See `docs/agents/issue-tracker.md`.
+工单放在 GitHub Issues（Oran929/pixel-book-video），用 `gh` CLI 操作。切换前已完成的票留在 `.scratch/` 作历史记录。见 `docs/agents/issue-tracker.md`。
 
-### Triage labels
+### 分诊标签
 
-The five default triage roles (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`), recorded as a `Status:` line in each issue file. See `docs/agents/triage-labels.md`.
+五个默认分诊角色（`needs-triage`、`needs-info`、`ready-for-agent`、`ready-for-human`、`wontfix`），以 GitHub label 的形式打在 issue 上。见 `docs/agents/triage-labels.md`。
 
-### Domain docs
+### 领域文档
 
-Single-context: `GLOSSARY.md` and `docs/adr/` at the repo root, created lazily. See `docs/agents/domain.md`.
+单上下文：`GLOSSARY.md` 和 `docs/adr/` 放在仓库根目录，用到时再建。见 `docs/agents/domain.md`。
 
 ## 工作约定
 
-- 因为环境限制（权限、网络、缺工具）而改变实现方式时，在票的 Comments 里写明原因和影响，不要悄悄绕过。
-- 发现会影响后续票的事，写进那张票的 Comments。
-- 做的改动推翻了之前某张票 Comments 里的说法时，回到那条留言标注「已失效」，写明被哪张票、改成了什么。仍然有效的约定写进 ADR、spec、`GLOSSARY.md` 或 README，Comments 只当历史记录。
-- `/implement` 不改票的状态。票做完后，核对完验收项，再把 `Status:` 改为 `done`（见 `docs/agents/triage-labels.md`）。
+- 因为环境限制（权限、网络、缺工具）而改变实现方式时，在票的评论里写明原因和影响，不要悄悄绕过。
+- 发现会影响后续票的事，写进那张票的评论。
+- 做的改动推翻了之前某张票评论里的说法时，回到那条评论标注「已失效」，写明被哪张票、改成了什么。仍然有效的约定写进 ADR、spec、`GLOSSARY.md` 或 README，评论只当历史记录。
+- `/implement` 不改票的状态。票做完后，核对完验收项，再关闭这个 issue（见 `docs/agents/triage-labels.md`）。
