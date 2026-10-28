@@ -15,6 +15,7 @@ from pixelbook.script import load_script
 from pixelbook.tts import TtsEngine
 from pixelbook.tts_cache import TtsCache
 from pixelbook.voice import Voice
+from pixelbook.voice_lock import LOCK_NAME, lock_mismatch, lock_record, write_lock
 
 MANIFEST_NAME = "episode.json"
 # Remotion 静态目录（video/public/）里存放本期文件的子目录
@@ -31,19 +32,26 @@ def voice_episode(
     voice: Voice,
     public_dir: Path,
     pronunciation: dict[str, str],
+    revoice: bool = False,
 ) -> dict[str, Any]:
     """为 `script_path` 这一期逐句配音，写出期目录里的合成清单并返回它。
 
+    `voice` 是这本书解析出的音色（`voice_lock.resolve_book_voice`）。配音前守卫
+    比较它和书的锁定音色，不一致就拒绝，除非 `revoice`；配音完成后写入锁定。
     朗读文本按读音表 `pronunciation` 生成（手写的 `speech` 优先）。
     """
     script = load_script(script_path)
     if terms := find_new_terms(script, pronunciation):
         raise PipelineError(new_terms_message(script_path, terms))
-    # 旁白稿在 books/<书>/<章>/<期>/script.yaml，配音缓存放在书的目录下
+    # 旁白稿在 books/<书>/<章>/<期>/script.yaml，配音缓存和锁定音色放在书的目录下
+    book_dir = script_path.parents[2]
     try:
-        cache = TtsCache(script_path.parents[2] / "cache" / "tts", engine, voice)
+        locked = lock_record(voice)
+        cache = TtsCache(book_dir / "cache" / "tts", engine, voice)
     except FileNotFoundError as error:
         raise PipelineError(f"参考音频 {error.filename} 不存在，无法配音") from error
+    if not revoice and (differences := lock_mismatch(book_dir, locked)):
+        raise PipelineError(voice_lock_message(script_path, book_dir, differences))
 
     segments, scenes, lines = [], [], []
     wavs: dict[str, Path] = {}
@@ -84,6 +92,7 @@ def voice_episode(
     for audio, wav in wavs.items():
         shutil.copyfile(wav, public_dir / audio)
     stage_episode(script_path.parent, public_dir)
+    write_lock(book_dir, locked)
     return manifest
 
 
@@ -94,6 +103,21 @@ def new_terms_message(script_path: Path, terms: dict[str, list[str]]) -> str:
         f"{listing}\n"
         f"先用 `pixelbook terms {script_path}` 试听，再把读法写进 pronunciation.yaml"
         "（读法不变就写成 `术语: 术语`），或者给所在旁白句手写 `speech`。"
+    )
+
+
+def voice_lock_message(
+    script_path: Path, book_dir: Path, differences: list[str]
+) -> str:
+    listing = "\n".join(f"  {line}" for line in differences)
+    return (
+        f"{book_dir / LOCK_NAME}: 当前音色和这本书的锁定音色不一致，拒绝配音"
+        f"（ADR-0005：一本书只用一种音色）：\n{listing}\n"
+        "两个选项：\n"
+        "  1. 改回原来的音色：把项目默认音色 voice.yaml、或书配置 book.yaml 的 "
+        "`voice` 引用的音色文件改回锁定值（参考音频内容变了就换回原来的文件）；\n"
+        f"  2. 整本书用新音色重新配音：`pixelbook voice {script_path} --revoice`，"
+        "锁定会更新，这本书的其他期也要各自重新配音。"
     )
 
 

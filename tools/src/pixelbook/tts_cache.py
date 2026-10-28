@@ -39,10 +39,11 @@ def voice_fingerprint(voice: Voice, engine: TtsEngine) -> str:
 
 
 def _settings(voice: Voice, engine: TtsEngine) -> dict[str, Any]:
-    return {"voice": _normalized(voice), "engine": engine.settings}
+    return {"voice": normalized_voice(voice), "engine": engine.settings}
 
 
-def _normalized(voice: Voice) -> dict[str, Any]:
+def normalized_voice(voice: Voice) -> dict[str, Any]:
+    """音色设置的规范化形式：参考音频换成内容的 sha256，去掉不进指纹的参数。"""
     ref_audio = None
     if voice.ref_audio:
         # `ref_audio` 相对仓库根目录；绝对路径接在后面仍是它自己

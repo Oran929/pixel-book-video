@@ -1,7 +1,11 @@
 """音色解析、锁定与守卫（票 06，ADR-0005）。"""
 
+from dataclasses import replace
+
 import pytest
 
+from pixelbook.pipeline import PipelineError, voice_episode
+from pixelbook.tts import FakeTtsEngine
 from pixelbook.voice import Voice, VoiceConfigError, save_voice_config
 from pixelbook.voice_lock import resolve_book_voice
 
@@ -53,3 +57,53 @@ def test_bad_book_config_is_rejected_naming_the_file(repo, content, problem):
         resolve_book_voice(book, repo)
     assert "book.yaml" in str(error.value)
     assert problem in str(error.value)
+
+
+# ---- 守卫：书解析出的音色 vs 锁定音色 ----
+
+SCRIPT = """\
+segments:
+  - id: s01
+    title: 开场
+    scenes:
+      - id: s01-c01
+        description: 书的封面
+        lines:
+          - id: s01-l01
+            text: 今天读一本书
+            cite: ch01-¶001
+"""
+
+
+def _voice(repo, **options):
+    """像 `pixelbook voice` 那样：先解析书的音色，再配音。"""
+    script = repo / "books" / "demo" / "ch01" / "ep01" / "script.yaml"
+    script.parent.mkdir(parents=True, exist_ok=True)
+    script.write_text(SCRIPT)
+    voice = resolve_book_voice(repo / "books" / "demo", repo)
+    return voice_episode(script, FakeTtsEngine(), voice, repo / "public", {}, **options)
+
+
+def test_changing_the_project_default_voice_is_refused_for_a_locked_book(repo):
+    _voice(repo)
+    save_voice_config(replace(DEFAULT, speaker="Ryan"), repo / "voice.yaml")
+
+    with pytest.raises(PipelineError) as error:
+        _voice(repo)
+    assert "speaker：锁定 Vivian，当前 Ryan" in str(error.value)
+
+
+@pytest.mark.parametrize("change", ["add", "edit"])
+def test_changing_the_book_override_is_refused(repo, change):
+    book = repo / "books" / "demo"
+    if change == "edit":
+        (book / "book.yaml").write_text("voice: voices/yujie.yaml\n")
+    _voice(repo)
+
+    if change == "add":
+        (book / "book.yaml").write_text("voice: voices/yujie.yaml\n")
+    else:
+        save_voice_config(replace(YUJIE, params={}), repo / "voices" / "yujie.yaml")
+
+    with pytest.raises(PipelineError, match="锁定"):
+        _voice(repo)

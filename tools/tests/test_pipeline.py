@@ -1,3 +1,4 @@
+import hashlib
 import json
 import re
 import shutil
@@ -5,6 +6,7 @@ import wave
 from dataclasses import replace
 
 import pytest
+import yaml
 
 from pixelbook import REPO_ROOT
 from pixelbook.pipeline import PipelineError, stage_episode, voice_episode
@@ -272,7 +274,7 @@ def test_changing_voice_settings_regenerates_every_line(tmp_path, script_path, c
     voice_episode(script_path, FakeTtsEngine(), VOICE, tmp_path / "public", {})
 
     engine = FakeTtsEngine()
-    voice_episode(script_path, engine, changed, tmp_path / "public", {})
+    voice_episode(script_path, engine, changed, tmp_path / "public", {}, revoice=True)
 
     assert len(engine.texts) == 3
 
@@ -280,7 +282,8 @@ def test_changing_voice_settings_regenerates_every_line(tmp_path, script_path, c
 def test_changing_engine_settings_regenerates_every_line(tmp_path, script_path):
     voice_episode(script_path, FakeTtsEngine(), VOICE, tmp_path / "public", {})
 
-    # 例如真实引擎给参考音频补的静音（REF_PAD_SECONDS）改了
+    # 例如真实引擎给参考音频补的静音（REF_PAD_SECONDS）改了。引擎设置不进
+    # 锁定音色，守卫不拦（票 06）；只是缓存键变了
     engine = FakeTtsEngine(settings={"engine": "fake", "ref_pad_seconds": [0.3, 0.6]})
     voice_episode(script_path, engine, VOICE, tmp_path / "public", {})
 
@@ -317,7 +320,7 @@ def test_new_reference_audio_content_at_the_same_path_regenerates_every_line(
 
     _write_wav(ref, 2.0)
     engine = FakeTtsEngine()
-    voice_episode(script_path, engine, voice, tmp_path / "public", {})
+    voice_episode(script_path, engine, voice, tmp_path / "public", {}, revoice=True)
 
     assert len(engine.texts) == 3
 
@@ -404,7 +407,12 @@ def test_manifest_records_the_voice_fingerprint_used(tmp_path, script_path):
     reseeded = replace(VOICE, params={**VOICE.params, "seed": 7})
     same = voice_episode(script_path, FakeTtsEngine(), reseeded, public, {})
     other = voice_episode(
-        script_path, FakeTtsEngine(), replace(VOICE, model="other"), public, {}
+        script_path,
+        FakeTtsEngine(),
+        replace(VOICE, model="other"),
+        public,
+        {},
+        revoice=True,
     )
 
     assert re.fullmatch(r"[0-9a-f]{16}", first["voice_fingerprint"])
@@ -416,3 +424,85 @@ def test_manifest_records_the_voice_fingerprint_used(tmp_path, script_path):
         json.loads(p.read_text())["voice_fingerprint"] for p in cache.glob("*.json")
     }
     assert recorded == {first["voice_fingerprint"], other["voice_fingerprint"]}
+
+
+# ---- 音色锁定与守卫（票 06） ----
+
+
+def _lock(script_path):
+    return script_path.parents[2] / "voice.lock"
+
+
+def test_first_voicing_locks_the_full_voice_settings_and_reference_audio_content(
+    tmp_path, script_path
+):
+    voice_episode(script_path, FakeTtsEngine(), VOICE, tmp_path / "public", {})
+
+    content = (REPO_ROOT / "voices" / "tianmei.wav").read_bytes()
+    assert yaml.safe_load(_lock(script_path).read_text()) == {
+        "model": "base-model",
+        "ref_audio": "voices/tianmei.wav",
+        "ref_audio_sha256": hashlib.sha256(content).hexdigest(),
+        "ref_text": "你好。",
+        "params": {"language": "chinese"},
+    }
+
+
+def test_voice_differing_from_the_lock_is_refused_listing_locked_and_current(
+    tmp_path, script_path
+):
+    public = tmp_path / "public"
+    voice_episode(script_path, FakeTtsEngine(), VOICE, public, {})
+    locked = _lock(script_path).read_text()
+    changed = replace(VOICE, ref_text="大家好。")
+
+    engine = FakeTtsEngine()
+    with pytest.raises(PipelineError) as error:
+        voice_episode(script_path, engine, changed, public, {})
+
+    message = str(error.value)
+    assert "ref_text" in message
+    assert "你好。" in message and "大家好。" in message
+    assert "--revoice" in message
+    assert engine.texts == []
+    assert _lock(script_path).read_text() == locked
+
+
+def test_revoice_updates_the_lock_and_regenerates_every_line(tmp_path, script_path):
+    public = tmp_path / "public"
+    voice_episode(script_path, FakeTtsEngine(), VOICE, public, {})
+    changed = replace(VOICE, ref_text="大家好。")
+
+    engine = FakeTtsEngine()
+    voice_episode(script_path, engine, changed, public, {}, revoice=True)
+
+    assert engine.texts == ["今天读一本书", "它讲怎样写好代码", "不要重复你自己"]
+    assert yaml.safe_load(_lock(script_path).read_text())["ref_text"] == "大家好。"
+    # 锁定已更新：之后不加 --revoice 也能用新音色配音
+    voice_episode(script_path, FakeTtsEngine(), changed, public, {})
+
+
+def test_new_reference_audio_content_at_the_same_path_is_refused(tmp_path, script_path):
+    ref = tmp_path / "ref.wav"
+    _write_wav(ref, 1.0)
+    voice = replace(VOICE, ref_audio=str(ref))
+    voice_episode(script_path, FakeTtsEngine(), voice, tmp_path / "public", {})
+
+    _write_wav(ref, 2.0)
+    engine = FakeTtsEngine()
+    with pytest.raises(PipelineError, match="ref_audio_sha256"):
+        voice_episode(script_path, engine, voice, tmp_path / "public", {})
+    assert engine.texts == []
+
+
+def test_failed_first_voicing_writes_no_lock(tmp_path, script_path):
+    script_path.write_text(SCRIPT.replace("今天读一本书", "今天读 DRY"))
+    with pytest.raises(PipelineError, match="新术语"):
+        voice_episode(script_path, FakeTtsEngine(), VOICE, tmp_path / "public", {})
+
+    script_path.write_text(SCRIPT)
+    voice = replace(VOICE, ref_audio=str(tmp_path / "missing.wav"))
+    with pytest.raises(PipelineError, match="missing.wav"):
+        voice_episode(script_path, FakeTtsEngine(), voice, tmp_path / "public", {})
+
+    assert not _lock(script_path).exists()
