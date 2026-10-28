@@ -1,6 +1,6 @@
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import { VIDEO } from "../video-config";
 import { exportTimeline } from "./export-timeline";
@@ -65,11 +65,25 @@ beforeEach(() => {
 });
 
 describe("exportTimeline", () => {
-  it("writes timeline.json equal to computing the timeline directly", () => {
+  it("writes timeline.json equal to computing the timeline directly, plus the duration report", () => {
     exportTimeline(episode);
 
-    expect(read(join(episode, "timeline.json"))).toEqual(
-      computeTimeline(MANIFEST, DEFAULT_PAUSES, VIDEO.fps),
+    // 61 + 9（句间）+ 45 + 24（换画面）+ 75 = 214 帧 ≈ 7.13 秒
+    expect(read(join(episode, "timeline.json"))).toEqual({
+      ...computeTimeline(MANIFEST, DEFAULT_PAUSES, VIDEO.fps),
+      duration: { seconds: 214 / 30, text: "0:07", verdict: "too-short" },
+    });
+  });
+
+  it("writes segments.txt next to the episode's timeline.json", () => {
+    write("storyboard.json", STORYBOARD);
+
+    const { segmentsFile } = exportTimeline(episode);
+
+    // s02 从 61 + 36（覆盖的 1.2 秒）+ 45 + 24 = 166 帧 ≈ 5.53 秒开始
+    expect(segmentsFile).toBe(join(episode, "segments.txt"));
+    expect(readFileSync(join(episode, "segments.txt"), "utf8")).toBe(
+      "00:00 开场\n00:05 原则\n",
     );
   });
 
@@ -78,7 +92,7 @@ describe("exportTimeline", () => {
 
     exportTimeline(episode);
 
-    expect(read(join(episode, "timeline.json"))).toEqual(
+    expect(read(join(episode, "timeline.json"))).toMatchObject(
       computeTimeline(MANIFEST, DEFAULT_PAUSES, VIDEO.fps, { "s01-l01": 1.2 }),
     );
   });
@@ -87,12 +101,19 @@ describe("exportTimeline", () => {
     write("storyboard.json", STORYBOARD);
     const out = join(mkdtempSync(join(tmpdir(), "out-")), "defaults.json");
 
-    exportTimeline(episode, { storyboard: false, out });
+    const { segmentsFile } = exportTimeline(episode, {
+      storyboard: false,
+      out,
+    });
 
-    expect(read(out)).toEqual(
+    expect(read(out)).toMatchObject(
       computeTimeline(MANIFEST, DEFAULT_PAUSES, VIDEO.fps),
     );
     expect(existsSync(join(episode, "timeline.json"))).toBe(false);
+    // 打点时间表只跟期目录里的 timeline.json 一起写，试听用的时间轴不写
+    expect(segmentsFile).toBeNull();
+    expect(existsSync(join(episode, "segments.txt"))).toBe(false);
+    expect(existsSync(join(dirname(out), "segments.txt"))).toBe(false);
   });
 
   it("rejects an invalid storyboard instead of silently using default pauses", () => {

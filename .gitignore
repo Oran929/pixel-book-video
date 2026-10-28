@@ -18,10 +18,11 @@ books/*/cache/
 *.wav
 *.mp4
 
-# 期目录里生成的合成清单、检查报告和时间轴
+# 期目录里生成的合成清单、检查报告、时间轴和打点时间表
 books/*/*/*/episode.json
 books/*/*/*/report.json
 books/*/*/*/timeline.json
+books/*/*/*/segments.txt
 
 # Remotion 产物
 out/
