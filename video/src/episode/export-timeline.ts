@@ -4,7 +4,7 @@ import { COMPONENT_SCHEMAS } from "../components/schemas";
 import { VIDEO } from "../video-config";
 import { parseManifest } from "./manifest";
 import { durationReport, segmentsText, type DurationReport } from "./rhythm";
-import { parseStoryboard, pauseOverrides } from "./storyboard";
+import { parseStoryboard, pauseOverrides, scheduleCues } from "./storyboard";
 import { computeTimeline, DEFAULT_PAUSES, type Timeline } from "./timeline";
 
 // 期目录里的文件名，与 tools/src/pixelbook/pipeline.py 一致
@@ -54,6 +54,8 @@ export const exportTimeline = (
     VIDEO.fps,
     storyboard ? pauseOverrides(storyboard) : {},
   );
+  // 和 Remotion 一样排出组件的触发帧：触发帧落在画面之外时在这里就报错，不用等到渲染
+  if (storyboard) scheduleCues(storyboard, computed);
   const timeline = { ...computed, duration: durationReport(computed) };
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, JSON.stringify(timeline, null, 2) + "\n");

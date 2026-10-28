@@ -127,4 +127,17 @@ describe("exportTimeline", () => {
       /分镜格式不对[\s\S]*s09-l01 不存在/,
     );
   });
+
+  it("rejects a trigger outside its scene, like the render would, before rendering", () => {
+    // s02-l01 是画面 s02-c01 的第一句，负偏移让触发帧落到画面之前
+    const [scene] = STORYBOARD.scenes;
+    const [trigger] = scene!.triggers;
+    write("storyboard.json", {
+      ...STORYBOARD,
+      scenes: [{ ...scene, triggers: [{ ...trigger, offset: -0.5 }] }],
+    });
+
+    expect(() => exportTimeline(episode)).toThrow(/早于画面 s02-c01 的开始帧/);
+    expect(existsSync(join(episode, "timeline.json"))).toBe(false);
+  });
 });
