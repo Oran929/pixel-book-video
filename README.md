@@ -161,7 +161,9 @@ uv run pixelbook mix ../books/sample/ch01/ep01/timeline.json   # 拼到 out/mix/
 
 - 风格表在 `video/src/style/style.ts`：16 色调色板 `PALETTE` 和按用途取色的 `COLOR`、像素网格 `GRID`（4px，画面上一个"像素"）、字号 `FONT_SIZE` 与行高、尺寸 `SIZE`（都是网格的整数倍）、描边 `border`、硬阴影 `hardShadow`、描边字 `outlinedText`。字幕框（`src/shell/`）和组件（`src/components/`）里的颜色和尺寸只能引用这些常量，`npm run test` 会检查源码里有没有写死的颜色值和数字（0、1 除外）。
 - 字体：Fusion Pixel 12px 比例宽度简体（OFL 1.1，来源和许可在 `video/public/fonts/`）。字形画在 12×12 格上，字号只能是 12 的整数倍（现在用 24 / 48 / 96），否则会模糊；测试检查这一点。字体由 `src/style/font.ts` 在第一帧之前加载。
-- 频道名和频道小人在 `style.ts` 的 `CHANNEL`、`MASCOTS` / `MASCOT`。小人是从 `character/Q.png` 裁出的透明底 PNG（`video/public/character/`，裁图脚本 `character/crop_q.py`），只能按整数倍、最近邻插值显示。
+- 频道名在 `style.ts` 的 `CHANNEL`，常驻画面左上角。
+- 频道小人不常驻画面，是一个通用组件 `Mascot`：分镜里需要"人物做什么"时才用，参数 `character`（Q 版角色，按外观起名：`dragon`、`reader`、`whale`、`gothic`，见 `style.ts` 的 `MASCOTS`）和 `position`（站在画面底部的 `left` / `center` / `right`），例如 `{ "id": "host", "component": "Mascot", "props": { "character": "reader", "position": "left" } }`。小人是从 `character/Q.png` 裁出的透明底 PNG（`video/public/character/`，裁图脚本 `character/crop_q.py`），按原尺寸、最近邻插值显示；暂时没有动效。
+- 字幕只在显示时去掉分句标点 `，。、；`：句中的换成一个空格，句末（和句首）的直接去掉，紧挨在右引号、右书名号、右括号前的也直接去掉（`他说：“好的。”` 显示为 `他说：“好的”`）；`：“”‘’《》（）——？！` 保留（`video/src/shell/subtitle-text.ts`）。旁白脚本、配音、语音识别核对、合成清单和缺字检查都用原句。
 - 中间帧格式是 PNG（`video/remotion.config.ts`），JPEG 会让像素边缘出现杂色。
 
 ## 检查
@@ -182,4 +184,4 @@ make check
 cd video && npm run studio
 ```
 
-在 Studio 里打开 `Episode` 合成。`StyleSheet` 合成是风格样张（调色板、字体、描边、字幕框、组件、频道小人），只在 Studio 里看，渲染命令只渲染 `Episode`；要导出成图片：`npx remotion still StyleSheet ../out/style-sheet.png`。
+在 Studio 里打开 `Episode` 合成。`StyleSheet` 合成是风格样张（调色板、字体、描边、字幕框、方块组件、小人组件的四个角色和三个站位），只在 Studio 里看，渲染命令只渲染 `Episode`；要导出成图片：`npx remotion still StyleSheet ../out/style-sheet.png`。
