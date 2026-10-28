@@ -7,7 +7,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
-    "render": "remotion render Episode"
+    "render": "remotion render Episode",
+    "timeline": "tsx src/episode/timeline-cli.ts"
   },
   "dependencies": {
     "@remotion/cli": "^4.0.539",
@@ -20,6 +21,7 @@
     "@remotion/eslint-config-flat": "^4.0.539",
     "@types/react": "^19.3.0",
     "eslint": "^10.13.0",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "vitest": "^5.0.5"
   }
