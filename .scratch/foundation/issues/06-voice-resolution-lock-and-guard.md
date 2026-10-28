@@ -19,3 +19,5 @@
 
 - 来自 03（2026-10-28）：`pixelbook voice` 目前直接用 `load_voice_config(REPO_ROOT / "voice.yaml")` 作为音色传给 `voice_episode`（`tools/src/pixelbook/cli.py`），06 要把它换成书解析出的音色，并在流水线里加守卫。
 - 来自 04（2026-10-28）：新术语试听是 `pixelbook terms`（`cli.py` 里的 `terms` 分支），音色作为参数传给 `pixelbook.term_audition.audition_terms`，目前传的是 `load_voice_config(REPO_ROOT / "voice.yaml")`；06 改成书解析出的音色时只改 CLI 这一处，`audition_terms` 不需要动，也不要经过守卫。书目录可以从旁白稿路径推出（`script_path.parents[2]`）。
+- 来自 05（2026-10-28）：`pixelbook.tts_cache.voice_fingerprint(voice, engine)` 给出音色指纹（合成清单里的 `voice_fingerprint` 就是它），参考音频按文件内容算 sha256；锁定文件要的"参考音频内容的指纹"可以复用这里的规范化（`<指纹>.json` 的 `voice` 字段就是规范化后的样子，含 `ref_audio_sha256`）。注意音色指纹**也包括引擎自身的设置**（如 `QwenTtsEngine.REF_PAD_SECONDS`）：守卫如果直接比音色指纹，改了补静音也会被拦下要求 `--revoice`；如果只比音色设置，改补静音时这本书已配过的其他期会保留旧声音。两种都说得通，06 实现时选一种并写明。另外，音色变了缓存键自然就变，`--revoice` 不需要额外清缓存。参考音频不存在时 `voice_episode` 已经会抛 `PipelineError`。
+

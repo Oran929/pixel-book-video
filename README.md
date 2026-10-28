@@ -55,7 +55,11 @@ cd ../video
 npm run render -- ../out/sample-ch01-ep01.mp4                  # 渲染 MP4
 ```
 
-`voice` 先按读音表检查新术语（见下），没有新术语才用 `voice.yaml` 的默认音色逐句配音（wav 在 `books/<书>/cache/tts/`），写出期目录里的合成清单 `episode.json`，再清空 `video/public/episode/`，把每句 wav 和合成清单复制进去。Remotion 只读 `video/public/episode/episode.json`。只想重新复制合成清单、不重新配音时，用 `uv run pixelbook stage ../books/sample/ch01/ep01`。
+`voice` 先按读音表检查新术语（见下），没有新术语才用 `voice.yaml` 的默认音色逐句配音，写出期目录里的合成清单 `episode.json`，再清空 `video/public/episode/`，把每句 wav 和合成清单复制进去。Remotion 只读 `video/public/episode/episode.json`。
+
+每句配音缓存在 `books/<书>/cache/tts/<指纹>.wav`（不提交），指纹由朗读文本和音色指纹算出；音色指纹包括模型、参考音频的**文件内容**、参考文本、生成参数和引擎自身的设置（如参考音频补的静音），不包括随机种子。所以再次运行时只有改过的句子会重新生成，改了音色设置或换了参考音频的内容就全部重新生成。每个 wav 旁边的 `<指纹>.json` 记录生成信息。缓存可以随时删掉，删了就整期重新生成。
+
+只想重新复制合成清单、不重新配音时，用 `uv run pixelbook stage ../books/sample/ch01/ep01`。
 
 ### 读音表与新术语
 
