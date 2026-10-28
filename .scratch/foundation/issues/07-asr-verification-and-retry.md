@@ -40,4 +40,4 @@
 
 - 来自 04（2026-10-28）：对比用的朗读文本就是 `pixelbook.pronunciation.spoken_text(line, table)` 的结果，和交给 TTS 的是同一个，不要另算。
 - 来自 05（2026-10-28）：缓存在 `pixelbook.tts_cache.TtsCache.wav(text)`，目前是"生成 → 改名提交 wav → 写 `<指纹>.json`"一步完成，wav 和 json 都在才算命中，json 最后写（它是"缓存完整"的标记）。07 要把复核和重试放在提交之前（临时文件里生成、识别、选版本，再改名），复核结果写进同一个 json，并沿用先写临时文件再改名的做法（`tts_cache._staged`）。`seed` 已经不进指纹（`tts_cache.UNFINGERPRINTED_PARAMS`），但它还不在 `voice.PARAM_KEYS` 里，`QwenTtsEngine` 会把 `params` 原样传给 mlx-audio 的 `generate`，它认不认 `seed` 要查；现在每次采样本来就随机，不固定种子也能重试。`FakeTtsEngine.texts` 记录了每次调用的朗读文本，可以直接数调用次数。
-
+- 来自 06（2026-10-28）：守卫在 `voice_episode` 里、生成任何一句之前运行；锁定在整期成功之后才写。重试换种子不影响锁定（`seed` 不进锁定，见 `voice_lock.lock_record`）。如果 07 新增会影响声音的参数进 `Voice.params`，它会同时进锁定和缓存键；只影响复核、不影响声音的设置（阈值、识别模型）不要放进 `Voice`，否则改了会被守卫拦下要求 `--revoice`。

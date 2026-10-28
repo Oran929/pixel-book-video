@@ -19,3 +19,4 @@
 ## Comments
 
 - 来自 03（2026-10-28）：渲染命令是 `cd video && npm run render -- <输出路径>`（即 `remotion render Episode`）。合成 ID 是 `Episode`，总帧数由 `calculateMetadata` 读 `video/public/episode/episode.json` 后算出，没有这个文件时渲染会报错并提示先运行 `pixelbook voice` / `stage`。03 的实测：样例 7 句渲染 673 帧，约 23 秒（M5 Max）。
+- 来自 06（2026-10-28）：`voice_episode` 多了 `revoice` 参数，音色和书的 `voice.lock` 不一致时抛 `PipelineError`（一键命令应把它当作"配音"这一步失败报出来，并把 `--revoice` 透传）。冒烟测试的固定小样例如果放在一本书目录下，首次运行会写 `voice.lock`；用临时目录或忽略它，不要污染 `books/sample/voice.lock`。样例书的 `voice.lock` 已按当前 `voice.yaml`（tianmei）写好，改默认音色后出样片需要 `--revoice`。`--revoice` 目前只重配指定的一期，如果一键命令要支持"整本书重配"，需要定一期上屏到 `video/public/episode/`。
