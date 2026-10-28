@@ -16,6 +16,7 @@ from pixelbook.pipeline import (
     voice_episode,
 )
 from pixelbook.pronunciation import PronunciationError, load_pronunciation
+from pixelbook.render import RenderError, render_episode
 from pixelbook.script import ScriptError
 from pixelbook.term_audition import audition_terms
 from pixelbook.verification import (
@@ -102,6 +103,45 @@ def _texts(item: dict) -> str:
     )
 
 
+def _verifier() -> Verifier:
+    from pixelbook import mlx_asr
+
+    config = load_verification_config(VERIFICATION)
+    return Verifier(
+        mlx_asr.MlxAsrEngine(config.asr),
+        max_diff_rate=config.max_diff_rate,
+        max_retries=config.max_retries,
+    )
+
+
+def _print_render_summary(summary: dict[str, Any]) -> None:
+    duration = summary["duration"]
+    verdict = {
+        "within": "在目标范围之内",
+        "too-short": "太短（低于目标范围，只报告）",
+        "too-long": "太长（超出目标范围，只报告）",
+    }[duration["verdict"]]
+    print(
+        f"\n成片 {summary['mp4']}\n"
+        f"  帧数：视频流 {summary['frames']} 帧，时间轴 {summary['total_frames']} 帧"
+        f"（{summary['fps']}fps，相差不超过一帧）\n"
+        f"  总时长 {duration['text']}：{verdict}\n"
+        f"  打点时间表 {summary['segments']}"
+    )
+    if passes := summary["asr_pinyin_passes"]:
+        ids = "、".join(item["id"] for item in passes)
+        print(
+            f"  靠拼音通过（多半是同音字识别错，不用处理）：{len(passes)} 句（{ids}）"
+        )
+    if failures := summary["asr_failures"]:
+        print(f"  复核未通过（请试听）：{len(failures)} 句")
+        for item in failures:
+            print(f"    {item['id']}  {_rates(item)}\n{_texts(item)}")
+            print(f"    缓存：{item['cache']}")
+    else:
+        print("  复核未通过：无")
+
+
 def _book_voice(script: Path) -> Voice:
     # 旁白稿在 books/<书>/<章>/<期>/script.yaml
     return resolve_book_voice(script.parents[2], REPO_ROOT)
@@ -129,6 +169,20 @@ def main(argv: list[str] | None = None) -> int:
         "--revoice",
         action="store_true",
         help="音色和书的锁定音色不一致时，确认整本书用新音色重新配音（更新锁定）",
+    )
+
+    render = commands.add_parser(
+        "render",
+        help="一键出片：配音 → 时间轴 → 渲染 MP4 → 核对时长，打印汇总报告",
+    )
+    render.add_argument("script", type=Path, help="books/<书>/<章>/<期>/script.yaml")
+    render.add_argument(
+        "--out", type=Path, help="MP4 写到哪里，默认 out/<书>-<章>-<期>.mp4"
+    )
+    render.add_argument(
+        "--revoice",
+        action="store_true",
+        help="同 `voice --revoice`：确认整本书用新音色重新配音（更新锁定）",
     )
 
     terms = commands.add_parser(
@@ -167,24 +221,19 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "choose-voice":
             chosen = choose_voice(args.audition_dir, args.name, REPO_ROOT)
             print(f"已写入 {REPO_ROOT / 'voice.yaml'}：{chosen}")
+        elif args.command == "render":
+            return _render(args.script.resolve(), args.out, args.revoice)
         elif args.command == "voice":
-            from pixelbook import mlx_asr
             from pixelbook.qwen_tts import QwenTtsEngine
 
             script = args.script.resolve()
-            config = load_verification_config(VERIFICATION)
-            verifier = Verifier(
-                mlx_asr.MlxAsrEngine(config.asr),
-                max_diff_rate=config.max_diff_rate,
-                max_retries=config.max_retries,
-            )
             manifest = voice_episode(
                 script,
                 QwenTtsEngine(),
                 _book_voice(script),
                 VIDEO_PUBLIC,
                 load_pronunciation(PRONUNCIATION),
-                verifier,
+                _verifier(),
                 revoice=args.revoice,
                 font=VIDEO_PUBLIC / SUBTITLE_FONT,
             )
@@ -243,4 +292,42 @@ def main(argv: list[str] | None = None) -> int:
     ) as error:
         print(error)
         return 1
+    return 0
+
+
+def _render(script: Path, out: Path | None, revoice: bool) -> int:
+    # 旁白稿在 books/<书>/<章>/<期>/script.yaml
+    out = (
+        out or REPO_ROOT / "out" / ("-".join(script.parent.parts[-3:]) + ".mp4")
+    ).resolve()
+    try:
+        try:
+            from pixelbook.qwen_tts import QwenTtsEngine
+
+            engine = QwenTtsEngine()
+            voice = _book_voice(script)
+            verifier = _verifier()
+            pronunciation = load_pronunciation(PRONUNCIATION)
+        except (
+            PronunciationError,
+            VerificationConfigError,
+            VoiceConfigError,
+        ) as error:
+            raise RenderError("配音", str(error)) from error
+        summary = render_episode(
+            script,
+            engine,
+            voice,
+            verifier,
+            pronunciation,
+            out=out,
+            public_dir=VIDEO_PUBLIC,
+            font=VIDEO_PUBLIC / SUBTITLE_FONT,
+            revoice=revoice,
+            log=print,
+        )
+    except RenderError as error:
+        print(error)
+        return 1
+    _print_render_summary(summary)
     return 0

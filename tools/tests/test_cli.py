@@ -231,3 +231,40 @@ def test_voice_fails_naming_each_line_and_character_missing_from_the_font(
     assert report["missing_glyphs"] == [{"id": "s01-l01", "char": "𠀀"}]
     # 配音不白做：合成清单照常写出
     assert (script.parent / "episode.json").is_file()
+
+
+BAD_STORYBOARD = {
+    "scenes": [],
+    "pauses": [{"after": "s09-l09", "seconds": 1}],
+}
+
+
+def test_render_reports_a_bad_config_as_the_voicing_step(repo, engine, asr, capsys):
+    (repo / "verification.yaml").write_text("asr: whisper\nmax_diff_rate: 0.1\n")
+
+    assert cli.main(["render", _script(repo)]) == 1
+
+    out = capsys.readouterr().out
+    assert "第 1 步「配音」失败" in out
+    assert "`max_retries`" in out
+
+
+def test_render_passes_revoice_through_and_stops_at_the_failing_step(
+    repo, engine, asr, capsys
+):
+    # 分镜不合格：配音一步成功后在时间轴一步停下，不进入（慢的）渲染
+    episode = repo / "books" / "demo" / "ch01" / "ep01"
+    (episode / "storyboard.json").write_text(json.dumps(BAD_STORYBOARD))
+    assert cli.main(["render", _script(repo)]) == 1
+    assert "第 2 步「时间轴」失败" in capsys.readouterr().out
+    (repo / "books" / "demo" / "book.yaml").write_text("voice: voices/yujie.yaml\n")
+
+    assert cli.main(["render", _script(repo)]) == 1
+    out = capsys.readouterr().out
+    assert "第 1 步「配音」失败" in out and "--revoice" in out
+
+    assert cli.main(["render", _script(repo), "--revoice"]) == 1
+    out = capsys.readouterr().out
+    assert "第 2 步「时间轴」失败" in out and "s09-l09" in out
+    assert _locked_speaker(repo) == "Serena"
+    assert not (repo / "out" / "demo-ch01-ep01.mp4").exists()
