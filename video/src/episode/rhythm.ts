@@ -26,6 +26,19 @@ export const DURATION_RANGE = { min: 4 * 60, max: 6 * 60 } as const;
 
 export type DurationVerdict = "within" | "too-short" | "too-long";
 
+/** 整秒 → `m:ss`（分钟不补零） */
+const minutesSeconds = (whole: number) =>
+  `${Math.floor(whole / 60)}:${pad(whole % 60)}`;
+
+const RANGE_TEXT = `${minutesSeconds(DURATION_RANGE.min)}–${minutesSeconds(DURATION_RANGE.max)}`;
+
+/** 判断的说明文字，命令行原样打印（时间轴导出命令和 Python 的 `pixelbook render` 都用它） */
+const VERDICT_TEXT: Record<DurationVerdict, string> = {
+  within: `在 ${RANGE_TEXT} 之内`,
+  "too-short": `太短（目标 ${RANGE_TEXT}，只报告）`,
+  "too-long": `太长（目标 ${RANGE_TEXT}，只报告）`,
+};
+
 export type DurationReport = {
   /** 总帧数 ÷ 帧率，不取整 */
   seconds: number;
@@ -33,6 +46,8 @@ export type DurationReport = {
   text: string;
   /** 按显示出来的整秒判断，避免出现"6:00 太长" */
   verdict: DurationVerdict;
+  /** `verdict` 的说明文字，例如"在 4:00–6:00 之内" */
+  verdictText: string;
 };
 
 export const durationReport = ({
@@ -49,7 +64,8 @@ export const durationReport = ({
         : "within";
   return {
     seconds,
-    text: `${Math.floor(whole / 60)}:${pad(whole % 60)}`,
+    text: minutesSeconds(whole),
     verdict,
+    verdictText: VERDICT_TEXT[verdict],
   };
 };

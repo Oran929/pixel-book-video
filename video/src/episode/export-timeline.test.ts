@@ -72,7 +72,12 @@ describe("exportTimeline", () => {
     // 61 + 9（句间）+ 45 + 24（换画面）+ 75 = 214 帧 ≈ 7.13 秒
     expect(read(join(episode, "timeline.json"))).toEqual({
       ...computeTimeline(MANIFEST, DEFAULT_PAUSES, VIDEO.fps),
-      duration: { seconds: 214 / 30, text: "0:07", verdict: "too-short" },
+      duration: {
+        seconds: 214 / 30,
+        text: "0:07",
+        verdict: "too-short",
+        verdictText: "太短（目标 4:00–6:00，只报告）",
+      },
     });
   });
 

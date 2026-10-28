@@ -3,19 +3,9 @@
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { exportTimeline, TIMELINE_FILE } from "./export-timeline";
-import { DURATION_RANGE, type DurationVerdict } from "./rhythm";
 
 const USAGE =
   "用法：npm run timeline -- <期目录> [--no-storyboard] [--out <timeline.json 路径>]";
-
-const mss = (seconds: number) =>
-  `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
-const RANGE = `${mss(DURATION_RANGE.min)}–${mss(DURATION_RANGE.max)}`;
-const VERDICT_TEXT: Record<DurationVerdict, string> = {
-  within: `在 ${RANGE} 之内`,
-  "too-short": `太短（目标 ${RANGE}）`,
-  "too-long": `太长（目标 ${RANGE}）`,
-};
 
 const main = (argv: string[]): number => {
   let parsed;
@@ -60,7 +50,7 @@ const main = (argv: string[]): number => {
     );
     // 样片阶段只报告，不以非零码退出
     console.log(
-      `总时长 ${timeline.duration.text}：${VERDICT_TEXT[timeline.duration.verdict]}`,
+      `总时长 ${timeline.duration.text}：${timeline.duration.verdictText}`,
     );
   } catch (error) {
     console.error((error as Error).message);

@@ -46,6 +46,17 @@ describe("durationReport", () => {
     expect(at30fps(seconds)).toMatchObject({ text, verdict });
   });
 
+  it.each([
+    [3 * 60 + 59, "太短（目标 4:00–6:00，只报告）"],
+    [5 * 60, "在 4:00–6:00 之内"],
+    [6 * 60 + 1, "太长（目标 4:00–6:00，只报告）"],
+  ] as const)(
+    "words the verdict for %d seconds against the target range",
+    (seconds, verdictText) => {
+      expect(at30fps(seconds).verdictText).toBe(verdictText);
+    },
+  );
+
   it("reports the exact seconds of the timeline's total frames", () => {
     expect(durationReport({ fps: 30, totalFrames: 565 }).seconds).toBeCloseTo(
       18.8333,

@@ -74,6 +74,8 @@ def test_fixed_sample_renders_with_the_computed_number_of_frames(repo, capsys):
     assert abs(video_frames(mp4) - timeline["totalFrames"]) <= 1
     # 约 8 秒的样例必然"太短"：只报告，不让命令失败
     assert timeline["duration"]["verdict"] == "too-short"
+    # 判断的说明文字由时间轴导出命令写进 timeline.json，汇总原样打印
+    assert "总时长 0:07：太短（目标 4:00–6:00，只报告）" in out
     assert (episode / "segments.txt").read_text().splitlines() == [
         "00:00 开场",
         "00:05 结尾",
