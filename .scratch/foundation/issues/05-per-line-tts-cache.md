@@ -16,3 +16,7 @@
 - [ ] 合成清单里的音频位置仍按 03 的约定（以 `video/public/` 为起点、文件名带内容哈希）；流水线从缓存复制到 `video/public/episode/`
 - [ ] 合成清单记录生成时使用的音色指纹
 - [ ] Python 测试（假引擎会记录调用次数）：第二次运行调用 0 次；改一句调用 1 次；改音色设置后全部重新生成；换了参考音频的内容（路径不变）也全部重新生成；删掉缓存后能完整重建
+
+## Comments
+
+- 来自 03（2026-10-28）：03 把每句 wav 写到 `books/<书>/cache/tts/<旁白句ID>.wav`，书目录由旁白稿路径推出（`script_path.parents[2]`）；`voice_episode(script_path, engine, voice, public_dir)` 每次都调用引擎。复制到 `video/public/episode/` 的部分（清空、按内容哈希命名、复制合成清单）已经有测试，05 改缓存命名时不用动它。合成清单里还没有音色指纹字段，05 加上时，TS 一侧的 zod schema（`video/src/episode/manifest.ts`）也要加。

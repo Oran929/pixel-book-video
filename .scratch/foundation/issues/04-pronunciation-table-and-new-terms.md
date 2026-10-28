@@ -34,3 +34,7 @@
   - `性能提升 30%，第 2 章` → 没有新术语
   - `I/O 很慢` → 新术语 `I/O`
   - `dry 小写` → 新术语 `dry`（区分大小写）
+
+## Comments
+
+- 来自 03（2026-10-28）：朗读文本目前由 `pixelbook.script.Line.spoken` 给出（有 `speech` 用 `speech`，否则用 `text`），读音替换应接在这里或流水线里调用它的地方（`pixelbook/pipeline.py` 的 `voice_episode`）。流水线的拒绝运行可以沿用 `PipelineError`，CLI 已经统一捕获它并以非零码退出。

@@ -14,3 +14,7 @@
 - [ ] 加上 `--revoice` 后可以通过：锁定被更新，所有句子按新音色重新生成
 - [ ] 新术语试听、音色试听这类试听命令不受守卫限制，也不写入锁定；新术语试听改用书解析出的音色（04 里暂时用的是项目默认音色）
 - [ ] Python 测试覆盖以上各种情况；测试在临时目录里进行，不写入真实的 `books/sample/voice.lock`
+
+## Comments
+
+- 来自 03（2026-10-28）：`pixelbook voice` 目前直接用 `load_voice_config(REPO_ROOT / "voice.yaml")` 作为音色传给 `voice_episode`（`tools/src/pixelbook/cli.py`），06 要把它换成书解析出的音色，并在流水线里加守卫。

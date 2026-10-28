@@ -44,6 +44,19 @@ uv run pixelbook choose-voice <名字>  # 把选中的音色写进 voice.yaml
 
 `audition` 会为每个候选音色生成 `<名字>-<句号>.wav`，并打印每句的生成耗时、音频时长、峰值内存，以及一期（约 100 句）的耗时估算，完整数据在 `out/audition/report.json`。设计音色另外生成一句 `<名字>-ref.wav`：如果选中的是设计音色，`choose-voice` 会把这一句复制到 `voices/<名字>.wav` 作为参考音频，`voice.yaml` 改用 Base 模型克隆它。所以选之前也要听一下这句参考句。选中预设音色时，`voice.yaml` 直接记录模型和音色名。`voice.yaml` 里的 `ref_audio` 是相对仓库根目录的路径；`voice.yaml` 和参考音频都要提交。
 
+## 从旁白稿到 MP4
+
+旁白稿放在 `books/<书>/<章>/<期>/script.yaml`（样例：`books/sample/ch01/ep01/script.yaml`）。
+
+```sh
+cd tools
+uv run pixelbook voice ../books/sample/ch01/ep01/script.yaml   # 逐句配音，生成合成清单
+cd ../video
+npm run render -- ../out/sample-ch01-ep01.mp4                  # 渲染 MP4
+```
+
+`voice` 用 `voice.yaml` 的默认音色逐句配音（wav 在 `books/<书>/cache/tts/`），写出期目录里的合成清单 `episode.json`，再清空 `video/public/episode/`，把每句 wav 和合成清单复制进去。Remotion 只读 `video/public/episode/episode.json`。只想重新复制合成清单、不重新配音时，用 `uv run pixelbook stage ../books/sample/ch01/ep01`。
+
 ## 检查
 
 先运行过 `make install`，再运行：
@@ -56,6 +69,10 @@ make check
 
 ## 预览
 
+先运行过 `pixelbook voice`（或 `stage`），再：
+
 ```sh
 cd video && npm run studio
 ```
+
+在 Studio 里打开 `Episode` 合成。

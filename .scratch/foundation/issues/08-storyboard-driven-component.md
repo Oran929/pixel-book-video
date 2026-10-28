@@ -24,3 +24,11 @@
 - [ ] 一个简单组件，在分镜指定的旁白句出现
 - [ ] 样例书的分镜 `books/sample/ch01/ep01/storyboard.json` 提交到 git
 - [ ] TS 测试覆盖：停顿覆盖、负偏移、偏移取整、触发早于画面开始时报错、ID 不存在和组件名不存在时的报错、旁白句不属于该画面时的报错
+
+## Comments
+
+- 来自 03（2026-10-28）：
+  - 旁白稿里的段和画面也有 `id`（如 `s01`、`s01-c01`），合成清单的 `scenes` 列出画面 ID 和所属段，分镜可以按画面 ID 引用，不必只按序号。
+  - `stage_episode`（`tools/src/pixelbook/pipeline.py`）复制的文件列表目前只有 `episode.json`，加上 `storyboard.json`（不存在时跳过）。
+  - 时间轴里画面的区间是"从第一句开始，到下一个画面的第一句开始"，换画面的停顿归前一个画面；帧区间起含止不含。组件"到所在画面结束时消失"就按这个 `endFrame`。
+  - 停顿目前是 `computeTimeline(manifest, pauses, fps)` 的 `Pauses` 参数，分镜覆盖可以作为额外输入加进去。

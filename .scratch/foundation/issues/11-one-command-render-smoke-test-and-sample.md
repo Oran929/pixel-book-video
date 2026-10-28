@@ -15,3 +15,7 @@
 - [ ] 样片：默认音色、字幕逐句同步、组件在指定的旁白句出现、风格表和频道形象初版都生效
 - [ ] README 写明从旁白稿到 MP4 的完整操作步骤
 - [ ] 人工验收：我验收样片后，写一份简短回顾，记下哪些假设被推翻、哪些需要调整，作为阶段 3–4 spec 的输入
+
+## Comments
+
+- 来自 03（2026-10-28）：渲染命令是 `cd video && npm run render -- <输出路径>`（即 `remotion render Episode`）。合成 ID 是 `Episode`，总帧数由 `calculateMetadata` 读 `video/public/episode/episode.json` 后算出，没有这个文件时渲染会报错并提示先运行 `pixelbook voice` / `stage`。03 的实测：样例 7 句渲染 673 帧，约 23 秒（M5 Max）。

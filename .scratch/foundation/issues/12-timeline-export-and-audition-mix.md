@@ -16,3 +16,7 @@
 - [ ] TS 测试：同一份合成清单导出的 `timeline.json` 与直接调用时间轴函数的结果相同
 - [ ] Python 测试：用假引擎生成的 wav 和一份手写的 `timeline.json` 拼接，检查总时长；`timeline.json` 格式错误时报错并指出字段
 - [ ] 人工验收：用真实配音跑样例旁白稿，听试听音轨；停顿默认值要改的话，改 TS 里的默认值，并在 Comments 里记下改成了多少、为什么
+
+## Comments
+
+- 来自 03（2026-10-28）：时间轴函数是 `video/src/episode/timeline.ts` 的 `computeTimeline(manifest, DEFAULT_PAUSES, VIDEO.fps)`，合成清单用 `manifest.ts` 的 `parseManifest` 校验。`Timeline` 里帧区间起含止不含；每句 `endFrame` 是音频结束（不含停顿），总帧数 = 最后一句音频结束、末尾不加停顿。导出的 `timeline.json` 可以直接序列化这个结构。tsconfig 的 lib 已经是 ES2023。
