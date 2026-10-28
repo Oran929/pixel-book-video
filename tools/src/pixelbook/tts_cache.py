@@ -11,12 +11,14 @@ import os
 import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from pixelbook import REPO_ROOT
-from pixelbook.tts import TtsEngine
+from pixelbook.tts import SynthesisStats, TtsEngine
+from pixelbook.verification import Verifier, difference_rate
 from pixelbook.voice import Voice
 
 # 每次生成都可能不同、但不改变"这是哪一句、用什么音色"的参数，不进指纹。
@@ -61,51 +63,109 @@ def normalized_voice(voice: Voice) -> dict[str, Any]:
     }
 
 
+@dataclass(frozen=True)
+class CachedLine:
+    wav: Path
+    # 复核结果：`passed`、每次生成的 `attempts`（识别结果和差异率）、选中的 `chosen`
+    verification: dict[str, Any]
+
+
 class TtsCache:
-    def __init__(self, directory: Path, engine: TtsEngine, voice: Voice) -> None:
+    def __init__(
+        self, directory: Path, engine: TtsEngine, voice: Voice, verifier: Verifier
+    ) -> None:
         self.directory = directory
         self.engine = engine
         self.voice = voice
+        self.verifier = verifier
         self._settings = _settings(voice, engine)
         self.voice_fingerprint = _digest(self._settings)
 
-    def wav(self, text: str) -> Path:
-        """返回朗读 `text` 的 wav；缓存里没有时才调用 TTS 引擎生成。
+    def line(self, text: str) -> CachedLine:
+        """返回朗读 `text` 的 wav 和它的复核结果；缓存里没有时才生成并复核。
 
-        `<指纹>.json` 最后写出，有它才算缓存命中。
+        每一版都先生成到临时文件、经语音识别复核；不通过就重新生成，最多重试
+        `max_retries` 次。通过的那一版写入缓存；都不通过时，缓存差异率最低的
+        一版并标记"复核未通过"。之后命中缓存的句子不再生成，也不再识别。
+        `<指纹>.json` 最后写出，有它（且带复核结果）才算缓存命中。
         """
         key = _digest({"text": text, "voice": self.voice_fingerprint})
         wav = self.directory / f"{key}.wav"
         info = self.directory / f"{key}.json"
         if wav.is_file() and info.is_file():
-            return wav
+            record = json.loads(info.read_text())
+            # 票 07 之前写的缓存没有复核结果，当作没有缓存
+            if "verification" in record:
+                return CachedLine(wav, record["verification"])
         self.directory.mkdir(parents=True, exist_ok=True)
-        with _staged(wav) as tmp:
-            stats = self.engine.synthesize(text, self.voice, tmp)
+
+        takes: list[Path] = []
+        stats: list[SynthesisStats] = []
+        attempts: list[dict[str, Any]] = []
+        try:
+            for attempt in range(1 + self.verifier.max_retries):
+                takes.append(_temp_path(wav))
+                voice = _reseeded(self.voice, attempt)
+                stats.append(self.engine.synthesize(text, voice, takes[-1]))
+                heard = self.verifier.asr.transcribe(takes[-1])
+                attempts.append(
+                    {"heard": heard, "diff_rate": difference_rate(text, heard)}
+                )
+                if attempts[-1]["diff_rate"] <= self.verifier.max_diff_rate:
+                    break
+            chosen = min(range(len(attempts)), key=lambda i: attempts[i]["diff_rate"])
+            takes[chosen].replace(wav)
+        finally:
+            for tmp in takes:
+                tmp.unlink(missing_ok=True)
+        verification = {
+            "passed": attempts[chosen]["diff_rate"] <= self.verifier.max_diff_rate,
+            "chosen": chosen,
+            "attempts": attempts,
+            "max_diff_rate": self.verifier.max_diff_rate,
+            "asr": self.verifier.asr.settings,
+        }
+
         record = {
             "text": text,
             "voice_fingerprint": self.voice_fingerprint,
             **self._settings,
-            "elapsed_seconds": stats.elapsed_seconds,
-            "peak_memory_bytes": stats.peak_memory_bytes,
+            # 选中那一版的生成耗时；`total_elapsed_seconds` 含所有重试
+            "elapsed_seconds": stats[chosen].elapsed_seconds,
+            "total_elapsed_seconds": sum(s.elapsed_seconds for s in stats),
+            "peak_memory_bytes": max(s.peak_memory_bytes for s in stats),
             "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
+            "verification": verification,
         }
         with _staged(info) as tmp:
             tmp.write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n")
-        return wav
+        return CachedLine(wav, verification)
 
 
-@contextmanager
-def _staged(target: Path) -> Iterator[Path]:
-    """先写同目录下的临时文件，写完再改名成 `target`；中途出错就删掉临时文件。
+def _reseeded(voice: Voice, attempt: int) -> Voice:
+    """第 `attempt` 次重试用的音色：固定了随机种子时换一个种子，保证可能得到不同的音频。
 
-    临时文件保留原扩展名（音频库按扩展名决定格式），以 `.` 开头。
+    没有固定种子时每次采样本来就是随机的，原样返回。
     """
+    seed = voice.params.get("seed")
+    if attempt == 0 or seed is None:
+        return voice
+    return replace(voice, params={**voice.params, "seed": seed + attempt})
+
+
+def _temp_path(target: Path) -> Path:
+    """同目录下的临时文件，保留原扩展名（音频库按扩展名决定格式），以 `.` 开头。"""
     fd, name = tempfile.mkstemp(
         dir=target.parent, prefix=f".{target.stem}-", suffix=target.suffix
     )
     os.close(fd)
-    tmp = Path(name)
+    return Path(name)
+
+
+@contextmanager
+def _staged(target: Path) -> Iterator[Path]:
+    """先写同目录下的临时文件，写完再改名成 `target`；中途出错就删掉临时文件。"""
+    tmp = _temp_path(target)
     try:
         yield tmp
         tmp.replace(target)

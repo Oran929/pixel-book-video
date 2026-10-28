@@ -7,6 +7,7 @@ import pytest
 import yaml
 
 from pixelbook import cli
+from pixelbook.asr import FakeAsrEngine
 from pixelbook.tts import FakeTtsEngine
 from pixelbook.voice import Voice, save_voice_config
 
@@ -50,13 +51,41 @@ def repo(tmp_path, monkeypatch):
     (tmp_path / "voices").mkdir()
     save_voice_config(YUJIE, tmp_path / "voices" / "yujie.yaml")
     (tmp_path / "pronunciation.yaml").write_text("DRY: D R Y\n")
+    (tmp_path / "verification.yaml").write_text(
+        "asr: whisper\nmax_diff_rate: 0.1\nmax_retries: 1\n"
+    )
     monkeypatch.setattr(cli, "REPO_ROOT", tmp_path)
     monkeypatch.setattr(cli, "PRONUNCIATION", tmp_path / "pronunciation.yaml")
+    monkeypatch.setattr(cli, "VERIFICATION", tmp_path / "verification.yaml")
     monkeypatch.setattr(cli, "VIDEO_PUBLIC", tmp_path / "public")
     script = tmp_path / "books" / "demo" / "ch01" / "ep01" / "script.yaml"
     script.parent.mkdir(parents=True)
     script.write_text(SCRIPT)
     return tmp_path
+
+
+class NamedAsrEngine(FakeAsrEngine):
+    def __init__(self, name, mishear=None):
+        super().__init__(mishear)
+        self.name = name
+
+
+@pytest.fixture
+def asr(monkeypatch):
+    """把真实识别引擎换成假的；`asr.mishear` 设定听错的句子，`asr.engines` 记录创建的引擎。"""
+
+    class Factory:
+        def __init__(self):
+            self.mishear = {}
+            self.engines = []
+
+        def __call__(self, name):
+            self.engines.append(NamedAsrEngine(name, self.mishear))
+            return self.engines[-1]
+
+    factory = Factory()
+    monkeypatch.setattr("pixelbook.mlx_asr.MlxAsrEngine", factory)
+    return factory
 
 
 def _script(repo):
@@ -68,7 +97,7 @@ def _locked_speaker(repo):
     return yaml.safe_load(lock.read_text())["speaker"]
 
 
-def test_voice_uses_the_book_override(repo, engine):
+def test_voice_uses_the_book_override(repo, engine, asr):
     (repo / "books" / "demo" / "book.yaml").write_text("voice: voices/yujie.yaml\n")
 
     assert cli.main(["voice", _script(repo)]) == 0
@@ -77,7 +106,7 @@ def test_voice_uses_the_book_override(repo, engine):
     assert _locked_speaker(repo) == "Serena"
 
 
-def test_voice_refuses_a_changed_voice_until_revoice(repo, engine, capsys):
+def test_voice_refuses_a_changed_voice_until_revoice(repo, engine, asr, capsys):
     assert cli.main(["voice", _script(repo)]) == 0
     (repo / "books" / "demo" / "book.yaml").write_text("voice: voices/yujie.yaml\n")
 
@@ -102,3 +131,28 @@ def test_term_audition_uses_the_book_voice_without_guard_or_lock(repo, engine):
     assert engine.texts == ["DRY"]
     assert engine.voices == [YUJIE]
     assert lock.read_text() == "model: base-model\nspeaker: Ryan\n"
+
+
+def test_voice_verifies_with_the_configured_asr_and_retries(repo, engine, asr, capsys):
+    asr.mishear = {"今天读一本 D R Y 的书": ["今天读一本书"] * 2}
+
+    assert cli.main(["voice", _script(repo)]) == 0
+
+    assert [e.name for e in asr.engines] == ["whisper"]
+    # max_retries: 1，一共生成两次
+    assert engine.texts == ["今天读一本 D R Y 的书"] * 2
+    out = capsys.readouterr().out
+    assert "1 句复核未通过" in out
+    assert "s01-l01" in out
+    assert "今天读一本书" in out
+
+
+def test_voice_with_a_bad_verification_config_names_the_field(
+    repo, engine, asr, capsys
+):
+    (repo / "verification.yaml").write_text("asr: whisper\nmax_diff_rate: 0.1\n")
+
+    assert cli.main(["voice", _script(repo)]) == 1
+
+    assert "`max_retries`" in capsys.readouterr().out
+    assert engine.texts == []

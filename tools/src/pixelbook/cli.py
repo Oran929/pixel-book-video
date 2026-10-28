@@ -1,15 +1,26 @@
 """命令行入口：`uv run pixelbook <命令>`。"""
 
 import argparse
+import json
 from pathlib import Path
 from typing import Any
 
 from pixelbook import REPO_ROOT
 from pixelbook.audition import AuditionError, choose_voice, run_audition
-from pixelbook.pipeline import PipelineError, stage_episode, voice_episode
+from pixelbook.pipeline import (
+    REPORT_NAME,
+    PipelineError,
+    stage_episode,
+    voice_episode,
+)
 from pixelbook.pronunciation import PronunciationError, load_pronunciation
 from pixelbook.script import ScriptError
 from pixelbook.term_audition import audition_terms
+from pixelbook.verification import (
+    VerificationConfigError,
+    Verifier,
+    load_verification_config,
+)
 from pixelbook.voice import Voice, VoiceConfigError
 from pixelbook.voice_lock import resolve_book_voice
 
@@ -18,6 +29,7 @@ AUDITION_OUT = REPO_ROOT / "out" / "audition"
 VIDEO_PUBLIC = REPO_ROOT / "video" / "public"
 PRONUNCIATION = REPO_ROOT / "pronunciation.yaml"
 TERMS_OUT = REPO_ROOT / "out" / "terms"
+VERIFICATION = REPO_ROOT / "verification.yaml"
 
 
 def _print_report(report: dict[str, Any], out_dir: Path) -> None:
@@ -35,6 +47,25 @@ def _print_report(report: dict[str, Any], out_dir: Path) -> None:
             )
         minutes = candidate["estimated_seconds_per_100_lines"] / 60
         print(f"  估算一期（100 句）：约 {minutes:.0f} 分钟")
+
+
+def _print_asr_failures(report_path: Path) -> None:
+    failures = json.loads(report_path.read_text())["asr_failures"]
+    if not failures:
+        return
+    print(
+        f"\n{len(failures)} 句复核未通过（已用差异率最低的一版；详见 {report_path}）："
+    )
+    for item in failures:
+        print(
+            f"  {item['id']}  差异率 {item['diff_rate']:.0%}\n"
+            f"    字幕：{item['text']}\n    朗读：{item['spoken']}\n"
+            f"    识别：{item['heard']}\n    缓存：{item['cache']}"
+        )
+    print(
+        "确实读错了，就删掉这句的缓存 wav（在书的目录下）再配音，或者改写这句；"
+        "是识别错了就不用管。之后每次配音都会继续列出它。"
+    )
 
 
 def _book_voice(script: Path) -> Voice:
@@ -88,15 +119,23 @@ def main(argv: list[str] | None = None) -> int:
             chosen = choose_voice(args.audition_dir, args.name, REPO_ROOT)
             print(f"已写入 {REPO_ROOT / 'voice.yaml'}：{chosen}")
         elif args.command == "voice":
+            from pixelbook import mlx_asr
             from pixelbook.qwen_tts import QwenTtsEngine
 
             script = args.script.resolve()
+            config = load_verification_config(VERIFICATION)
+            verifier = Verifier(
+                mlx_asr.MlxAsrEngine(config.asr),
+                max_diff_rate=config.max_diff_rate,
+                max_retries=config.max_retries,
+            )
             manifest = voice_episode(
                 script,
                 QwenTtsEngine(),
                 _book_voice(script),
                 VIDEO_PUBLIC,
                 load_pronunciation(PRONUNCIATION),
+                verifier,
                 revoice=args.revoice,
             )
             total = sum(line["seconds"] for line in manifest["lines"])
@@ -105,6 +144,7 @@ def main(argv: list[str] | None = None) -> int:
                 f"合成清单 {args.script.parent / 'episode.json'}，"
                 f"已复制到 {VIDEO_PUBLIC / 'episode'}"
             )
+            _print_asr_failures(script.parent / REPORT_NAME)
         elif args.command == "terms":
             table = load_pronunciation(PRONUNCIATION)
             script = args.script.resolve()
@@ -133,6 +173,7 @@ def main(argv: list[str] | None = None) -> int:
         ScriptError,
         PipelineError,
         PronunciationError,
+        VerificationConfigError,
         VoiceConfigError,
     ) as error:
         print(error)

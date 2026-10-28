@@ -5,6 +5,7 @@ import shutil
 import pytest
 
 from pixelbook import REPO_ROOT
+from pixelbook.asr import FakeAsrEngine
 from pixelbook.pipeline import PipelineError, voice_episode
 from pixelbook.pronunciation import (
     PronunciationError,
@@ -12,7 +13,14 @@ from pixelbook.pronunciation import (
     new_terms,
 )
 from pixelbook.tts import FakeTtsEngine
+from pixelbook.verification import Verifier
 from pixelbook.voice import Voice
+
+
+def checked(asr=None, max_retries=2):
+    """复核：默认用原样"听见"朗读文本的假识别引擎，阈值 0.1，重试 2 次。"""
+    return Verifier(asr or FakeAsrEngine(), max_diff_rate=0.1, max_retries=max_retries)
+
 
 VOICE = Voice(model="base-model", ref_audio="voices/tianmei.wav", ref_text="你好。")
 TABLE = {"DRY": "DRY", "KV Cache": "KV Cache"}
@@ -40,7 +48,9 @@ def episode(tmp_path):
     def voice(text: str, table: dict[str, str]) -> FakeTtsEngine:
         path.write_text(text)
         engine = FakeTtsEngine()
-        voice_episode(path, engine, VOICE, tmp_path / "public", table)
+        voice_episode(
+            path, engine, VOICE, tmp_path / "public", table, verifier=checked()
+        )
         return engine
 
     voice.path = path

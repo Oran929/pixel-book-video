@@ -9,11 +9,19 @@ import pytest
 import yaml
 
 from pixelbook import REPO_ROOT
+from pixelbook.asr import FakeAsrEngine
 from pixelbook.pipeline import PipelineError, stage_episode, voice_episode
 from pixelbook.pronunciation import load_pronunciation
 from pixelbook.script import ScriptError
 from pixelbook.tts import FakeTtsEngine
+from pixelbook.verification import Verifier
 from pixelbook.voice import Voice
+
+
+def checked(asr=None, max_retries=2):
+    """复核：默认用原样"听见"朗读文本的假识别引擎，阈值 0.1，重试 2 次。"""
+    return Verifier(asr or FakeAsrEngine(), max_diff_rate=0.1, max_retries=max_retries)
+
 
 VOICE = Voice(
     model="base-model",
@@ -58,7 +66,9 @@ def script_path(tmp_path):
 
 
 def test_manifest_lists_segments_scenes_and_lines_in_order(tmp_path, script_path):
-    voice_episode(script_path, FakeTtsEngine(), VOICE, tmp_path / "public", {})
+    voice_episode(
+        script_path, FakeTtsEngine(), VOICE, tmp_path / "public", {}, verifier=checked()
+    )
 
     manifest = json.loads((script_path.parent / "episode.json").read_text())
     assert manifest["segments"] == [
@@ -88,7 +98,9 @@ def test_public_dir_holds_only_this_episode_and_every_audio_exists(
     (public / "fonts").mkdir()
     (public / "fonts" / "pixel.ttf").write_bytes(b"font")
 
-    manifest = voice_episode(script_path, FakeTtsEngine(), VOICE, public, {})
+    manifest = voice_episode(
+        script_path, FakeTtsEngine(), VOICE, public, {}, verifier=checked()
+    )
 
     audio = [line["audio"] for line in manifest["lines"]]
     assert all(
@@ -106,9 +118,13 @@ def test_public_dir_holds_only_this_episode_and_every_audio_exists(
 
 
 def test_audio_file_name_changes_with_its_content(tmp_path, script_path):
-    first = voice_episode(script_path, FakeTtsEngine(), VOICE, tmp_path / "public", {})
+    first = voice_episode(
+        script_path, FakeTtsEngine(), VOICE, tmp_path / "public", {}, verifier=checked()
+    )
     script_path.write_text(SCRIPT.replace("今天读一本书", "今天读一本好书"))
-    second = voice_episode(script_path, FakeTtsEngine(), VOICE, tmp_path / "public", {})
+    second = voice_episode(
+        script_path, FakeTtsEngine(), VOICE, tmp_path / "public", {}, verifier=checked()
+    )
 
     assert first["lines"][0]["audio"] != second["lines"][0]["audio"]
     assert first["lines"][1]["audio"] == second["lines"][1]["audio"]
@@ -116,7 +132,9 @@ def test_audio_file_name_changes_with_its_content(tmp_path, script_path):
 
 def test_stage_recopies_episode_json_and_leaves_audio_alone(tmp_path, script_path):
     public = tmp_path / "public"
-    manifest = voice_episode(script_path, FakeTtsEngine(), VOICE, public, {})
+    manifest = voice_episode(
+        script_path, FakeTtsEngine(), VOICE, public, {}, verifier=checked()
+    )
     edited = script_path.parent / "episode.json"
     edited.write_text(edited.read_text().replace("开场", "序章"))
 
@@ -135,7 +153,9 @@ def test_stage_without_a_manifest_says_to_voice_first(tmp_path):
 def _rejected(script_path, public, text):
     script_path.write_text(text)
     with pytest.raises(ScriptError) as error:
-        voice_episode(script_path, FakeTtsEngine(), VOICE, public, {})
+        voice_episode(
+            script_path, FakeTtsEngine(), VOICE, public, {}, verifier=checked()
+        )
     assert not (script_path.parent / "episode.json").exists()
     assert not (public / "episode").exists()
     return str(error.value)
@@ -197,7 +217,12 @@ def test_text_up_to_20_characters_not_counting_whitespace_passes(
     script_path.write_text(SCRIPT.replace("今天读一本书", text))
 
     manifest = voice_episode(
-        script_path, FakeTtsEngine(), VOICE, tmp_path / "public", {"KV Cache": "KV"}
+        script_path,
+        FakeTtsEngine(),
+        VOICE,
+        tmp_path / "public",
+        {"KV Cache": "KV"},
+        verifier=checked(),
     )
 
     assert manifest["lines"][0]["text"] == text
@@ -229,7 +254,12 @@ def test_sample_book_script_is_valid(tmp_path):
 
     # 样例旁白稿在仓库的读音表下没有新术语，能正式配音
     manifest = voice_episode(
-        script_path, FakeTtsEngine(), VOICE, tmp_path / "public", table
+        script_path,
+        FakeTtsEngine(),
+        VOICE,
+        tmp_path / "public",
+        table,
+        verifier=checked(),
     )
 
     assert len(manifest["segments"]) == 2
@@ -241,10 +271,12 @@ def test_sample_book_script_is_valid(tmp_path):
 
 def test_second_run_reuses_every_line_without_calling_tts(tmp_path, script_path):
     public = tmp_path / "public"
-    first = voice_episode(script_path, FakeTtsEngine(), VOICE, public, {})
+    first = voice_episode(
+        script_path, FakeTtsEngine(), VOICE, public, {}, verifier=checked()
+    )
 
     engine = FakeTtsEngine()
-    second = voice_episode(script_path, engine, VOICE, public, {})
+    second = voice_episode(script_path, engine, VOICE, public, {}, verifier=checked())
 
     assert engine.texts == []
     assert second == first
@@ -253,11 +285,15 @@ def test_second_run_reuses_every_line_without_calling_tts(tmp_path, script_path)
 
 
 def test_editing_one_line_regenerates_only_that_line(tmp_path, script_path):
-    voice_episode(script_path, FakeTtsEngine(), VOICE, tmp_path / "public", {})
+    voice_episode(
+        script_path, FakeTtsEngine(), VOICE, tmp_path / "public", {}, verifier=checked()
+    )
     script_path.write_text(SCRIPT.replace("它讲怎样写好代码", "它讲怎样写出好代码"))
 
     engine = FakeTtsEngine()
-    voice_episode(script_path, engine, VOICE, tmp_path / "public", {})
+    voice_episode(
+        script_path, engine, VOICE, tmp_path / "public", {}, verifier=checked()
+    )
 
     assert engine.texts == ["它讲怎样写出好代码"]
 
@@ -271,32 +307,50 @@ def test_editing_one_line_regenerates_only_that_line(tmp_path, script_path):
     ],
 )
 def test_changing_voice_settings_regenerates_every_line(tmp_path, script_path, changed):
-    voice_episode(script_path, FakeTtsEngine(), VOICE, tmp_path / "public", {})
+    voice_episode(
+        script_path, FakeTtsEngine(), VOICE, tmp_path / "public", {}, verifier=checked()
+    )
 
     engine = FakeTtsEngine()
-    voice_episode(script_path, engine, changed, tmp_path / "public", {}, revoice=True)
+    voice_episode(
+        script_path,
+        engine,
+        changed,
+        tmp_path / "public",
+        {},
+        revoice=True,
+        verifier=checked(),
+    )
 
     assert len(engine.texts) == 3
 
 
 def test_changing_engine_settings_regenerates_every_line(tmp_path, script_path):
-    voice_episode(script_path, FakeTtsEngine(), VOICE, tmp_path / "public", {})
+    voice_episode(
+        script_path, FakeTtsEngine(), VOICE, tmp_path / "public", {}, verifier=checked()
+    )
 
     # 例如真实引擎给参考音频补的静音（REF_PAD_SECONDS）改了。引擎设置不进
     # 锁定音色，守卫不拦（票 06）；只是缓存键变了
     engine = FakeTtsEngine(settings={"engine": "fake", "ref_pad_seconds": [0.3, 0.6]})
-    voice_episode(script_path, engine, VOICE, tmp_path / "public", {})
+    voice_episode(
+        script_path, engine, VOICE, tmp_path / "public", {}, verifier=checked()
+    )
 
     assert len(engine.texts) == 3
 
 
 def test_random_seed_is_not_part_of_the_cache_key(tmp_path, script_path):
-    voice_episode(script_path, FakeTtsEngine(), VOICE, tmp_path / "public", {})
+    voice_episode(
+        script_path, FakeTtsEngine(), VOICE, tmp_path / "public", {}, verifier=checked()
+    )
 
     # 07 重试时会换种子，通过的那一版仍然存在同一个指纹下
     engine = FakeTtsEngine()
     reseeded = replace(VOICE, params={**VOICE.params, "seed": 42})
-    voice_episode(script_path, engine, reseeded, tmp_path / "public", {})
+    voice_episode(
+        script_path, engine, reseeded, tmp_path / "public", {}, verifier=checked()
+    )
 
     assert engine.texts == []
 
@@ -316,11 +370,21 @@ def test_new_reference_audio_content_at_the_same_path_regenerates_every_line(
     _write_wav(ref, 1.0)
     # 绝对路径接在仓库根目录后面仍是它自己，测试里用临时文件当参考音频
     voice = replace(VOICE, ref_audio=str(ref))
-    voice_episode(script_path, FakeTtsEngine(), voice, tmp_path / "public", {})
+    voice_episode(
+        script_path, FakeTtsEngine(), voice, tmp_path / "public", {}, verifier=checked()
+    )
 
     _write_wav(ref, 2.0)
     engine = FakeTtsEngine()
-    voice_episode(script_path, engine, voice, tmp_path / "public", {}, revoice=True)
+    voice_episode(
+        script_path,
+        engine,
+        voice,
+        tmp_path / "public",
+        {},
+        revoice=True,
+        verifier=checked(),
+    )
 
     assert len(engine.texts) == 3
 
@@ -330,17 +394,21 @@ def test_missing_reference_audio_is_rejected_before_any_voicing(tmp_path, script
     engine = FakeTtsEngine()
 
     with pytest.raises(PipelineError, match="missing.wav"):
-        voice_episode(script_path, engine, voice, tmp_path / "public", {})
+        voice_episode(
+            script_path, engine, voice, tmp_path / "public", {}, verifier=checked()
+        )
     assert engine.texts == []
 
 
 def test_deleting_the_cache_rebuilds_every_line(tmp_path, script_path):
     public = tmp_path / "public"
-    first = voice_episode(script_path, FakeTtsEngine(), VOICE, public, {})
+    first = voice_episode(
+        script_path, FakeTtsEngine(), VOICE, public, {}, verifier=checked()
+    )
     shutil.rmtree(tmp_path / "books" / "demo" / "cache")
 
     engine = FakeTtsEngine()
-    second = voice_episode(script_path, engine, VOICE, public, {})
+    second = voice_episode(script_path, engine, VOICE, public, {}, verifier=checked())
 
     assert len(engine.texts) == 3
     assert second == first
@@ -351,7 +419,9 @@ def test_deleting_the_cache_rebuilds_every_line(tmp_path, script_path):
 def test_each_cached_wav_has_a_same_named_json_with_generation_info(
     tmp_path, script_path
 ):
-    voice_episode(script_path, FakeTtsEngine(), VOICE, tmp_path / "public", {})
+    voice_episode(
+        script_path, FakeTtsEngine(), VOICE, tmp_path / "public", {}, verifier=checked()
+    )
 
     cache = tmp_path / "books" / "demo" / "cache" / "tts"
     wavs = sorted(p.stem for p in cache.glob("*.wav"))
@@ -390,6 +460,7 @@ def test_interrupted_generation_leaves_no_broken_cache_file(tmp_path, script_pat
             VOICE,
             tmp_path / "public",
             {},
+            verifier=checked(),
         )
 
     cache = tmp_path / "books" / "demo" / "cache" / "tts"
@@ -397,15 +468,21 @@ def test_interrupted_generation_leaves_no_broken_cache_file(tmp_path, script_pat
     assert sorted(p.suffix for p in cache.iterdir()) == [".json", ".wav"]
 
     engine = FakeTtsEngine()
-    voice_episode(script_path, engine, VOICE, tmp_path / "public", {})
+    voice_episode(
+        script_path, engine, VOICE, tmp_path / "public", {}, verifier=checked()
+    )
     assert engine.texts == ["它讲怎样写好代码", "不要重复你自己"]
 
 
 def test_manifest_records_the_voice_fingerprint_used(tmp_path, script_path):
     public = tmp_path / "public"
-    first = voice_episode(script_path, FakeTtsEngine(), VOICE, public, {})
+    first = voice_episode(
+        script_path, FakeTtsEngine(), VOICE, public, {}, verifier=checked()
+    )
     reseeded = replace(VOICE, params={**VOICE.params, "seed": 7})
-    same = voice_episode(script_path, FakeTtsEngine(), reseeded, public, {})
+    same = voice_episode(
+        script_path, FakeTtsEngine(), reseeded, public, {}, verifier=checked()
+    )
     other = voice_episode(
         script_path,
         FakeTtsEngine(),
@@ -413,6 +490,7 @@ def test_manifest_records_the_voice_fingerprint_used(tmp_path, script_path):
         public,
         {},
         revoice=True,
+        verifier=checked(),
     )
 
     assert re.fullmatch(r"[0-9a-f]{16}", first["voice_fingerprint"])
@@ -436,7 +514,9 @@ def _lock(script_path):
 def test_first_voicing_locks_the_full_voice_settings_and_reference_audio_content(
     tmp_path, script_path
 ):
-    voice_episode(script_path, FakeTtsEngine(), VOICE, tmp_path / "public", {})
+    voice_episode(
+        script_path, FakeTtsEngine(), VOICE, tmp_path / "public", {}, verifier=checked()
+    )
 
     content = (REPO_ROOT / "voices" / "tianmei.wav").read_bytes()
     assert yaml.safe_load(_lock(script_path).read_text()) == {
@@ -452,13 +532,13 @@ def test_voice_differing_from_the_lock_is_refused_listing_locked_and_current(
     tmp_path, script_path
 ):
     public = tmp_path / "public"
-    voice_episode(script_path, FakeTtsEngine(), VOICE, public, {})
+    voice_episode(script_path, FakeTtsEngine(), VOICE, public, {}, verifier=checked())
     locked = _lock(script_path).read_text()
     changed = replace(VOICE, ref_text="大家好。")
 
     engine = FakeTtsEngine()
     with pytest.raises(PipelineError) as error:
-        voice_episode(script_path, engine, changed, public, {})
+        voice_episode(script_path, engine, changed, public, {}, verifier=checked())
 
     message = str(error.value)
     assert "ref_text" in message
@@ -470,39 +550,242 @@ def test_voice_differing_from_the_lock_is_refused_listing_locked_and_current(
 
 def test_revoice_updates_the_lock_and_regenerates_every_line(tmp_path, script_path):
     public = tmp_path / "public"
-    voice_episode(script_path, FakeTtsEngine(), VOICE, public, {})
+    voice_episode(script_path, FakeTtsEngine(), VOICE, public, {}, verifier=checked())
     changed = replace(VOICE, ref_text="大家好。")
 
     engine = FakeTtsEngine()
-    voice_episode(script_path, engine, changed, public, {}, revoice=True)
+    voice_episode(
+        script_path, engine, changed, public, {}, revoice=True, verifier=checked()
+    )
 
     assert engine.texts == ["今天读一本书", "它讲怎样写好代码", "不要重复你自己"]
     assert yaml.safe_load(_lock(script_path).read_text())["ref_text"] == "大家好。"
     # 锁定已更新：之后不加 --revoice 也能用新音色配音
-    voice_episode(script_path, FakeTtsEngine(), changed, public, {})
+    voice_episode(script_path, FakeTtsEngine(), changed, public, {}, verifier=checked())
 
 
 def test_new_reference_audio_content_at_the_same_path_is_refused(tmp_path, script_path):
     ref = tmp_path / "ref.wav"
     _write_wav(ref, 1.0)
     voice = replace(VOICE, ref_audio=str(ref))
-    voice_episode(script_path, FakeTtsEngine(), voice, tmp_path / "public", {})
+    voice_episode(
+        script_path, FakeTtsEngine(), voice, tmp_path / "public", {}, verifier=checked()
+    )
 
     _write_wav(ref, 2.0)
     engine = FakeTtsEngine()
     with pytest.raises(PipelineError, match="ref_audio_sha256"):
-        voice_episode(script_path, engine, voice, tmp_path / "public", {})
+        voice_episode(
+            script_path, engine, voice, tmp_path / "public", {}, verifier=checked()
+        )
     assert engine.texts == []
 
 
 def test_failed_first_voicing_writes_no_lock(tmp_path, script_path):
     script_path.write_text(SCRIPT.replace("今天读一本书", "今天读 DRY"))
     with pytest.raises(PipelineError, match="新术语"):
-        voice_episode(script_path, FakeTtsEngine(), VOICE, tmp_path / "public", {})
+        voice_episode(
+            script_path,
+            FakeTtsEngine(),
+            VOICE,
+            tmp_path / "public",
+            {},
+            verifier=checked(),
+        )
 
     script_path.write_text(SCRIPT)
     voice = replace(VOICE, ref_audio=str(tmp_path / "missing.wav"))
     with pytest.raises(PipelineError, match="missing.wav"):
-        voice_episode(script_path, FakeTtsEngine(), voice, tmp_path / "public", {})
+        voice_episode(
+            script_path,
+            FakeTtsEngine(),
+            voice,
+            tmp_path / "public",
+            {},
+            verifier=checked(),
+        )
 
     assert not _lock(script_path).exists()
+
+
+# ---- 语音识别复核与重试（票 07） ----
+
+
+def _report(script_path):
+    return json.loads((script_path.parent / "report.json").read_text())
+
+
+def _cache_records(script_path):
+    cache = script_path.parents[2] / "cache" / "tts"
+    return {
+        info["text"]: info
+        for info in (json.loads(p.read_text()) for p in cache.glob("*.json"))
+    }
+
+
+def test_lines_heard_as_spoken_pass_on_the_first_take(tmp_path, script_path):
+    engine, asr = FakeTtsEngine(), FakeAsrEngine()
+
+    voice_episode(
+        script_path, engine, VOICE, tmp_path / "public", {}, verifier=checked(asr)
+    )
+
+    assert engine.texts == ["今天读一本书", "它讲怎样写好代码", "不要重复你自己"]
+    assert _report(script_path) == {"asr_failures": []}
+    for text, info in _cache_records(script_path).items():
+        assert info["verification"]["passed"] is True
+        assert info["verification"]["attempts"] == [{"heard": text, "diff_rate": 0}]
+
+
+def test_format_differences_in_what_is_heard_do_not_trigger_a_retry(
+    tmp_path, script_path
+):
+    asr = FakeAsrEngine(mishear={"今天读一本书": ["今天讀1本書。"]})
+    engine = FakeTtsEngine()
+
+    voice_episode(
+        script_path, engine, VOICE, tmp_path / "public", {}, verifier=checked(asr)
+    )
+
+    assert engine.texts.count("今天读一本书") == 1
+    assert _report(script_path) == {"asr_failures": []}
+
+
+def test_a_misheard_line_is_regenerated_until_it_passes(tmp_path, script_path):
+    asr = FakeAsrEngine(mishear={"它讲怎样写好代码": ["它讲怎样写坏代码", "它讲"]})
+    engine = FakeTtsEngine()
+
+    voice_episode(
+        script_path, engine, VOICE, tmp_path / "public", {}, verifier=checked(asr)
+    )
+
+    assert engine.texts.count("它讲怎样写好代码") == 3
+    assert _report(script_path) == {"asr_failures": []}
+    verification = _cache_records(script_path)["它讲怎样写好代码"]["verification"]
+    assert verification["passed"] is True
+    assert [a["heard"] for a in verification["attempts"]] == [
+        "它讲怎样写坏代码",
+        "它讲",
+        "它讲怎样写好代码",
+    ]
+
+
+class RamblingTtsEngine(FakeTtsEngine):
+    """每次生成都在句尾多说几个"啊"：第 n 次多说 `extra[n]` 个。
+
+    假识别引擎听见的就是它说的，所以多说得越少，差异率越低；句子也越短。
+    """
+
+    def __init__(self, extra):
+        super().__init__()
+        self.extra = list(extra)
+
+    def synthesize(self, text, voice, out):
+        return super().synthesize(text + "啊" * self.extra.pop(0), voice, out)
+
+
+def test_a_line_failing_every_retry_keeps_its_closest_take_and_is_reported(
+    tmp_path, script_path
+):
+    script_path.write_text(SCRIPT.replace("今天读一本书", "今天读一本好书"))
+    # 第一句 7 个字：三次分别多说 3、1、2 个字，第二次最接近（差异率 1/7）
+    engine = RamblingTtsEngine([3, 1, 2] + [0, 0])
+
+    manifest = voice_episode(
+        script_path, engine, VOICE, tmp_path / "public", {}, verifier=checked()
+    )
+
+    assert len(engine.texts) == 3 + 2
+    # 缓存、上屏的是第二次生成的那一版：7 + 1 个字，每字 0.2 秒
+    assert manifest["lines"][0]["seconds"] == pytest.approx(1.6)
+    [failure] = _report(script_path)["asr_failures"]
+    cached = failure.pop("cache")
+    assert failure == {
+        "id": "s01-l01",
+        "text": "今天读一本好书",
+        "spoken": "今天读一本好书",
+        "heard": "今天读一本好书啊",
+        "diff_rate": pytest.approx(1 / 7),
+    }
+    # 想重新生成就删掉这个文件；路径相对书的目录
+    assert re.fullmatch(r"cache/tts/[0-9a-f]{16}\.wav", cached)
+    assert (script_path.parents[2] / cached).is_file()
+    verification = _cache_records(script_path)["今天读一本好书"]["verification"]
+    assert verification["passed"] is False
+    assert len(verification["attempts"]) == 3
+
+
+def test_a_line_that_failed_verification_is_reused_and_still_reported(
+    tmp_path, script_path
+):
+    public = tmp_path / "public"
+    asr = FakeAsrEngine(mishear={"它讲怎样写好代码": ["它讲怎样写坏代码"] * 3})
+    first = voice_episode(
+        script_path, FakeTtsEngine(), VOICE, public, {}, verifier=checked(asr)
+    )
+    failures = _report(script_path)["asr_failures"]
+    assert [f["id"] for f in failures] == ["s01-l02"]
+
+    engine, asr = FakeTtsEngine(), FakeAsrEngine()
+    second = voice_episode(
+        script_path, engine, VOICE, public, {}, verifier=checked(asr)
+    )
+
+    assert engine.texts == []
+    # 缓存命中的句子（通过的和没通过的）都不再识别
+    assert asr.heard == []
+    assert second == first
+    assert _report(script_path)["asr_failures"] == failures
+
+
+def test_a_line_with_handwritten_speech_is_checked_against_the_speech(
+    tmp_path, script_path
+):
+    # s02-l01 的字幕是"不要重复"，手写的 speech 是"不要重复你自己"
+    engine = FakeTtsEngine()
+
+    voice_episode(
+        script_path, engine, VOICE, tmp_path / "public", {}, verifier=checked()
+    )
+
+    assert engine.texts.count("不要重复你自己") == 1
+    assert _report(script_path) == {"asr_failures": []}
+
+
+def test_retry_count_is_configurable(tmp_path, script_path):
+    asr = FakeAsrEngine(mishear={"今天读一本书": ["今天"] * 9})
+    engine = FakeTtsEngine()
+
+    voice_episode(
+        script_path,
+        engine,
+        VOICE,
+        tmp_path / "public",
+        {},
+        verifier=checked(asr, max_retries=0),
+    )
+
+    assert engine.texts.count("今天读一本书") == 1
+    assert [f["id"] for f in _report(script_path)["asr_failures"]] == ["s01-l01"]
+
+
+class SeedRecordingEngine(FakeTtsEngine):
+    def __init__(self):
+        super().__init__()
+        self.seeds = []
+
+    def synthesize(self, text, voice, out):
+        self.seeds.append(voice.params.get("seed"))
+        return super().synthesize(text, voice, out)
+
+
+def test_retries_change_a_fixed_random_seed(tmp_path, script_path):
+    asr = FakeAsrEngine(mishear={"今天读一本书": ["今天"] * 3})
+    engine = SeedRecordingEngine()
+    seeded = replace(VOICE, params={**VOICE.params, "seed": 7})
+
+    voice_episode(
+        script_path, engine, seeded, tmp_path / "public", {}, verifier=checked(asr)
+    )
+
+    assert engine.seeds == [7, 8, 9, 7, 7]

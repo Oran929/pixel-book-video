@@ -14,10 +14,13 @@ from pixelbook.pronunciation import find_new_terms, spoken_text
 from pixelbook.script import load_script
 from pixelbook.tts import TtsEngine
 from pixelbook.tts_cache import TtsCache
+from pixelbook.verification import Verifier
 from pixelbook.voice import Voice
 from pixelbook.voice_lock import LOCK_NAME, lock_mismatch, lock_record, write_lock
 
 MANIFEST_NAME = "episode.json"
+# 检查报告：需要人看的问题（复核未通过的句子……），每次配音重写
+REPORT_NAME = "report.json"
 # Remotion 静态目录（video/public/）里存放本期文件的子目录
 STAGE_DIR = "episode"
 
@@ -32,6 +35,7 @@ def voice_episode(
     voice: Voice,
     public_dir: Path,
     pronunciation: dict[str, str],
+    verifier: Verifier,
     revoice: bool = False,
 ) -> dict[str, Any]:
     """为 `script_path` 这一期逐句配音，写出期目录里的合成清单并返回它。
@@ -39,6 +43,9 @@ def voice_episode(
     `voice` 是这本书解析出的音色（`voice_lock.resolve_book_voice`）。配音前守卫
     比较它和书的锁定音色，不一致就拒绝，除非 `revoice`；配音完成后写入锁定。
     朗读文本按读音表 `pronunciation` 生成（手写的 `speech` 优先）。
+
+    每句配音经 `verifier` 的语音识别复核，和朗读文本对比；重试后仍不通过的
+    句子照常使用，并列进期目录里的检查报告 `report.json`（每次运行都列出）。
     """
     script = load_script(script_path)
     if terms := find_new_terms(script, pronunciation):
@@ -47,20 +54,34 @@ def voice_episode(
     book_dir = script_path.parents[2]
     try:
         locked = lock_record(voice)
-        cache = TtsCache(book_dir / "cache" / "tts", engine, voice)
+        cache = TtsCache(book_dir / "cache" / "tts", engine, voice, verifier)
     except FileNotFoundError as error:
         raise PipelineError(f"参考音频 {error.filename} 不存在，无法配音") from error
     if not revoice and (differences := lock_mismatch(book_dir, locked)):
         raise PipelineError(voice_lock_message(script_path, book_dir, differences))
 
-    segments, scenes, lines = [], [], []
+    segments, scenes, lines, failures = [], [], [], []
     wavs: dict[str, Path] = {}
     for segment in script.segments:
         segments.append({"id": segment.id, "title": segment.title})
         for scene in segment.scenes:
             scenes.append({"id": scene.id, "segment": segment.id})
             for line in scene.lines:
-                wav = cache.wav(spoken_text(line, pronunciation))
+                spoken = spoken_text(line, pronunciation)
+                cached = cache.line(spoken)
+                wav = cached.wav
+                if not (verification := cached.verification)["passed"]:
+                    chosen = verification["attempts"][verification["chosen"]]
+                    failures.append(
+                        {
+                            "id": line.id,
+                            "text": line.text,
+                            "spoken": spoken,
+                            "heard": chosen["heard"],
+                            "diff_rate": chosen["diff_rate"],
+                            "cache": wav.relative_to(book_dir).as_posix(),
+                        }
+                    )
                 # 文件名带内容哈希：内容变了，Studio 就不会播放浏览器缓存里的旧音频
                 digest = hashlib.sha256(wav.read_bytes()).hexdigest()[:8]
                 audio = f"{STAGE_DIR}/{line.id}-{digest}.wav"
@@ -83,6 +104,10 @@ def voice_episode(
     }
     (script_path.parent / MANIFEST_NAME).write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n"
+    )
+
+    (script_path.parent / REPORT_NAME).write_text(
+        json.dumps({"asr_failures": failures}, ensure_ascii=False, indent=2) + "\n"
     )
 
     stage = public_dir / STAGE_DIR
