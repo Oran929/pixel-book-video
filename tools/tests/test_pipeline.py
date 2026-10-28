@@ -1,6 +1,8 @@
 import json
 import re
 import shutil
+import wave
+from dataclasses import replace
 
 import pytest
 
@@ -11,7 +13,12 @@ from pixelbook.script import ScriptError
 from pixelbook.tts import FakeTtsEngine
 from pixelbook.voice import Voice
 
-VOICE = Voice(model="base-model", ref_audio="voices/a.wav", ref_text="你好。")
+VOICE = Voice(
+    model="base-model",
+    ref_audio="voices/tianmei.wav",
+    ref_text="你好。",
+    params={"language": "chinese"},
+)
 
 SCRIPT = """\
 segments:
@@ -225,3 +232,114 @@ def test_sample_book_script_is_valid(tmp_path):
 
     assert len(manifest["segments"]) == 2
     assert 6 <= len(manifest["lines"]) <= 8
+
+
+# ---- 按句配音缓存（票 05） ----
+
+
+def test_second_run_reuses_every_line_without_calling_tts(tmp_path, script_path):
+    public = tmp_path / "public"
+    first = voice_episode(script_path, FakeTtsEngine(), VOICE, public, {})
+
+    engine = FakeTtsEngine()
+    second = voice_episode(script_path, engine, VOICE, public, {})
+
+    assert engine.texts == []
+    assert second == first
+    for line in second["lines"]:
+        assert (public / line["audio"]).is_file()
+
+
+def test_editing_one_line_regenerates_only_that_line(tmp_path, script_path):
+    voice_episode(script_path, FakeTtsEngine(), VOICE, tmp_path / "public", {})
+    script_path.write_text(SCRIPT.replace("它讲怎样写好代码", "它讲怎样写出好代码"))
+
+    engine = FakeTtsEngine()
+    voice_episode(script_path, engine, VOICE, tmp_path / "public", {})
+
+    assert engine.texts == ["它讲怎样写出好代码"]
+
+
+@pytest.mark.parametrize(
+    "changed",
+    [
+        replace(VOICE, params={"language": "chinese", "temperature": 0.7}),
+        replace(VOICE, model="another-model"),
+        replace(VOICE, ref_text="大家好。"),
+    ],
+)
+def test_changing_voice_settings_regenerates_every_line(tmp_path, script_path, changed):
+    voice_episode(script_path, FakeTtsEngine(), VOICE, tmp_path / "public", {})
+
+    engine = FakeTtsEngine()
+    voice_episode(script_path, engine, changed, tmp_path / "public", {})
+
+    assert len(engine.texts) == 3
+
+
+def test_changing_engine_settings_regenerates_every_line(tmp_path, script_path):
+    voice_episode(script_path, FakeTtsEngine(), VOICE, tmp_path / "public", {})
+
+    # 例如真实引擎给参考音频补的静音（REF_PAD_SECONDS）改了
+    engine = FakeTtsEngine(settings={"engine": "fake", "ref_pad_seconds": [0.3, 0.6]})
+    voice_episode(script_path, engine, VOICE, tmp_path / "public", {})
+
+    assert len(engine.texts) == 3
+
+
+def test_random_seed_is_not_part_of_the_cache_key(tmp_path, script_path):
+    voice_episode(script_path, FakeTtsEngine(), VOICE, tmp_path / "public", {})
+
+    # 07 重试时会换种子，通过的那一版仍然存在同一个指纹下
+    engine = FakeTtsEngine()
+    reseeded = replace(VOICE, params={**VOICE.params, "seed": 42})
+    voice_episode(script_path, engine, reseeded, tmp_path / "public", {})
+
+    assert engine.texts == []
+
+
+def _write_wav(path, seconds):
+    with wave.open(str(path), "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(24_000)
+        wav.writeframes(b"\x00\x00" * round(seconds * 24_000))
+
+
+def test_new_reference_audio_content_at_the_same_path_regenerates_every_line(
+    tmp_path, script_path
+):
+    ref = tmp_path / "ref.wav"
+    _write_wav(ref, 1.0)
+    # 绝对路径接在仓库根目录后面仍是它自己，测试里用临时文件当参考音频
+    voice = replace(VOICE, ref_audio=str(ref))
+    voice_episode(script_path, FakeTtsEngine(), voice, tmp_path / "public", {})
+
+    _write_wav(ref, 2.0)
+    engine = FakeTtsEngine()
+    voice_episode(script_path, engine, voice, tmp_path / "public", {})
+
+    assert len(engine.texts) == 3
+
+
+def test_missing_reference_audio_is_rejected_before_any_voicing(tmp_path, script_path):
+    voice = replace(VOICE, ref_audio=str(tmp_path / "missing.wav"))
+    engine = FakeTtsEngine()
+
+    with pytest.raises(PipelineError, match="missing.wav"):
+        voice_episode(script_path, engine, voice, tmp_path / "public", {})
+    assert engine.texts == []
+
+
+def test_deleting_the_cache_rebuilds_every_line(tmp_path, script_path):
+    public = tmp_path / "public"
+    first = voice_episode(script_path, FakeTtsEngine(), VOICE, public, {})
+    shutil.rmtree(tmp_path / "books" / "demo" / "cache")
+
+    engine = FakeTtsEngine()
+    second = voice_episode(script_path, engine, VOICE, public, {})
+
+    assert len(engine.texts) == 3
+    assert second == first
+    for line in second["lines"]:
+        assert (public / line["audio"]).is_file()

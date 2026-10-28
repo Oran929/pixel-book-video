@@ -3,7 +3,7 @@
 import wave
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 from pixelbook.voice import Voice
 
@@ -15,6 +15,9 @@ class SynthesisStats:
 
 
 class TtsEngine(Protocol):
+    # 引擎自身会影响生成结果的设置（不在音色设置里的那些），算进音色指纹
+    settings: dict[str, Any]
+
     def synthesize(self, text: str, voice: Voice, out: Path) -> SynthesisStats: ...
 
 
@@ -26,7 +29,13 @@ class FakeTtsEngine:
     ELAPSED_PER_CHAR = 0.1
     PEAK_MEMORY_BYTES = 6 * 1024**3
 
+    def __init__(self, settings: dict[str, Any] | None = None) -> None:
+        self.settings = settings or {"engine": "fake"}
+        # 每次调用时的朗读文本，测试用它数调用次数
+        self.texts: list[str] = []
+
     def synthesize(self, text: str, voice: Voice, out: Path) -> SynthesisStats:
+        self.texts.append(text)
         frames = round(len(text) * self.SECONDS_PER_CHAR * self.SAMPLE_RATE)
         with wave.open(str(out), "wb") as wav:
             wav.setnchannels(1)

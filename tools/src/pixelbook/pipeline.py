@@ -13,6 +13,7 @@ from pixelbook.audio import wav_seconds
 from pixelbook.pronunciation import find_new_terms, spoken_text
 from pixelbook.script import load_script
 from pixelbook.tts import TtsEngine
+from pixelbook.tts_cache import TtsCache
 from pixelbook.voice import Voice
 
 MANIFEST_NAME = "episode.json"
@@ -38,9 +39,11 @@ def voice_episode(
     script = load_script(script_path)
     if terms := find_new_terms(script, pronunciation):
         raise PipelineError(new_terms_message(script_path, terms))
-    # 旁白稿在 books/<书>/<章>/<期>/script.yaml；03 还没有缓存，按旁白句 ID 命名
-    tts_dir = script_path.parents[2] / "cache" / "tts"
-    tts_dir.mkdir(parents=True, exist_ok=True)
+    # 旁白稿在 books/<书>/<章>/<期>/script.yaml，配音缓存放在书的目录下
+    try:
+        cache = TtsCache(script_path.parents[2] / "cache" / "tts", engine, voice)
+    except FileNotFoundError as error:
+        raise PipelineError(f"参考音频 {error.filename} 不存在，无法配音") from error
 
     segments, scenes, lines = [], [], []
     wavs: dict[str, Path] = {}
@@ -49,8 +52,7 @@ def voice_episode(
         for scene in segment.scenes:
             scenes.append({"id": scene.id, "segment": segment.id})
             for line in scene.lines:
-                wav = tts_dir / f"{line.id}.wav"
-                engine.synthesize(spoken_text(line, pronunciation), voice, wav)
+                wav = cache.wav(spoken_text(line, pronunciation))
                 # 文件名带内容哈希：内容变了，Studio 就不会播放浏览器缓存里的旧音频
                 digest = hashlib.sha256(wav.read_bytes()).hexdigest()[:8]
                 audio = f"{STAGE_DIR}/{line.id}-{digest}.wav"

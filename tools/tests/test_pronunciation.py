@@ -1,5 +1,7 @@
 """读音表与新术语（票 04）：经由配音流水线和读音模块的公开接口验证。"""
 
+import shutil
+
 import pytest
 
 from pixelbook import REPO_ROOT
@@ -12,19 +14,8 @@ from pixelbook.pronunciation import (
 from pixelbook.tts import FakeTtsEngine
 from pixelbook.voice import Voice
 
-VOICE = Voice(model="base-model", ref_audio="voices/a.wav", ref_text="你好。")
+VOICE = Voice(model="base-model", ref_audio="voices/tianmei.wav", ref_text="你好。")
 TABLE = {"DRY": "DRY", "KV Cache": "KV Cache"}
-
-
-class RecordingEngine(FakeTtsEngine):
-    """记下每次交给 TTS 的朗读文本。"""
-
-    def __init__(self):
-        self.texts: list[str] = []
-
-    def synthesize(self, text, voice, out):
-        self.texts.append(text)
-        return super().synthesize(text, voice, out)
 
 
 def script(*lines: tuple[str, str | None]) -> str:
@@ -46,9 +37,9 @@ def episode(tmp_path):
     path = tmp_path / "books" / "demo" / "ch01" / "ep01" / "script.yaml"
     path.parent.mkdir(parents=True)
 
-    def voice(text: str, table: dict[str, str]) -> RecordingEngine:
+    def voice(text: str, table: dict[str, str]) -> FakeTtsEngine:
         path.write_text(text)
-        engine = RecordingEngine()
+        engine = FakeTtsEngine()
         voice_episode(path, engine, VOICE, tmp_path / "public", table)
         return engine
 
@@ -76,6 +67,8 @@ def test_replacement_is_case_sensitive_and_deterministic(episode):
     text = script(("DRY 不是 dry", None))
 
     first = episode(text, table).texts
+    # 删掉配音缓存，第二次才会真的再交给 TTS
+    shutil.rmtree(episode.path.parents[2] / "cache")
     second = episode(text, dict(reversed(table.items()))).texts
 
     assert first == second == ["dry 原则 不是 干"]

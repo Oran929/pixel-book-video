@@ -26,6 +26,14 @@ class QwenTtsEngine:
         self._padded_refs: dict[Path, Path] = {}
         self._tmp = tempfile.TemporaryDirectory(prefix="pixelbook-ref-")
 
+    @property
+    def settings(self) -> dict[str, Any]:
+        """引擎自身影响生成结果的设置，算进音色指纹（改了就重新配音）。"""
+        return {
+            "engine": "qwen3-tts-mlx",
+            "ref_pad_seconds": list(self.REF_PAD_SECONDS),
+        }
+
     def _padded_ref(self, ref_audio: Path) -> Path:
         if ref_audio not in self._padded_refs:
             padded = Path(self._tmp.name) / f"{len(self._padded_refs)}-{ref_audio.name}"
