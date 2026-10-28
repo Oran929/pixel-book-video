@@ -37,3 +37,8 @@
 - 来自 07（2026-10-28，复核改为两步）：`report.json` 现在是 `{"asr_failures": [...], "asr_pinyin_passes": [...]}` 两个键；`cli.py` 里打印报告的函数从 `_print_asr_failures` 改名为 `_print_asr_report`，缺字检查的打印放在它旁边。
 - 来自 12（2026-10-28）：组件参数格式从 `PixelBlock.tsx` 挪到了 `video/src/components/schemas.ts`（`PixelBlockProps`、`COMPONENT_PROPS`、`COMPONENT_SCHEMAS`），`registry.ts` 只登记实现。原因是时间轴导出命令在 Node 里校验分镜，不能加载 .tsx 和 remotion。新组件要登记两处（类型检查会提示缺哪处）；`schemas.ts` 里不要 import 风格表以外会拉进 React/remotion 的东西——风格表常量如果放在纯 .ts 文件里就没问题。
 
+- 来自用户（2026-10-28，开工输入）：
+  - 频道名：**读一本8bit像素书**
+  - 形象：仓库根目录 `character/` 下两张设定图，`Q.png`（Q 版，米色底）和 `M.png`（成熟版，带背景的卡片），各 1672×941，每张并排四个角色（图上标注 ChatGPT / Claude / DeepSeek / Grok）。用户说可以挑一个，也可以轮换。
+  - 编排者的初版建议（用户可改）：样片里用 Q 版第二个角色（橙发、捧书，最贴"读书"主题）当频道小人；四个 Q 版角色都裁成单独的透明底图片留着，轮换以后再做。成熟版适合以后做片头或封面卡片，这张票不用。
+  - 注意：这两张是 AI 生成的"像素风"图，不是严格对齐网格的像素画，有抗锯齿和非整数缩放。初版可以当占位直接用（缩放时用最近邻插值，显示尺寸取整数倍）；以后如果要真正清晰的像素小人，需要重画或按网格重新量化。图上的产品名文字不要放进成片。
