@@ -56,10 +56,38 @@ uv run pixelbook choose-voice <名字>  # 把选中的音色写进 voice.yaml
 
 旁白稿放在 `books/<书>/<章>/<期>/script.yaml`（样例：`books/sample/ch01/ep01/script.yaml`）。顶层的 `title` 必填，是这一期的书名或主题名，显示在画面左上角（样例里是示例值「读一本8bit像素书」），缺了或为空时 `voice` 报错。
 
+### 完整步骤
+
+1. 写旁白稿 `script.yaml`（和可选的分镜 `storyboard.json`，见下文"分镜"）。
+2. 一键出片：
+
+   ```sh
+   cd tools
+   uv run pixelbook render ../books/sample/ch01/ep01/script.yaml   # 默认写到 out/sample-ch01-ep01.mp4
+   ```
+
+   依次运行四步，任何一步失败就停下，打印"第几步「哪一步」失败：原因"并以退出码 1 结束：
+
+   | 步 | 做什么 | 常见的失败 |
+   | --- | --- | --- |
+   | 1 配音 | 同 `pixelbook voice`：新术语检查、音色锁定守卫、逐句配音与复核、缺字检查，复制到 `video/public/episode/` | 新术语、音色和锁定不一致、缺字、配置文件写错 |
+   | 2 时间轴 | 同 `npm run timeline`：校验分镜（含组件触发帧是否落在画面里），写出 `timeline.json` 和 `segments.txt` | 分镜不合格 |
+   | 3 渲染 | `remotion render Episode`（只渲染成片，不渲染风格样张） | Remotion 报错（附上输出的最后几行） |
+   | 4 核对时长 | 用 ffprobe 数 MP4 **视频流**的帧数，和 `timeline.json` 的总帧数比，相差超过一帧就算失败 | — |
+
+   全部通过后打印汇总报告：MP4 路径、帧数、总时长和 4:00–6:00 的判断、打点时间表位置、复核未通过的句子（需要试听）、靠拼音通过的句子（只列出备查）。**复核未通过和总时长超出范围不算失败**，只列在汇总里。
+
+   `--out <路径>` 改输出位置；`--revoice` 同 `voice --revoice`（音色和书的锁定音色不一致、确认整本书换音色时用）。
+
+3. 看汇总报告：试听复核未通过的句子，读错了就删缓存再跑一遍；看 MP4。改了分镜只要再跑一遍 `render`，配音全部命中缓存，不会重新生成。
+
+分步运行（排查某一步时用）：
+
 ```sh
 cd tools
 uv run pixelbook voice ../books/sample/ch01/ep01/script.yaml   # 逐句配音，生成合成清单
 cd ../video
+npm run timeline -- ../books/sample/ch01/ep01                   # 时间轴、打点时间表、总时长
 npm run render -- ../out/sample-ch01-ep01.mp4                  # 渲染 MP4
 ```
 
@@ -176,9 +204,17 @@ make check
 
 依次运行 pytest、ruff（lint + 格式）、`tsc`、ESLint、Vitest，任何一项失败就以非零码退出。"做完了"的标准就是这条命令通过。
 
+冒烟测试单独一条命令（要真实渲染，慢一些，所以不在 `make check` 里）：
+
+```sh
+make smoke
+```
+
+它用 `tools/smoke/episode/` 里的固定小样例（4 句、带分镜和 `title`），把真实 TTS 和语音识别换成假引擎（静音 wav，不加载任何模型），在临时目录里经 `pixelbook render` 走完四步，再用 ffprobe 解码数出 MP4 视频流的帧数，和 `timeline.json` 的总帧数比，相差不超过一帧。它验证的是渲染管线和时长，不是音质；不比较音频流时长（最后一句的音频可能比视频短）。配音缓存、锁定音色、Remotion 静态目录和 MP4 都在临时目录里，不碰 `books/`、`video/public/episode/` 和 `out/`。改了配音流水线、时间轴或 Remotion 之后跑一次。
+
 ## 预览
 
-先运行过 `pixelbook voice`（或 `stage`），再：
+先运行过 `pixelbook render`、`pixelbook voice` 或 `stage`，再：
 
 ```sh
 cd video && npm run studio
