@@ -101,8 +101,8 @@ export const SIZE = {
   blockLift: cells(60),
   /** 落下动画的起点在终点上方多远 */
   slideDistance: cells(40),
-  /** 频道小人离画面左边的距离（比边距小，免得和最长的字幕框重叠） */
-  mascotLeft: cells(8),
+  /** 小人组件站在左边或右边时离画面边缘的距离（比边距小，免得和最长的字幕框重叠） */
+  mascotInset: cells(8),
 } as const;
 
 /** 描边规则：实心、不模糊，宽度取 `SIZE.stroke` / `SIZE.strokeThick` */
@@ -150,8 +150,9 @@ export const CHANNEL = {
 } as const;
 
 /**
- * 频道小人：从 AI 生成的 Q 版设定图裁出，不是对齐网格的像素画，
- * 只能按整数倍、最近邻插值显示。`width`/`height` 是图片原始尺寸。
+ * 频道小人（Mascot 组件可选的 Q 版角色）：从 AI 生成的 Q 版设定图裁出，
+ * 不是对齐网格的像素画，只能按原尺寸（或整数倍）、最近邻插值显示。
+ * `width`/`height` 是图片原始尺寸。
  */
 export const MASCOTS = {
   dragon: { file: "character/q-1-dragon.png", width: 410, height: 589 },
@@ -159,6 +160,3 @@ export const MASCOTS = {
   whale: { file: "character/q-3-whale.png", width: 440, height: 592 },
   gothic: { file: "character/q-4-gothic.png", width: 440, height: 589 },
 } as const;
-
-/** 样片里的频道小人和显示倍数（整数） */
-export const MASCOT = { ...MASCOTS.reader, scale: 1 } as const;

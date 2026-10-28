@@ -9,7 +9,6 @@ import {
 import { Entering } from "../components/Entering";
 import { COMPONENT_SCHEMAS } from "../components/schemas";
 import { ChannelName } from "../shell/ChannelName";
-import { Mascot } from "../shell/Mascot";
 import { Subtitle } from "../shell/Subtitle";
 import { COLOR } from "../style/style";
 import { VIDEO } from "../video-config";
@@ -71,7 +70,6 @@ const CurrentSubtitle: React.FC<{ timeline: Timeline }> = ({ timeline }) => {
 
 export const Episode: React.FC<EpisodeProps> = ({ timeline, cues }) => (
   <AbsoluteFill style={{ backgroundColor: COLOR.background }}>
-    <Mascot />
     <ChannelName />
     {cues.map((cue) => (
       <Sequence

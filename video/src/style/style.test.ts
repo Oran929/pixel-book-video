@@ -5,7 +5,6 @@ import {
   FONT_SIZE,
   GRID,
   LINE_HEIGHT,
-  MASCOT,
   MASCOTS,
   SIZE,
 } from "./style";
@@ -43,11 +42,6 @@ describe("风格表", () => {
 
   it.each(Object.entries(SIZE))("尺寸 %s = %ipx 是像素网格的整数倍", (_, size) => {
     expect(Number.isInteger(size / GRID)).toBe(true);
-  });
-
-  it("频道小人按整数倍显示", () => {
-    expect(Number.isInteger(MASCOT.scale)).toBe(true);
-    expect(MASCOT.scale).toBeGreaterThan(0);
   });
 
   it.each(Object.entries(MASCOTS))(

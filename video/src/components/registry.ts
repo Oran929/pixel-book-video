@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import { Mascot } from "./Mascot";
 import { PixelBlock } from "./PixelBlock";
 import { COMPONENT_PROPS } from "./schemas";
 
@@ -10,6 +11,7 @@ const COMPONENTS: {
   >;
 } = {
   PixelBlock,
+  Mascot,
 };
 
 /** 分镜里的组件名对应的实现；参数已由 `parseStoryboard` 按 schemas.ts 校验 */

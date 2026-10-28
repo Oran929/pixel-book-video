@@ -1,5 +1,8 @@
-import { AbsoluteFill, Img, staticFile } from "remotion";
+import { AbsoluteFill } from "remotion";
+import type { z } from "zod";
+import { Mascot } from "../components/Mascot";
 import { PixelBlock } from "../components/PixelBlock";
+import type { MascotProps } from "../components/schemas";
 import { Subtitle } from "../shell/Subtitle";
 import {
   border,
@@ -16,11 +19,25 @@ import {
   SIZE,
 } from "../style/style";
 
-// 风格样张（票 09）：集中展示调色板、像素字体、描边和阴影、频道小人。
+// 风格样张（票 09）：集中展示调色板、像素字体、描边和阴影、小人组件。
 // 只在 Studio 里看（合成 ID `StyleSheet`），渲染命令只渲染 `Episode`，不进入成片。
 
-/** 样张画布：宽同成片，加高到放得下四个原尺寸的小人 */
-export const STYLE_SHEET = { width: 1920, height: 3600 } as const;
+/** 样张画布：宽同成片，加高到放得下两排原尺寸的小人 */
+export const STYLE_SHEET = { width: 1920, height: 4000 } as const;
+
+/** 两个画框里的小人：三个站位，四个角色都出现一次 */
+const STAGES: z.infer<typeof MascotProps>[][] = [
+  [
+    { character: "dragon", position: "left" },
+    { character: "reader", position: "center" },
+    { character: "whale", position: "right" },
+  ],
+  [{ character: "gothic", position: "center" }],
+];
+
+/** 画框高度：放得下最高的小人和上下两条细描边 */
+const MASCOT_STAGE_HEIGHT =
+  Math.max(...Object.values(MASCOTS).map((m) => m.height)) + SIZE.stroke * 2;
 
 const SAMPLES = [
   CHANNEL.name,
@@ -34,7 +51,9 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({
   title,
   children,
 }) => (
-  <div style={{ display: "flex", flexDirection: "column", gap: SIZE.stroke * 2 }}>
+  <div
+    style={{ display: "flex", flexDirection: "column", gap: SIZE.stroke * 2 }}
+  >
     <div style={{ ...pixelText("small"), color: PALETTE.slate }}>{title}</div>
     {children}
   </div>
@@ -86,7 +105,9 @@ export const StyleSheet: React.FC = () => (
 
     <Section
       title={`像素字体 ${FONT.family}：${Object.entries(FONT_SIZE)
-        .map(([name, size]) => `${name} ${size}px（×${size / FONT.designSize}）`)
+        .map(
+          ([name, size]) => `${name} ${size}px（×${size / FONT.designSize}）`,
+        )
         .join("、")}`}
     >
       {(["large", "subtitle", "small"] as const).map((size) =>
@@ -180,20 +201,28 @@ export const StyleSheet: React.FC = () => (
       </div>
     </Section>
 
-    <Section title="频道小人（占位，原尺寸，最近邻插值）">
-      <div style={{ display: "flex", gap: SIZE.margin, alignItems: "flex-end" }}>
-        {Object.entries(MASCOTS).map(([name, mascot]) => (
-          <Img
-            key={name}
-            src={staticFile(mascot.file)}
+    <Section title="小人组件 Mascot（占位，原尺寸，最近邻插值）：画框和成片一样宽，看三个站位和四个 Q 版角色">
+      {STAGES.map((stage) => (
+        <div
+          key={stage.map((m) => m.character).join()}
+          style={{ display: "flex", flexDirection: "column", gap: GRID * 2 }}
+        >
+          <div style={{ ...pixelText("small"), color: COLOR.ink }}>
+            {stage.map((m) => `${m.character} ${m.position}`).join("、")}
+          </div>
+          <div
             style={{
-              width: mascot.width,
-              height: mascot.height,
-              imageRendering: "pixelated",
+              position: "relative",
+              height: MASCOT_STAGE_HEIGHT,
+              border: border(SIZE.stroke, PALETTE.sand),
             }}
-          />
-        ))}
-      </div>
+          >
+            {stage.map((props) => (
+              <Mascot key={props.character} {...props} />
+            ))}
+          </div>
+        </div>
+      ))}
     </Section>
   </AbsoluteFill>
 );
