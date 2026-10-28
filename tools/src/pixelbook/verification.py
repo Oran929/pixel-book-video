@@ -6,10 +6,16 @@
 
 import unicodedata
 import warnings
+from dataclasses import dataclass
 from functools import cache
+from pathlib import Path
 
 import cn2an
 import opencc
+import yaml
+
+from pixelbook.asr import AsrEngine
+from pixelbook.mlx_asr import ASR_MODELS
 
 
 @cache
@@ -51,3 +57,49 @@ def _edit_distance(a: str, b: str) -> int:
             )
         previous = current
     return previous[-1]
+
+
+@dataclass(frozen=True)
+class Verifier:
+    """复核设置：识别引擎、差异率阈值（超过就不通过）、不通过时最多重试几次。"""
+
+    asr: AsrEngine
+    max_diff_rate: float
+    max_retries: int
+
+
+@dataclass(frozen=True)
+class VerificationConfig:
+    """复核配置文件 `verification.yaml` 的内容。
+
+    不放进音色设置：改它不影响声音，不触发音色锁定守卫，也不让缓存失效。
+    """
+
+    asr: str
+    max_diff_rate: float
+    max_retries: int
+
+
+class VerificationConfigError(Exception):
+    pass
+
+
+def load_verification_config(path: Path) -> VerificationConfig:
+    def fail(field_name: str, problem: str) -> VerificationConfigError:
+        return VerificationConfigError(f"{path}: `{field_name}` {problem}")
+
+    data = yaml.safe_load(path.read_text())
+    if not isinstance(data, dict):
+        raise VerificationConfigError(f"{path}: 应该是一个映射（键: 值）")
+    for key in data:
+        if key not in VerificationConfig.__dataclass_fields__:
+            raise fail(key, "不是认识的字段")
+    if data.get("asr") not in ASR_MODELS:
+        raise fail("asr", f"应该是 {' 或 '.join(ASR_MODELS)}")
+    rate = data.get("max_diff_rate")
+    if isinstance(rate, bool) or not isinstance(rate, int | float) or rate < 0:
+        raise fail("max_diff_rate", "应该是不小于 0 的数（如 0.1）")
+    retries = data.get("max_retries")
+    if isinstance(retries, bool) or not isinstance(retries, int) or retries < 0:
+        raise fail("max_retries", "应该是不小于 0 的整数")
+    return VerificationConfig(**data)
