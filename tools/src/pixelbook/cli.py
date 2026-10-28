@@ -9,12 +9,14 @@ from pixelbook.audition import AuditionError, choose_voice, run_audition
 from pixelbook.pipeline import PipelineError, stage_episode, voice_episode
 from pixelbook.pronunciation import PronunciationError, load_pronunciation
 from pixelbook.script import ScriptError
+from pixelbook.term_audition import audition_terms
 from pixelbook.voice import VoiceConfigError, load_voice_config
 
 AUDITION_PLAN = REPO_ROOT / "voices" / "audition.yaml"
 AUDITION_OUT = REPO_ROOT / "out" / "audition"
 VIDEO_PUBLIC = REPO_ROOT / "video" / "public"
 PRONUNCIATION = REPO_ROOT / "pronunciation.yaml"
+TERMS_OUT = REPO_ROOT / "out" / "terms"
 
 
 def _print_report(report: dict[str, Any], out_dir: Path) -> None:
@@ -53,6 +55,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     voice.add_argument("script", type=Path, help="books/<书>/<章>/<期>/script.yaml")
 
+    terms = commands.add_parser(
+        "terms", help="为一期旁白稿的每个新术语生成一段试听音频（项目默认音色）"
+    )
+    terms.add_argument("script", type=Path, help="books/<书>/<章>/<期>/script.yaml")
+    terms.add_argument("--out", type=Path, default=TERMS_OUT)
+
     stage = commands.add_parser(
         "stage", help="只把期目录里的合成清单复制到 video/public/（不重新配音）"
     )
@@ -85,6 +93,24 @@ def main(argv: list[str] | None = None) -> int:
                 f"合成清单 {args.script.parent / 'episode.json'}，"
                 f"已复制到 {VIDEO_PUBLIC / 'episode'}"
             )
+        elif args.command == "terms":
+            table = load_pronunciation(PRONUNCIATION)
+            default_voice = load_voice_config(REPO_ROOT / "voice.yaml")
+            from pixelbook.qwen_tts import QwenTtsEngine
+
+            results = audition_terms(
+                args.script.resolve(), table, QwenTtsEngine(), default_voice, args.out
+            )
+            if not results:
+                print("没有新术语，可以直接 `pixelbook voice`")
+            else:
+                print(f"{len(results)} 个新术语，试听音频在 {args.out}：")
+                for item in results:
+                    print(
+                        f"  {item['file'].name:<24} {item['term']}"
+                        f"（{'、'.join(item['lines'])}）"
+                    )
+                print(f"听完把读法写进 {PRONUNCIATION}（读法不变就写成 `术语: 术语`）")
         else:
             stage_episode(args.episode.resolve(), VIDEO_PUBLIC)
             print(f"已复制到 {VIDEO_PUBLIC / 'episode'}")
