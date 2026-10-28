@@ -6,7 +6,7 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "cn2an>=0.5.24",
     "fonttools[woff]>=4.60",
-    "mlx-audio==0.6.2",
+    "mlx-audio==0.6.2; sys_platform == 'darwin'",
     "opencc>=1.4.2",
     "pypinyin>=0.55.0",
     "pyyaml>=6.0.3",
