@@ -1,0 +1,5 @@
+model: mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16
+ref_audio: voices/yujie.wav
+ref_text: 今天我们一起读一本书，看看作者是怎样一步一步，把一个复杂的问题讲清楚的。
+params:
+  language: chinese

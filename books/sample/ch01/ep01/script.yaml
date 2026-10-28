@@ -1,0 +1,41 @@
+# 样例书的测试旁白稿：用来打通"旁白稿 → 配音 → 合成清单 → MP4"的主干。
+# 出处只需要格式合法，不指向真实原文。
+# 这一期的书名或主题名，显示在画面左上角
+title: 读一本8bit像素书
+segments:
+  - id: s01
+    title: 开场
+    scenes:
+      - id: s01-c01
+        description: 米白底色上只有字幕，介绍这一期要读的书
+        lines:
+          - id: s01-l01
+            text: 今天我们一起读一本书。
+            cite: ch01-¶001
+          - id: s01-l02
+            text: 它讲的是怎样把代码写好。
+            cite: ch01-¶002
+      - id: s01-c02
+        description: 一个方块落下，代表书里的第一条原则
+        lines:
+          - id: s01-l03
+            text: 第一条原则叫 DRY。
+            cite: ch01-¶003
+          - id: s01-l04
+            text: 意思是不要重复你自己。
+            cite: ch01-¶004
+  - id: s02
+    title: 为什么
+    scenes:
+      - id: s02-c01
+        description: 两个一模一样的方块，其中一个变色
+        lines:
+          - id: s02-l01
+            text: 同一件事写在两个地方，
+            cite: ch01-¶005
+          - id: s02-l02
+            text: 改了一处，另一处就会忘记改。
+            cite: ch01-¶006
+          - id: s02-l03
+            text: 所以，每条知识只写一次。
+            cite: ch01-¶007
