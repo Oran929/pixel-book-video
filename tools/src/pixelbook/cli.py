@@ -35,7 +35,7 @@ TERMS_OUT = REPO_ROOT / "out" / "terms"
 VERIFICATION = REPO_ROOT / "verification.yaml"
 
 
-def _print_report(report: dict[str, Any], out_dir: Path) -> None:
+def _print_audition_report(report: dict[str, Any], out_dir: Path) -> None:
     print(f"试听音频在 {out_dir}")
     for candidate in report["candidates"]:
         print(f"\n{candidate['name']}")
@@ -64,12 +64,18 @@ def _print_asr_report(report_path: Path) -> None:
         f"\n{len(failures)} 句复核未通过（已用差异率最低的一版；详见 {report_path}）："
     )
     for item in failures:
-        print(
-            f"  {item['id']}  {_rates(item)}\n{_texts(item)}\n    缓存：{item['cache']}"
-        )
+        print(_asr_failure(item, indent="  "))
     print(
         "确实读错了，就删掉这句的缓存 wav（在书的目录下）再配音，或者改写这句；"
         "是识别错了就不用管。之后每次配音都会继续列出它。"
+    )
+
+
+def _asr_failure(item: dict, indent: str) -> str:
+    """一句复核未通过的句子：ID 和差异率、字幕/朗读/识别、缓存位置。"""
+    return (
+        f"{indent}{item['id']}  {_rates(item)}\n{_texts(item)}\n"
+        f"    缓存：{item['cache']}"
     )
 
 
@@ -100,17 +106,13 @@ def _verifier() -> Verifier:
 
 
 def _print_render_summary(summary: dict[str, Any]) -> None:
+    # 总时长的说明文字由时间轴导出命令写进 timeline.json，这里原样打印
     duration = summary["duration"]
-    verdict = {
-        "within": "在目标范围之内",
-        "too-short": "太短（低于目标范围，只报告）",
-        "too-long": "太长（超出目标范围，只报告）",
-    }[duration["verdict"]]
     print(
         f"\n成片 {summary['mp4']}\n"
         f"  帧数：视频流 {summary['frames']} 帧，时间轴 {summary['total_frames']} 帧"
         f"（{summary['fps']}fps，相差不超过一帧）\n"
-        f"  总时长 {duration['text']}：{verdict}\n"
+        f"  总时长 {duration['text']}：{duration['verdictText']}\n"
         f"  打点时间表 {summary['segments']}"
     )
     if passes := summary["asr_pinyin_passes"]:
@@ -121,8 +123,7 @@ def _print_render_summary(summary: dict[str, Any]) -> None:
     if failures := summary["asr_failures"]:
         print(f"  复核未通过（请试听）：{len(failures)} 句")
         for item in failures:
-            print(f"    {item['id']}  {_rates(item)}\n{_texts(item)}")
-            print(f"    缓存：{item['cache']}")
+            print(_asr_failure(item, indent="    "))
     else:
         print("  复核未通过：无")
 
@@ -202,7 +203,7 @@ def main(argv: list[str] | None = None) -> int:
             from pixelbook.qwen_tts import QwenTtsEngine
 
             report = run_audition(args.plan, QwenTtsEngine(), args.out)
-            _print_report(report, args.out)
+            _print_audition_report(report, args.out)
         elif args.command == "choose-voice":
             chosen = choose_voice(args.audition_dir, args.name, REPO_ROOT)
             print(f"已写入 {REPO_ROOT / 'voice.yaml'}：{chosen}")

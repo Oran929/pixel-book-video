@@ -17,7 +17,7 @@ from pixelbook.verification import Verifier
 from pixelbook.voice import Voice
 
 
-def checked(asr=None, max_retries=2):
+def fake_asr_verifier(asr=None, max_retries=2):
     """复核：默认用原样"听见"朗读文本的假识别引擎，阈值 0.1，重试 2 次。"""
     return Verifier(asr or FakeAsrEngine(), max_diff_rate=0.1, max_retries=max_retries)
 
@@ -49,7 +49,12 @@ def episode(tmp_path):
         path.write_text(text)
         engine = FakeTtsEngine()
         voice_episode(
-            path, engine, VOICE, tmp_path / "public", table, verifier=checked()
+            path,
+            engine,
+            VOICE,
+            tmp_path / "public",
+            table,
+            verifier=fake_asr_verifier(),
         )
         return engine
 
