@@ -957,15 +957,16 @@ def test_a_character_missing_from_the_font_is_reported_with_its_line(
     # "𠀀"（扩展 B 区）不在字体里；同一句里重复出现只报一次
     script_path.write_text(SCRIPT.replace("它讲怎样写好代码", "它讲𠀀怎样写好𠀀代码"))
 
-    voice_episode(
-        script_path,
-        FakeTtsEngine(),
-        VOICE,
-        tmp_path / "public",
-        {},
-        verifier=checked(),
-        font=FONT,
-    )
+    with pytest.raises(PipelineError, match="s01-l02"):
+        voice_episode(
+            script_path,
+            FakeTtsEngine(),
+            VOICE,
+            tmp_path / "public",
+            {},
+            verifier=checked(),
+            font=FONT,
+        )
 
     assert _report(script_path)["missing_glyphs"] == [{"id": "s01-l02", "char": "𠀀"}]
 
@@ -976,15 +977,16 @@ def test_a_character_missing_from_the_font_in_the_title_is_reported_as_title(
     # 左上角的书名/主题名也用像素字体显示，一样要查
     script_path.write_text(SCRIPT.replace("title: 程序员修炼之道", "title: 𠀀之书"))
 
-    voice_episode(
-        script_path,
-        FakeTtsEngine(),
-        VOICE,
-        tmp_path / "public",
-        {},
-        verifier=checked(),
-        font=FONT,
-    )
+    with pytest.raises(PipelineError, match="title"):
+        voice_episode(
+            script_path,
+            FakeTtsEngine(),
+            VOICE,
+            tmp_path / "public",
+            {},
+            verifier=checked(),
+            font=FONT,
+        )
 
     assert _report(script_path)["missing_glyphs"] == [{"id": "title", "char": "𠀀"}]
 
@@ -1004,3 +1006,51 @@ def test_a_missing_font_file_is_rejected_before_any_voicing(tmp_path, script_pat
         )
 
     assert engine.texts == []
+
+
+def test_missing_glyphs_fail_before_voicing_leaving_stage_and_lock_untouched(
+    tmp_path, script_path
+):
+    public = tmp_path / "public"
+    voice_episode(
+        script_path, FakeTtsEngine(), VOICE, public, {}, verifier=checked(), font=FONT
+    )
+    staged = {
+        p.relative_to(public): p.read_bytes() for p in public.rglob("*") if p.is_file()
+    }
+    lock = _lock(script_path).read_text()
+    manifest = (script_path.parent / "episode.json").read_text()
+
+    script_path.write_text(SCRIPT.replace("它讲怎样写好代码", "它讲𠀀怎样写好代码"))
+    engine = FakeTtsEngine()
+    with pytest.raises(PipelineError) as error:
+        voice_episode(
+            script_path, engine, VOICE, public, {}, verifier=checked(), font=FONT
+        )
+
+    assert "s01-l02" in str(error.value) and "𠀀" in str(error.value)
+    assert _report(script_path) == {"missing_glyphs": [{"id": "s01-l02", "char": "𠀀"}]}
+    assert engine.texts == []
+    assert {
+        p.relative_to(public): p.read_bytes() for p in public.rglob("*") if p.is_file()
+    } == staged
+    assert _lock(script_path).read_text() == lock
+    assert (script_path.parent / "episode.json").read_text() == manifest
+
+
+def test_missing_glyphs_on_the_first_voicing_write_no_lock(tmp_path, script_path):
+    script_path.write_text(SCRIPT.replace("title: 程序员修炼之道", "title: 𠀀之书"))
+
+    with pytest.raises(PipelineError, match="title"):
+        voice_episode(
+            script_path,
+            FakeTtsEngine(),
+            VOICE,
+            tmp_path / "public",
+            {},
+            verifier=checked(),
+            font=FONT,
+        )
+
+    assert not _lock(script_path).exists()
+    assert not (tmp_path / "public").exists()

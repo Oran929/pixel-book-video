@@ -68,12 +68,6 @@ def render_episode(
     except (PipelineError, ScriptError, PronunciationError, VoiceConfigError) as error:
         raise RenderError("配音", str(error)) from error
     report = json.loads((episode_dir / REPORT_NAME).read_text())
-    if missing := report.get("missing_glyphs"):
-        listing = "、".join(f"{item['id']}「{item['char']}」" for item in missing)
-        raise RenderError(
-            "配音",
-            f"字幕里有字在像素字体里没有字形：{listing}。改写这些字幕后再运行。",
-        )
 
     log(_progress("时间轴"))
     _run(

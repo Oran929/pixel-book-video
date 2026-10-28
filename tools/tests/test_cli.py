@@ -229,8 +229,8 @@ def test_voice_fails_naming_each_line_and_character_missing_from_the_font(
     assert "s01-l01" in out and "𠀀" in out
     report = json.loads((script.parent / "report.json").read_text())
     assert report["missing_glyphs"] == [{"id": "s01-l01", "char": "𠀀"}]
-    # 配音不白做：合成清单照常写出
-    assert (script.parent / "episode.json").is_file()
+    # 配音前就拒绝：不配音，不写合成清单
+    assert not (script.parent / "episode.json").exists()
 
 
 BAD_STORYBOARD = {

@@ -70,7 +70,7 @@ uv run pixelbook choose-voice <名字>  # 把选中的音色写进 voice.yaml
 
    | 步 | 做什么 | 常见的失败 |
    | --- | --- | --- |
-   | 1 配音 | 同 `pixelbook voice`：新术语检查、音色锁定守卫、逐句配音与复核、缺字检查，复制到 `video/public/episode/` | 新术语、音色和锁定不一致、缺字、配置文件写错 |
+   | 1 配音 | 同 `pixelbook voice`：新术语检查、音色锁定守卫、缺字检查、逐句配音与复核，复制到 `video/public/episode/` | 新术语、音色和锁定不一致、缺字、配置文件写错 |
    | 2 时间轴 | 同 `npm run timeline`：校验分镜（含组件触发帧是否落在画面里），写出 `timeline.json` 和 `segments.txt` | 分镜不合格 |
    | 3 渲染 | `remotion render Episode`（只渲染成片，不渲染风格样张） | Remotion 报错（附上输出的最后几行） |
    | 4 核对时长 | 用 ffprobe 数 MP4 **视频流**的帧数，和 `timeline.json` 的总帧数比，相差超过一帧就算失败 | — |
@@ -111,7 +111,7 @@ npm run render -- ../out/sample-ch01-ep01.mp4                  # 渲染 MP4
 
 ### 缺字检查
 
-`voice` 还检查字幕文本里的每个字在像素字体（`video/public/fonts/` 里的 Fusion Pixel）里有没有字形：缺字时浏览器会换成系统字体，画面上混进一个不是像素风的字。左上角的书名/主题名 `title` 也一样检查。缺的字列进检查报告的 `missing_glyphs`（旁白句 `id` 和字 `char`；书名/主题名里缺的字，`id` 记作 `title`），`voice` 打印出来并以非零码退出；合成清单照常写出。改写那句字幕（或者换字体）后再配音。空白不检查。
+`voice` 还检查字幕文本里的每个字在像素字体（`video/public/fonts/` 里的 Fusion Pixel）里有没有字形：缺字时浏览器会换成系统字体，画面上混进一个不是像素风的字。左上角的书名/主题名 `title` 也一样检查。缺的字列进检查报告的 `missing_glyphs`（旁白句 `id` 和字 `char`；书名/主题名里缺的字，`id` 记作 `title`），`voice` 打印出来并以非零码退出。这项检查在配音之前做：有缺字就不配音，合成清单、`video/public/episode/` 和锁定音色都不动，检查报告里只有 `missing_glyphs` 一项。改写那句字幕（或者换字体）后再配音。空白不检查。
 
 只想重新复制合成清单和分镜、不重新配音时（比如改了分镜），用 `uv run pixelbook stage ../books/sample/ch01/ep01`。
 

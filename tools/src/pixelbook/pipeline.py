@@ -54,9 +54,10 @@ def voice_episode(
     句子照常使用，并列进期目录里的检查报告 `report.json`（每次运行都列出）；
     字符对比不通过、靠拼音对比通过的句子（多半是同音字）也列进报告，单独一项。
 
-    给了字幕字体 `font` 时，字幕文本和书名/主题名 `title` 里字体没有字形的字列进
-    报告的 `missing_glyphs`（旁白句 ID 或 `title`，和字）；不给就不检查，报告里也
-    没有这一项。
+    给了字幕字体 `font` 时，配音前先做缺字检查：字幕文本和书名/主题名 `title`
+    里字体没有字形的字列进报告的 `missing_glyphs`（旁白句 ID 或 `title`，和字）。
+    有缺字就抛出 `PipelineError`，报告里只有这一项；不配音，也不碰合成清单、
+    Remotion 静态目录和锁定音色。不给字体就不检查，报告里也没有这一项。
     """
     script = load_script(script_path)
     if terms := find_new_terms(script, pronunciation):
@@ -72,6 +73,24 @@ def voice_episode(
         raise PipelineError(voice_lock_message(script_path, book_dir, differences))
     if font is not None and not font.is_file():
         raise PipelineError(f"字幕字体 {font} 不存在，无法做缺字检查")
+    glyphs: dict[str, Any] = {}
+    if font is not None:
+        # 左上角的书名/主题名也用像素字体显示，报告里的 ID 记作 `title`
+        glyphs["missing_glyphs"] = missing_glyphs(
+            [("title", script.title)]
+            + [
+                (line.id, line.text)
+                for segment in script.segments
+                for scene in segment.scenes
+                for line in scene.lines
+            ],
+            font,
+        )
+        if glyphs["missing_glyphs"]:
+            _write_report(script_path.parent, glyphs)
+            raise PipelineError(
+                missing_glyphs_message(script_path, glyphs["missing_glyphs"], font)
+            )
 
     segments, scenes, lines, failures, pinyin_passes = [], [], [], [], []
     wavs: dict[str, Path] = {}
@@ -125,23 +144,9 @@ def voice_episode(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n"
     )
 
-    report: dict[str, Any] = {
-        "asr_failures": failures,
-        "asr_pinyin_passes": pinyin_passes,
-    }
-    if font is not None:
-        # 左上角的书名/主题名也用像素字体显示，报告里的 ID 记作 `title`
-        report["missing_glyphs"] = missing_glyphs(
-            [("title", script.title)] + [(line["id"], line["text"]) for line in lines],
-            font,
-        )
-    (script_path.parent / REPORT_NAME).write_text(
-        json.dumps(
-            report,
-            ensure_ascii=False,
-            indent=2,
-        )
-        + "\n"
+    _write_report(
+        script_path.parent,
+        {"asr_failures": failures, "asr_pinyin_passes": pinyin_passes, **glyphs},
     )
 
     stage = public_dir / STAGE_DIR
@@ -153,6 +158,27 @@ def voice_episode(
     stage_episode(script_path.parent, public_dir)
     write_lock(book_dir, locked)
     return manifest
+
+
+def _write_report(episode_dir: Path, report: dict[str, Any]) -> None:
+    (episode_dir / REPORT_NAME).write_text(
+        json.dumps(report, ensure_ascii=False, indent=2) + "\n"
+    )
+
+
+def missing_glyphs_message(
+    script_path: Path, missing: list[dict[str, str]], font: Path
+) -> str:
+    listing = "\n".join(
+        f"  {item['id']}  「{item['char']}」（U+{ord(item['char']):04X}）"
+        for item in missing
+    )
+    return (
+        f"{script_path}: 字幕里有 {len(missing)} 个字在像素字体里没有字形"
+        f"（会显示成系统字体），拒绝配音：\n{listing}\n"
+        "改写这些旁白句的字幕（`title` 是左上角的书名/主题名），"
+        f"或换一款有这些字的字体（{font.name}）。"
+    )
 
 
 def new_terms_message(script_path: Path, terms: dict[str, list[str]]) -> str:

@@ -73,21 +73,6 @@ def _print_asr_report(report_path: Path) -> None:
     )
 
 
-def _print_missing_glyphs(report_path: Path) -> bool:
-    """打印缺字；没有缺字返回 True。"""
-    if not (missing := json.loads(report_path.read_text())["missing_glyphs"]):
-        return True
-    print(
-        f"\n错误：字幕里有 {len(missing)} 个字在像素字体里没有字形（会显示成系统字体）："
-    )
-    for item in missing:
-        print(f"  {item['id']}  「{item['char']}」（U+{ord(item['char']):04X}）")
-    print(
-        f"改写这些旁白句的字幕（`title` 是左上角的书名/主题名），或换一款有这些字的字体（{SUBTITLE_FONT}）。"
-    )
-    return False
-
-
 def _rates(item: dict) -> str:
     rates = f"字符差异率 {item['diff_rate']:.0%}"
     # 两步复核之前缓存的句子没有算过拼音
@@ -244,8 +229,6 @@ def main(argv: list[str] | None = None) -> int:
                 f"已复制到 {VIDEO_PUBLIC / 'episode'}"
             )
             _print_asr_report(script.parent / REPORT_NAME)
-            if not _print_missing_glyphs(script.parent / REPORT_NAME):
-                return 1
         elif args.command == "terms":
             table = load_pronunciation(PRONUNCIATION)
             script = args.script.resolve()
