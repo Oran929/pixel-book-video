@@ -28,3 +28,8 @@
 - 来自 07（2026-10-28，复核改为两步）：`report.json` 现在有两个键：`asr_failures`（每项多了 `pinyin_diff_rate`，旧缓存的句子为 `null`）和 `asr_pinyin_passes`（比字不通过、靠不带声调的拼音通过的句子，多半是同音字，算通过，字段同 `asr_failures`）。汇总时 `asr_pinyin_passes` 只列出备查，不算问题。
 - 来自 12（2026-10-28）：时间轴导出是 `cd video && npm run timeline -- <期目录>`（tsx 运行 `src/episode/timeline-cli.ts`，失败时退出码 1、错误打到 stderr；参数错 2），写期目录里的 `timeline.json`；它和 Remotion 用同一个时间轴函数和分镜校验，所以一键命令可以把它放在渲染之前当作"分镜校验"一步，比等 `remotion render` 报错更早。冒烟测试比对的 `totalFrames` 就从这个文件读。试听音轨 `uv run pixelbook mix <timeline.json>` 不是正式产物，一键命令不必调用。相对路径按调用 npm 的目录解析（`INIT_CWD`），从仓库根目录可以用 `npm --prefix video run timeline -- books/...`。
 - 来自 10（2026-10-28）：`npm run timeline` 现在同时写出期目录里的打点时间表 `segments.txt`，并在最后一行打印 `总时长 m:ss：在 4:00–6:00 之内 / 太短 / 太长`；判断也在 `timeline.json` 的 `duration.verdict`（`within` / `too-short` / `too-long`），一键命令汇总报告时可以直接读这个字段，不用解析输出文本。总时长超出范围时退出码仍是 0，一键命令不要因此停下（约 20 秒的样片必然是"太短"）。只有写到期目录默认位置时才写 `segments.txt`，用 `--out` 写到别处时不写。
+- 来自 09（2026-10-28）：
+  - `voice` 现在还做缺字检查：字幕里有字体没有的字时，报告 `report.json` 多一项 `missing_glyphs: [{id, char}]`，`voice` **以退出码 1 结束**（合成清单照常写出）。一键命令应把它当作"配音"这一步失败报出来。`voice_episode` 的新参数 `font`（CLI 传 `video/public/fonts/…woff2`）；冒烟测试直接调 `voice_episode` 时也传上，才会检查缺字。
+  - `Root.tsx` 现在有两个合成：`Episode` 和风格样张 `StyleSheet`。一键命令渲染时要明确写 `Episode`（`npm run render` 已经是 `remotion render Episode`）。
+  - 中间帧改成了 PNG，渲染会比 JPEG 慢一点、MP4 没变大多少（样例 1.1 MB）。字体在第一帧前用 `delayRender` 加载，冒烟测试不需要特别处理。
+
