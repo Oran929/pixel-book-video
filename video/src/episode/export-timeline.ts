@@ -1,11 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { COMPONENT_SCHEMAS } from "../components/schemas";
-import { VIDEO } from "../video-config";
-import { parseManifest } from "./manifest";
+import { planEpisode } from "./episode-plan";
 import { durationReport, segmentsText, type DurationReport } from "./rhythm";
-import { parseStoryboard, pauseOverrides, scheduleCues } from "./storyboard";
-import { computeTimeline, DEFAULT_PAUSES, type Timeline } from "./timeline";
+import type { Timeline } from "./timeline";
 
 // 期目录里的文件名，与 tools/src/pixelbook/pipeline.py 一致
 const MANIFEST_FILE = "episode.json";
@@ -15,7 +12,7 @@ export const SEGMENTS_FILE = "segments.txt";
 
 /**
  * 读期目录里的合成清单（有分镜时也读分镜，取它的停顿覆盖），用 Remotion 里
- * 同一套校验和时间轴函数算出时间轴，连同总时长报告写成 `timeline.json`
+ * 同一个 `planEpisode` 算出时间轴，连同总时长报告写成 `timeline.json`
  * （供 Python 的试听拼接读取）。写到期目录里时，同时写出打点时间表 `segments.txt`。
  */
 export type ExportOptions = {
@@ -43,19 +40,13 @@ export const exportTimeline = (
 ): ExportResult => {
   const readJson = (file: string) =>
     JSON.parse(readFileSync(join(episodeDir, file), "utf8")) as unknown;
-  const manifest = parseManifest(readJson(MANIFEST_FILE));
-  const storyboard =
+  // 和 Remotion 用同一个函数：触发帧落在画面之外时在这里就报错，不用等到渲染
+  const { timeline: computed } = planEpisode(
+    readJson(MANIFEST_FILE),
     useStoryboard && existsSync(join(episodeDir, STORYBOARD_FILE))
-      ? parseStoryboard(readJson(STORYBOARD_FILE), manifest, COMPONENT_SCHEMAS)
-      : null;
-  const computed = computeTimeline(
-    manifest,
-    DEFAULT_PAUSES,
-    VIDEO.fps,
-    storyboard ? pauseOverrides(storyboard) : {},
+      ? readJson(STORYBOARD_FILE)
+      : null,
   );
-  // 和 Remotion 一样排出组件的触发帧：触发帧落在画面之外时在这里就报错，不用等到渲染
-  if (storyboard) scheduleCues(storyboard, computed);
   const timeline = { ...computed, duration: durationReport(computed) };
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, JSON.stringify(timeline, null, 2) + "\n");

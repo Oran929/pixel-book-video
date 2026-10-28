@@ -7,24 +7,12 @@ import {
   useCurrentFrame,
 } from "remotion";
 import { Entering } from "../components/Entering";
-import { COMPONENT_SCHEMAS } from "../components/schemas";
 import { EpisodeTitle } from "../shell/EpisodeTitle";
 import { Subtitle } from "../shell/Subtitle";
 import { COLOR } from "../style/style";
-import { VIDEO } from "../video-config";
-import { parseManifest } from "./manifest";
-import {
-  type Cue,
-  parseStoryboard,
-  pauseOverrides,
-  scheduleCues,
-} from "./storyboard";
-import {
-  computeTimeline,
-  DEFAULT_PAUSES,
-  lineAt,
-  type Timeline,
-} from "./timeline";
+import { planEpisode } from "./episode-plan";
+import type { Cue } from "./storyboard";
+import { lineAt, type Timeline } from "./timeline";
 
 // 合成清单和分镜由 `pixelbook voice` / `pixelbook stage` 复制到 video/public/episode/
 const MANIFEST_FILE = "episode/episode.json";
@@ -57,19 +45,11 @@ export const calculateEpisodeMetadata: CalculateMetadataFunction<
       `public/${MANIFEST_FILE} 不存在：先运行 \`pixelbook voice\` 或 \`pixelbook stage\``,
     );
   }
-  const manifest = parseManifest(manifestData);
   const storyboardData = await readJson(STORYBOARD_FILE, abortSignal);
-  const storyboard =
-    storyboardData === null
-      ? null
-      : parseStoryboard(storyboardData, manifest, COMPONENT_SCHEMAS);
-  const timeline = computeTimeline(
-    manifest,
-    DEFAULT_PAUSES,
-    VIDEO.fps,
-    storyboard ? pauseOverrides(storyboard) : {},
+  const { manifest, timeline, cues } = planEpisode(
+    manifestData,
+    storyboardData,
   );
-  const cues = storyboard ? scheduleCues(storyboard, timeline) : [];
   return {
     durationInFrames: timeline.totalFrames,
     props: { title: manifest.title, timeline, cues },

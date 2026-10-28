@@ -22,10 +22,8 @@ export const MascotProps = z.strictObject({
   position: z.enum(["left", "center", "right"]),
 });
 
+/** 组件名 → 参数格式；交给 `parseStoryboard` 核对组件名和参数 */
 export const COMPONENT_PROPS = {
   PixelBlock: PixelBlockProps,
   Mascot: MascotProps,
-} as const;
-
-/** 交给 `parseStoryboard` 核对组件名和参数 */
-export const COMPONENT_SCHEMAS: ComponentSchemas = COMPONENT_PROPS;
+} as const satisfies ComponentSchemas;
