@@ -10,7 +10,8 @@ from pixelbook.pipeline import PipelineError, stage_episode, voice_episode
 from pixelbook.pronunciation import PronunciationError, load_pronunciation
 from pixelbook.script import ScriptError
 from pixelbook.term_audition import audition_terms
-from pixelbook.voice import VoiceConfigError, load_voice_config
+from pixelbook.voice import Voice, VoiceConfigError
+from pixelbook.voice_lock import resolve_book_voice
 
 AUDITION_PLAN = REPO_ROOT / "voices" / "audition.yaml"
 AUDITION_OUT = REPO_ROOT / "out" / "audition"
@@ -36,6 +37,11 @@ def _print_report(report: dict[str, Any], out_dir: Path) -> None:
         print(f"  估算一期（100 句）：约 {minutes:.0f} 分钟")
 
 
+def _book_voice(script: Path) -> Voice:
+    # 旁白稿在 books/<书>/<章>/<期>/script.yaml
+    return resolve_book_voice(script.parents[2], REPO_ROOT)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="pixelbook")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -54,9 +60,14 @@ def main(argv: list[str] | None = None) -> int:
         "voice", help="为一期旁白稿逐句配音，生成合成清单并复制到 video/public/"
     )
     voice.add_argument("script", type=Path, help="books/<书>/<章>/<期>/script.yaml")
+    voice.add_argument(
+        "--revoice",
+        action="store_true",
+        help="音色和书的锁定音色不一致时，确认整本书用新音色重新配音（更新锁定）",
+    )
 
     terms = commands.add_parser(
-        "terms", help="为一期旁白稿的每个新术语生成一段试听音频（项目默认音色）"
+        "terms", help="为一期旁白稿的每个新术语生成一段试听音频（书的音色）"
     )
     terms.add_argument("script", type=Path, help="books/<书>/<章>/<期>/script.yaml")
     terms.add_argument("--out", type=Path, default=TERMS_OUT)
@@ -79,13 +90,14 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "voice":
             from pixelbook.qwen_tts import QwenTtsEngine
 
-            default_voice = load_voice_config(REPO_ROOT / "voice.yaml")
+            script = args.script.resolve()
             manifest = voice_episode(
-                args.script.resolve(),
+                script,
                 QwenTtsEngine(),
-                default_voice,
+                _book_voice(script),
                 VIDEO_PUBLIC,
                 load_pronunciation(PRONUNCIATION),
+                revoice=args.revoice,
             )
             total = sum(line["seconds"] for line in manifest["lines"])
             print(
@@ -95,11 +107,13 @@ def main(argv: list[str] | None = None) -> int:
             )
         elif args.command == "terms":
             table = load_pronunciation(PRONUNCIATION)
-            default_voice = load_voice_config(REPO_ROOT / "voice.yaml")
+            script = args.script.resolve()
+            # 试听不经过守卫，也不写锁定音色
+            book_voice = _book_voice(script)
             from pixelbook.qwen_tts import QwenTtsEngine
 
             results = audition_terms(
-                args.script.resolve(), table, QwenTtsEngine(), default_voice, args.out
+                script, table, QwenTtsEngine(), book_voice, args.out
             )
             if not results:
                 print("没有新术语，可以直接 `pixelbook voice`")
