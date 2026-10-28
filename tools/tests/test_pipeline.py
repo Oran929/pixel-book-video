@@ -10,7 +10,12 @@ import yaml
 
 from pixelbook import REPO_ROOT
 from pixelbook.asr import FakeAsrEngine
-from pixelbook.pipeline import PipelineError, stage_episode, voice_episode
+from pixelbook.pipeline import (
+    SUBTITLE_FONT,
+    PipelineError,
+    stage_episode,
+    voice_episode,
+)
 from pixelbook.pronunciation import load_pronunciation
 from pixelbook.script import ScriptError
 from pixelbook.tts import FakeTtsEngine
@@ -919,3 +924,60 @@ def test_cache_written_before_the_pinyin_step_is_reused_and_reported(
     assert failure["id"] == "s01-l02"
     assert failure["diff_rate"] == 1 / 8
     assert failure["pinyin_diff_rate"] is None
+
+
+# --- 缺字检查（票 09）：字幕文本里每个字在像素字体里都要有字形 ---
+
+FONT = REPO_ROOT / "video" / "public" / SUBTITLE_FONT
+
+
+def test_every_subtitle_character_in_the_font_reports_no_missing_glyphs(
+    tmp_path, script_path
+):
+    voice_episode(
+        script_path,
+        FakeTtsEngine(),
+        VOICE,
+        tmp_path / "public",
+        {},
+        verifier=checked(),
+        font=FONT,
+    )
+
+    assert _report(script_path)["missing_glyphs"] == []
+
+
+def test_a_character_missing_from_the_font_is_reported_with_its_line(
+    tmp_path, script_path
+):
+    # "𠀀"（扩展 B 区）不在字体里；同一句里重复出现只报一次
+    script_path.write_text(SCRIPT.replace("它讲怎样写好代码", "它讲𠀀怎样写好𠀀代码"))
+
+    voice_episode(
+        script_path,
+        FakeTtsEngine(),
+        VOICE,
+        tmp_path / "public",
+        {},
+        verifier=checked(),
+        font=FONT,
+    )
+
+    assert _report(script_path)["missing_glyphs"] == [{"id": "s01-l02", "char": "𠀀"}]
+
+
+def test_a_missing_font_file_is_rejected_before_any_voicing(tmp_path, script_path):
+    engine = FakeTtsEngine()
+
+    with pytest.raises(PipelineError, match="nope.woff2"):
+        voice_episode(
+            script_path,
+            engine,
+            VOICE,
+            tmp_path / "public",
+            {},
+            verifier=checked(),
+            font=tmp_path / "nope.woff2",
+        )
+
+    assert engine.texts == []

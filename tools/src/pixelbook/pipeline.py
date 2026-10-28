@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from pixelbook.audio import wav_seconds
+from pixelbook.glyphs import missing_glyphs
 from pixelbook.pronunciation import find_new_terms, spoken_text
 from pixelbook.script import load_script
 from pixelbook.tts import TtsEngine
@@ -25,6 +26,8 @@ STORYBOARD_NAME = "storyboard.json"
 REPORT_NAME = "report.json"
 # Remotion 静态目录（video/public/）里存放本期文件的子目录
 STAGE_DIR = "episode"
+# 字幕用的像素字体，相对 Remotion 静态目录；和 video/src/style/style.ts 的 FONT.file 是同一个文件
+SUBTITLE_FONT = "fonts/fusion-pixel-12px-proportional-zh_hans.otf.woff2"
 
 
 class PipelineError(Exception):
@@ -39,6 +42,7 @@ def voice_episode(
     pronunciation: dict[str, str],
     verifier: Verifier,
     revoice: bool = False,
+    font: Path | None = None,
 ) -> dict[str, Any]:
     """为 `script_path` 这一期逐句配音，写出期目录里的合成清单并返回它。
 
@@ -49,6 +53,9 @@ def voice_episode(
     每句配音经 `verifier` 的语音识别复核，和朗读文本对比；重试后仍不通过的
     句子照常使用，并列进期目录里的检查报告 `report.json`（每次运行都列出）；
     字符对比不通过、靠拼音对比通过的句子（多半是同音字）也列进报告，单独一项。
+
+    给了字幕字体 `font` 时，字幕文本里字体没有字形的字列进报告的 `missing_glyphs`
+    （旁白句 ID 和字）；不给就不检查，报告里也没有这一项。
     """
     script = load_script(script_path)
     if terms := find_new_terms(script, pronunciation):
@@ -62,6 +69,8 @@ def voice_episode(
         raise PipelineError(f"参考音频 {error.filename} 不存在，无法配音") from error
     if not revoice and (differences := lock_mismatch(book_dir, locked)):
         raise PipelineError(voice_lock_message(script_path, book_dir, differences))
+    if font is not None and not font.is_file():
+        raise PipelineError(f"字幕字体 {font} 不存在，无法做缺字检查")
 
     segments, scenes, lines, failures, pinyin_passes = [], [], [], [], []
     wavs: dict[str, Path] = {}
@@ -114,9 +123,17 @@ def voice_episode(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n"
     )
 
+    report: dict[str, Any] = {
+        "asr_failures": failures,
+        "asr_pinyin_passes": pinyin_passes,
+    }
+    if font is not None:
+        report["missing_glyphs"] = missing_glyphs(
+            ((line["id"], line["text"]) for line in lines), font
+        )
     (script_path.parent / REPORT_NAME).write_text(
         json.dumps(
-            {"asr_failures": failures, "asr_pinyin_passes": pinyin_passes},
+            report,
             ensure_ascii=False,
             indent=2,
         )

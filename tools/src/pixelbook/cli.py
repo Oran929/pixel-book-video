@@ -10,6 +10,7 @@ from pixelbook.audition import AuditionError, choose_voice, run_audition
 from pixelbook.mix import MixError, mix_timeline
 from pixelbook.pipeline import (
     REPORT_NAME,
+    SUBTITLE_FONT,
     PipelineError,
     stage_episode,
     voice_episode,
@@ -69,6 +70,19 @@ def _print_asr_report(report_path: Path) -> None:
         "确实读错了，就删掉这句的缓存 wav（在书的目录下）再配音，或者改写这句；"
         "是识别错了就不用管。之后每次配音都会继续列出它。"
     )
+
+
+def _print_missing_glyphs(report_path: Path) -> bool:
+    """打印缺字；没有缺字返回 True。"""
+    if not (missing := json.loads(report_path.read_text())["missing_glyphs"]):
+        return True
+    print(
+        f"\n错误：字幕里有 {len(missing)} 个字在像素字体里没有字形（会显示成系统字体）："
+    )
+    for item in missing:
+        print(f"  {item['id']}  「{item['char']}」（U+{ord(item['char']):04X}）")
+    print(f"改写这些旁白句的字幕，或换一款有这些字的字体（{SUBTITLE_FONT}）。")
+    return False
 
 
 def _rates(item: dict) -> str:
@@ -170,6 +184,7 @@ def main(argv: list[str] | None = None) -> int:
                 load_pronunciation(PRONUNCIATION),
                 verifier,
                 revoice=args.revoice,
+                font=VIDEO_PUBLIC / SUBTITLE_FONT,
             )
             total = sum(line["seconds"] for line in manifest["lines"])
             print(
@@ -178,6 +193,8 @@ def main(argv: list[str] | None = None) -> int:
                 f"已复制到 {VIDEO_PUBLIC / 'episode'}"
             )
             _print_asr_report(script.parent / REPORT_NAME)
+            if not _print_missing_glyphs(script.parent / REPORT_NAME):
+                return 1
         elif args.command == "terms":
             table = load_pronunciation(PRONUNCIATION)
             script = args.script.resolve()

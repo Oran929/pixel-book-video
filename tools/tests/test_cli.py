@@ -4,13 +4,15 @@
 """
 
 import json
+import shutil
 
 import pytest
 import yaml
 
-from pixelbook import cli
+from pixelbook import REPO_ROOT, cli
 from pixelbook.asr import FakeAsrEngine
 from pixelbook.audio import wav_seconds
+from pixelbook.pipeline import SUBTITLE_FONT
 from pixelbook.tts import FakeTtsEngine
 from pixelbook.voice import Voice, save_voice_config
 
@@ -61,6 +63,9 @@ def repo(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "PRONUNCIATION", tmp_path / "pronunciation.yaml")
     monkeypatch.setattr(cli, "VERIFICATION", tmp_path / "verification.yaml")
     monkeypatch.setattr(cli, "VIDEO_PUBLIC", tmp_path / "public")
+    font = tmp_path / "public" / SUBTITLE_FONT
+    font.parent.mkdir(parents=True)
+    shutil.copyfile(REPO_ROOT / "video" / "public" / SUBTITLE_FONT, font)
     script = tmp_path / "books" / "demo" / "ch01" / "ep01" / "script.yaml"
     script.parent.mkdir(parents=True)
     script.write_text(SCRIPT)
@@ -209,3 +214,19 @@ def test_mix_reports_a_malformed_timeline(repo, tmp_path, capsys):
 
     assert cli.main(["mix", str(tmp_path / "timeline.json")]) == 1
     assert "totalFrames: 缺少" in capsys.readouterr().out
+
+
+def test_voice_fails_naming_each_line_and_character_missing_from_the_font(
+    repo, engine, asr, capsys
+):
+    script = repo / "books" / "demo" / "ch01" / "ep01" / "script.yaml"
+    script.write_text(SCRIPT.replace("今天读一本 DRY 的书", "今天读一本 DRY 的𠀀"))
+
+    assert cli.main(["voice", str(script)]) == 1
+
+    out = capsys.readouterr().out
+    assert "s01-l01" in out and "𠀀" in out
+    report = json.loads((script.parent / "report.json").read_text())
+    assert report["missing_glyphs"] == [{"id": "s01-l01", "char": "𠀀"}]
+    # 配音不白做：合成清单照常写出
+    assert (script.parent / "episode.json").is_file()
