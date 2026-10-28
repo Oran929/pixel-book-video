@@ -9,7 +9,7 @@
     "skipLibCheck": true,
     "noEmit": true,
     "isolatedModules": true,
-    "lib": ["ES2023", "DOM"]
+    "lib": ["ES2023", "DOM", "DOM.Iterable"]
   },
   "include": ["src", "*.ts"]
 }
