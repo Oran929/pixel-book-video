@@ -10,6 +10,9 @@ export type Pauses = {
 
 export const DEFAULT_PAUSES: Pauses = { betweenLines: 0.3, sceneChange: 0.8 };
 
+/** 分镜对个别位置的停顿覆盖：旁白句 ID → 这句之后的停顿（秒），优先于默认规则 */
+export type PauseOverrides = Readonly<Record<string, number>>;
+
 /** 帧区间：startFrame 含，endFrame 不含 */
 export type FrameSpan = { startFrame: number; endFrame: number };
 
@@ -33,6 +36,7 @@ export const computeTimeline = (
   manifest: EpisodeManifest,
   pauses: Pauses,
   fps: number,
+  overrides: PauseOverrides = {},
 ): Timeline => {
   const lines: TimedLine[] = [];
   let cursor = 0;
@@ -40,7 +44,8 @@ export const computeTimeline = (
     const previous = manifest.lines[index - 1];
     if (previous) {
       const pause =
-        previous.scene === line.scene ? pauses.betweenLines : pauses.sceneChange;
+        overrides[previous.id] ??
+        (previous.scene === line.scene ? pauses.betweenLines : pauses.sceneChange);
       cursor += pauseFrames(pause, fps);
     }
     const endFrame = cursor + lineFrames(line.seconds, fps);

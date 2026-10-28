@@ -103,6 +103,28 @@ describe("computeTimeline", () => {
   });
 });
 
+describe("computeTimeline with pause overrides", () => {
+  it("uses the override after the named line instead of the default rule", () => {
+    const timeline = computeTimeline(MANIFEST, DEFAULT_PAUSES, 30, {
+      "s01-l01": 1.2, // 同一画面内，默认 0.3 秒
+      "s01-l02": 0, // 换画面，默认 0.8 秒
+    });
+
+    expect(timeline.lines[1]!.startFrame).toBe(60 + 36);
+    expect(timeline.lines[2]!.startFrame).toBe(141);
+    // 没有覆盖的位置照常用默认规则
+    expect(timeline.lines[3]!.startFrame).toBe(141 + 30 + 24);
+  });
+
+  it("rounds an overridden pause to the nearest frame", () => {
+    const timeline = computeTimeline(MANIFEST, DEFAULT_PAUSES, 30, {
+      "s01-l01": 0.517, // 15.51 帧
+    });
+
+    expect(timeline.lines[1]!.startFrame - timeline.lines[0]!.endFrame).toBe(16);
+  });
+});
+
 describe("lineAt", () => {
   const timeline = computeTimeline(MANIFEST, DEFAULT_PAUSES, 30);
 
