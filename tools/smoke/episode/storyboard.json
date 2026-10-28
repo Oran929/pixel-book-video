@@ -1,0 +1,23 @@
+{
+  "scenes": [
+    {
+      "scene": "s01-c02",
+      "components": [
+        { "id": "rule", "component": "PixelBlock", "props": { "label": "一" } }
+      ],
+      "triggers": [
+        { "target": "rule", "line": "s01-l03", "offset": 0.4, "action": "enter", "animation": "slide" }
+      ]
+    },
+    {
+      "scene": "s02-c01",
+      "components": [
+        { "id": "once", "component": "PixelBlock", "props": { "label": "一次" } }
+      ],
+      "triggers": [
+        { "target": "once", "line": "s02-l01", "offset": 0.2, "action": "enter", "animation": "fade" }
+      ]
+    }
+  ],
+  "pauses": [{ "after": "s01-l01", "seconds": 0.5 }]
+}
