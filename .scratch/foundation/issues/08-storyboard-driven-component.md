@@ -18,12 +18,12 @@
 
 **验收：**
 
-- [ ] 分镜的 zod schema，加上交叉校验：旁白句 ID 必须存在于合成清单并属于该画面，组件名必须在注册表里，报错信息指出是第几个画面、第几个触发
-- [ ] 时间轴支持分镜里的停顿覆盖，覆盖优先于默认规则
-- [ ] 动画触发帧按上面的规则计算；偏移为负数时可以提前，但不能早于画面开始
-- [ ] 一个简单组件，在分镜指定的旁白句出现
-- [ ] 样例书的分镜 `books/sample/ch01/ep01/storyboard.json` 提交到 git
-- [ ] TS 测试覆盖：停顿覆盖、负偏移、偏移取整、触发早于画面开始时报错、ID 不存在和组件名不存在时的报错、旁白句不属于该画面时的报错
+- [x] 分镜的 zod schema，加上交叉校验：旁白句 ID 必须存在于合成清单并属于该画面，组件名必须在注册表里，报错信息指出是第几个画面、第几个触发
+- [x] 时间轴支持分镜里的停顿覆盖，覆盖优先于默认规则
+- [x] 动画触发帧按上面的规则计算；偏移为负数时可以提前，但不能早于画面开始
+- [x] 一个简单组件，在分镜指定的旁白句出现
+- [x] 样例书的分镜 `books/sample/ch01/ep01/storyboard.json` 提交到 git
+- [x] TS 测试覆盖：停顿覆盖、负偏移、偏移取整、触发早于画面开始时报错、ID 不存在和组件名不存在时的报错、旁白句不属于该画面时的报错
 
 ## Comments
 
@@ -32,3 +32,13 @@
   - `stage_episode`（`tools/src/pixelbook/pipeline.py`）复制的文件列表目前只有 `episode.json`，加上 `storyboard.json`（不存在时跳过）。
   - 时间轴里画面的区间是"从第一句开始，到下一个画面的第一句开始"，换画面的停顿归前一个画面；帧区间起含止不含。组件"到所在画面结束时消失"就按这个 `endFrame`。
   - 停顿目前是 `computeTimeline(manifest, pauses, fps)` 的 `Pauses` 参数，分镜覆盖可以作为额外输入加进去。
+- 来自 08 实现（2026-10-28）：
+  - **格式的具体写法**（票面没定死的部分）：顶层 `scenes`、`pauses` 两个数组。每个画面 `{ scene, components, triggers }`，`scene` 用合成清单的画面 ID；组件 `{ id, component, props }`，`id` 是本画面里的名字，触发用 `target` 引用它；触发 `{ target, line, offset, action: "enter", animation: "fade" | "slide" }`，`offset` 必填。所有对象都是严格模式，拼错的字段名（如 `ofset`）直接报错。示例见 README「分镜」和 `books/sample/ch01/ep01/storyboard.json`。
+  - **自己补的规则**：每个组件恰好一个 `enter` 触发（没有或重复都报错）；同一画面里组件 `id` 不能重复；同一画面不能写两项；触发帧不早于画面结束帧也报错（否则组件永远不出现）；停顿覆盖不能写在最后一句之后（末尾不加停顿），同一句不能覆盖两次。组件参数按注册表里该组件的 zod schema 校验，错误路径带到 `props` 里的字段。
+  - **报错位置**：形如 `第 2 个画面 第 1 个触发 line: 旁白句 s01-l03 不属于画面 s02-c01（属于 s01-c02）`，一次列出全部问题。触发帧越界要用时间轴才算得出，由 `scheduleCues` 单独报错（同样写明第几个画面、第几个触发、触发帧和画面起止帧）。
+  - **校验时机**：在 `calculateEpisodeMetadata` 里，读完合成清单就校验分镜，再算时间轴和组件区间，早于任何一帧渲染；Studio 和 `remotion render` / `remotion compositions` 都会报出来（已实测）。没有单独的校验命令，12 的 TS 命令行入口可以复用 `parseStoryboard`。
+  - **没有分镜**：`fetch` 得到 404 时当作没有分镜，只渲染字幕；其他 HTTP 错误照常报错。`stage` 在期目录没有分镜时会删掉 `video/public/episode/` 里上一期留下的 `storyboard.json`，避免误用旧分镜。实测删掉分镜后样片 553 帧、只有字幕。
+  - **动画**：出现动画 0.4 秒、ease-out；`fade` 是透明度 0→1，`slide` 是从上方 160px 落下（不改透明度，对应样例画面说明"一个方块落下"）。这些是临时值，09 换成风格表常量。
+  - **模块位置**：分镜校验和组件区间计算在 `video/src/episode/storyboard.ts`（`parseStoryboard`、`pauseOverrides`、`scheduleCues`），组件注册表 `video/src/components/registry.ts`，样片组件 `PixelBlock`（参数只有 `label`）。时间轴 `computeTimeline` 加了第四个参数 `overrides`（旁白句 ID → 之后的停顿秒数），默认空。
+  - **样例分镜与渲染**：s01-c02 在 s01-l03 开始后 1.2 秒落下 "DRY"；s02-c01 在 s02-l03 开始前 0.2 秒淡入"一次"（演示负偏移）；s01-l04 之后停顿覆盖为 1.2 秒。用现有缓存 `pixelbook stage` 后渲染到 `out/sample-ch01-ep01.mp4`：565 帧（18.83 秒），与手算一致（无覆盖时 553 帧，覆盖多 12 帧）。抽帧确认：第 198 帧没有方块、第 199 帧起 DRY 落下、第 338 帧（换段）消失；第 481 帧没有、第 482 帧起"一次"淡入，此时字幕仍是上一句。
+  - 没有写"样例分镜对真实合成清单校验通过"的自动测试：`episode.json` 不提交，全新克隆时没有，测试不能依赖它。这一点由渲染实测，11 的冒烟测试可以覆盖。
