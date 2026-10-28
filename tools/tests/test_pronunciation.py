@@ -93,6 +93,7 @@ def test_unchanged_entry_keeps_spoken_text_as_written(episode):
     engine = episode(script(("第一条原则叫 DRY。", None)), TABLE)
 
     assert engine.texts == ["第一条原则叫 DRY。"]
+    assert new_terms("第一条原则叫 DRY。", TABLE) == []
 
 
 @pytest.mark.parametrize(

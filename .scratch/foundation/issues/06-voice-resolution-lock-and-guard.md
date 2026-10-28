@@ -18,3 +18,4 @@
 ## Comments
 
 - 来自 03（2026-10-28）：`pixelbook voice` 目前直接用 `load_voice_config(REPO_ROOT / "voice.yaml")` 作为音色传给 `voice_episode`（`tools/src/pixelbook/cli.py`），06 要把它换成书解析出的音色，并在流水线里加守卫。
+- 来自 04（2026-10-28）：新术语试听是 `pixelbook terms`（`cli.py` 里的 `terms` 分支），音色作为参数传给 `pixelbook.term_audition.audition_terms`，目前传的是 `load_voice_config(REPO_ROOT / "voice.yaml")`；06 改成书解析出的音色时只改 CLI 这一处，`audition_terms` 不需要动，也不要经过守卫。书目录可以从旁白稿路径推出（`script_path.parents[2]`）。

@@ -55,7 +55,20 @@ cd ../video
 npm run render -- ../out/sample-ch01-ep01.mp4                  # 渲染 MP4
 ```
 
-`voice` 用 `voice.yaml` 的默认音色逐句配音（wav 在 `books/<书>/cache/tts/`），写出期目录里的合成清单 `episode.json`，再清空 `video/public/episode/`，把每句 wav 和合成清单复制进去。Remotion 只读 `video/public/episode/episode.json`。只想重新复制合成清单、不重新配音时，用 `uv run pixelbook stage ../books/sample/ch01/ep01`。
+`voice` 先按读音表检查新术语（见下），没有新术语才用 `voice.yaml` 的默认音色逐句配音（wav 在 `books/<书>/cache/tts/`），写出期目录里的合成清单 `episode.json`，再清空 `video/public/episode/`，把每句 wav 和合成清单复制进去。Remotion 只读 `video/public/episode/episode.json`。只想重新复制合成清单、不重新配音时，用 `uv run pixelbook stage ../books/sample/ch01/ep01`。
+
+### 读音表与新术语
+
+`pronunciation.yaml` 是全频道共用的读音表（术语 → 朗读写法）。配音时，字幕文本里的术语按读音表替换成朗读文本（最长的术语优先，区分大小写）；旁白句手写了 `speech` 时以手写的为准。
+
+字幕文本里由英文字母、数字、ASCII 符号组成的片段（如 `KV Cache`、`C++`、`I/O`），扣掉读音表里的术语后还剩下的，就是新术语；纯数字（`30`、`3.5`、`80%`、`1,000`）和手写了 `speech` 的句子不算。只要有新术语，`voice` 就拒绝配音，并列出每个术语出现在哪些旁白句。这时：
+
+```sh
+cd tools
+uv run pixelbook terms ../books/sample/ch01/ep01/script.yaml   # 每个新术语一段试听音频，在 out/terms/
+```
+
+听完把读法写进 `pronunciation.yaml`。读法没问题的也要登记成原样不变的条目（如 `DRY: DRY`），表示"已确认"。
 
 ## 检查
 
