@@ -6,9 +6,13 @@ from typing import Any
 
 from pixelbook import REPO_ROOT
 from pixelbook.audition import AuditionError, choose_voice, run_audition
+from pixelbook.pipeline import PipelineError, stage_episode, voice_episode
+from pixelbook.script import ScriptError
+from pixelbook.voice import VoiceConfigError, load_voice_config
 
 AUDITION_PLAN = REPO_ROOT / "voices" / "audition.yaml"
 AUDITION_OUT = REPO_ROOT / "out" / "audition"
+VIDEO_PUBLIC = REPO_ROOT / "video" / "public"
 
 
 def _print_report(report: dict[str, Any], out_dir: Path) -> None:
@@ -42,16 +46,43 @@ def main(argv: list[str] | None = None) -> int:
     choose.add_argument("name")
     choose.add_argument("--from", dest="audition_dir", type=Path, default=AUDITION_OUT)
 
-    args = parser.parse_args(argv)
-    if args.command == "audition":
-        from pixelbook.qwen_tts import QwenTtsEngine
+    voice = commands.add_parser(
+        "voice", help="为一期旁白稿逐句配音，生成合成清单并复制到 video/public/"
+    )
+    voice.add_argument("script", type=Path, help="books/<书>/<章>/<期>/script.yaml")
 
-        _print_report(run_audition(args.plan, QwenTtsEngine(), args.out), args.out)
-    else:
-        try:
-            voice = choose_voice(args.audition_dir, args.name, REPO_ROOT)
-        except AuditionError as error:
-            print(error)
-            return 1
-        print(f"已写入 {REPO_ROOT / 'voice.yaml'}：{voice}")
+    stage = commands.add_parser(
+        "stage", help="只把期目录里的合成清单复制到 video/public/（不重新配音）"
+    )
+    stage.add_argument("episode", type=Path, help="books/<书>/<章>/<期>/")
+
+    args = parser.parse_args(argv)
+    try:
+        if args.command == "audition":
+            from pixelbook.qwen_tts import QwenTtsEngine
+
+            report = run_audition(args.plan, QwenTtsEngine(), args.out)
+            _print_report(report, args.out)
+        elif args.command == "choose-voice":
+            chosen = choose_voice(args.audition_dir, args.name, REPO_ROOT)
+            print(f"已写入 {REPO_ROOT / 'voice.yaml'}：{chosen}")
+        elif args.command == "voice":
+            from pixelbook.qwen_tts import QwenTtsEngine
+
+            default_voice = load_voice_config(REPO_ROOT / "voice.yaml")
+            manifest = voice_episode(
+                args.script.resolve(), QwenTtsEngine(), default_voice, VIDEO_PUBLIC
+            )
+            total = sum(line["seconds"] for line in manifest["lines"])
+            print(
+                f"{len(manifest['lines'])} 句，配音共 {total:.1f} 秒（不含停顿）；"
+                f"合成清单 {args.script.parent / 'episode.json'}，"
+                f"已复制到 {VIDEO_PUBLIC / 'episode'}"
+            )
+        else:
+            stage_episode(args.episode.resolve(), VIDEO_PUBLIC)
+            print(f"已复制到 {VIDEO_PUBLIC / 'episode'}")
+    except (AuditionError, ScriptError, PipelineError, VoiceConfigError) as error:
+        print(error)
+        return 1
     return 0
