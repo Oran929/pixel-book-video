@@ -35,7 +35,7 @@ def script(*lines: tuple[str, str | None]) -> str:
             body += f"            speech: '{speech}'\n"
         body += f"            cite: ch01-¶{n:03d}\n"
     return (
-        "segments:\n  - id: s01\n    title: 开场\n    scenes:\n"
+        "title: 示例书\nsegments:\n  - id: s01\n    title: 开场\n    scenes:\n"
         "      - id: s01-c01\n        description: 画面\n        lines:\n" + body
     )
 

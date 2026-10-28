@@ -36,6 +36,7 @@ VOICE = Voice(
 )
 
 SCRIPT = """\
+title: 程序员修炼之道
 segments:
   - id: s01
     title: 开场
@@ -76,6 +77,7 @@ def test_manifest_lists_segments_scenes_and_lines_in_order(tmp_path, script_path
     )
 
     manifest = json.loads((script_path.parent / "episode.json").read_text())
+    assert manifest["title"] == "程序员修炼之道"
     assert manifest["segments"] == [
         {"id": "s01", "title": "开场"},
         {"id": "s02", "title": "原则"},
@@ -219,6 +221,8 @@ def _rejected(script_path, public, text):
         ),
         ("id: s02-c01", "id: s01-c01", "第 2 段第 1 个画面（s01-c01）", "id"),
         ("id: s02\n", "id: s01\n", "第 2 段（s01）", "id"),
+        ("title: 程序员修炼之道\n", "", "旁白稿", "title"),
+        ("title: 程序员修炼之道", "title: ''", "旁白稿", "title"),
     ],
 )
 def test_malformed_script_names_the_line_and_field(
@@ -964,6 +968,25 @@ def test_a_character_missing_from_the_font_is_reported_with_its_line(
     )
 
     assert _report(script_path)["missing_glyphs"] == [{"id": "s01-l02", "char": "𠀀"}]
+
+
+def test_a_character_missing_from_the_font_in_the_title_is_reported_as_title(
+    tmp_path, script_path
+):
+    # 左上角的书名/主题名也用像素字体显示，一样要查
+    script_path.write_text(SCRIPT.replace("title: 程序员修炼之道", "title: 𠀀之书"))
+
+    voice_episode(
+        script_path,
+        FakeTtsEngine(),
+        VOICE,
+        tmp_path / "public",
+        {},
+        verifier=checked(),
+        font=FONT,
+    )
+
+    assert _report(script_path)["missing_glyphs"] == [{"id": "title", "char": "𠀀"}]
 
 
 def test_a_missing_font_file_is_rejected_before_any_voicing(tmp_path, script_path):

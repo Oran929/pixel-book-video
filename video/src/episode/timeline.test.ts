@@ -13,6 +13,7 @@ const line = (id: string, scene: string, seconds: number) => ({
 // 两段：s01 有两个画面，s02 有一个画面
 const MANIFEST: EpisodeManifest = {
   voice_fingerprint: "3f2a9c0d1e4b5a6f",
+  title: "程序员修炼之道",
   segments: [
     { id: "s01", title: "开场" },
     { id: "s02", title: "原则" },
@@ -74,6 +75,7 @@ describe("computeTimeline", () => {
     const durations = [2.645166666666667, 1.1, 0.1, 2.0333, 3.3, 59 / 30 + 1e-9];
     const manifest: EpisodeManifest = {
       voice_fingerprint: "3f2a9c0d1e4b5a6f",
+      title: "程序员修炼之道",
       segments: [{ id: "s01", title: "开场" }],
       scenes: [{ id: "s01-c01", segment: "s01" }],
       lines: durations.map((seconds, i) => line(`s01-l0${i}`, "s01-c01", seconds)),

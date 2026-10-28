@@ -1,6 +1,6 @@
 """旁白稿（YAML）的读取与校验。只有 Python 读旁白稿（ADR-0004）。
 
-结构：期 → 段（`id`、`title`）→ 画面（`id`、`description`）→ 旁白句
+结构：期（`title`：这一期的书名或主题名，显示在画面左上角）→ 段（`id`、`title`）→ 画面（`id`、`description`）→ 旁白句
 （`id`、`text`、可选的 `speech`、`cite`）。格式不对时报错，指出是哪一句、哪个字段。
 """
 
@@ -39,6 +39,7 @@ class Segment:
 
 @dataclass(frozen=True)
 class Script:
+    title: str
     segments: list[Segment]
 
 
@@ -133,10 +134,11 @@ def load_script(path: Path) -> Script:
             ],
         )
 
-    data = mapping(yaml.safe_load(path.read_text()), "旁白稿", ["segments"])
+    data = mapping(yaml.safe_load(path.read_text()), "旁白稿", ["title", "segments"])
     return Script(
+        title=string(data, "title", "旁白稿"),
         segments=[
             segment(item, f"第 {n} 段")
             for n, item in enumerate(items(data, "segments", "旁白稿"), start=1)
-        ]
+        ],
     )

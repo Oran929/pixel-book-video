@@ -8,7 +8,7 @@ import {
 } from "remotion";
 import { Entering } from "../components/Entering";
 import { COMPONENT_SCHEMAS } from "../components/schemas";
-import { ChannelName } from "../shell/ChannelName";
+import { EpisodeTitle } from "../shell/EpisodeTitle";
 import { Subtitle } from "../shell/Subtitle";
 import { COLOR } from "../style/style";
 import { VIDEO } from "../video-config";
@@ -19,13 +19,23 @@ import {
   pauseOverrides,
   scheduleCues,
 } from "./storyboard";
-import { computeTimeline, DEFAULT_PAUSES, lineAt, type Timeline } from "./timeline";
+import {
+  computeTimeline,
+  DEFAULT_PAUSES,
+  lineAt,
+  type Timeline,
+} from "./timeline";
 
 // 合成清单和分镜由 `pixelbook voice` / `pixelbook stage` 复制到 video/public/episode/
 const MANIFEST_FILE = "episode/episode.json";
 const STORYBOARD_FILE = "episode/storyboard.json";
 
-export type EpisodeProps = { timeline: Timeline | null; cues: Cue[] };
+export type EpisodeProps = {
+  /** 这一期的书名或主题名（合成清单的 `title`）；没读到合成清单时为空 */
+  title: string;
+  timeline: Timeline | null;
+  cues: Cue[];
+};
 
 const readJson = async (file: string, signal: AbortSignal) => {
   const response = await fetch(staticFile(file), { signal });
@@ -60,7 +70,10 @@ export const calculateEpisodeMetadata: CalculateMetadataFunction<
     storyboard ? pauseOverrides(storyboard) : {},
   );
   const cues = storyboard ? scheduleCues(storyboard, timeline) : [];
-  return { durationInFrames: timeline.totalFrames, props: { timeline, cues } };
+  return {
+    durationInFrames: timeline.totalFrames,
+    props: { title: manifest.title, timeline, cues },
+  };
 };
 
 const CurrentSubtitle: React.FC<{ timeline: Timeline }> = ({ timeline }) => {
@@ -68,9 +81,9 @@ const CurrentSubtitle: React.FC<{ timeline: Timeline }> = ({ timeline }) => {
   return line ? <Subtitle text={line.text} /> : null;
 };
 
-export const Episode: React.FC<EpisodeProps> = ({ timeline, cues }) => (
+export const Episode: React.FC<EpisodeProps> = ({ title, timeline, cues }) => (
   <AbsoluteFill style={{ backgroundColor: COLOR.background }}>
-    <ChannelName />
+    {title ? <EpisodeTitle title={title} /> : null}
     {cues.map((cue) => (
       <Sequence
         key={cue.key}

@@ -81,7 +81,9 @@ def _print_missing_glyphs(report_path: Path) -> bool:
     )
     for item in missing:
         print(f"  {item['id']}  「{item['char']}」（U+{ord(item['char']):04X}）")
-    print(f"改写这些旁白句的字幕，或换一款有这些字的字体（{SUBTITLE_FONT}）。")
+    print(
+        f"改写这些旁白句的字幕（`title` 是左上角的书名/主题名），或换一款有这些字的字体（{SUBTITLE_FONT}）。"
+    )
     return False
 
 

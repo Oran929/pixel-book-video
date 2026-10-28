@@ -11,6 +11,7 @@ VOICE = Voice(model="base-model", ref_audio="voices/a.wav", ref_text="你好。"
 TABLE = {"DRY": "DRY", "KV Cache": "KV Cache"}
 
 SCRIPT = """\
+title: 示例书
 segments:
   - id: s01
     title: 开场

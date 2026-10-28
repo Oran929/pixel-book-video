@@ -6,7 +6,6 @@ import type { MascotProps } from "../components/schemas";
 import { Subtitle } from "../shell/Subtitle";
 import {
   border,
-  CHANNEL,
   COLOR,
   FONT,
   FONT_SIZE,
@@ -40,7 +39,7 @@ const MASCOT_STAGE_HEIGHT =
   Math.max(...Object.values(MASCOTS).map((m) => m.height)) + SIZE.stroke * 2;
 
 const SAMPLES = [
-  CHANNEL.name,
+  "读一本8bit像素书",
   "今天我们一起读一本书。第一条原则叫 DRY。",
   "ABCDEFGHIJKLM abcdefghijklm 0123456789",
   "，。、；：？！“”‘’（）《》【】—…·",
@@ -134,7 +133,7 @@ export const StyleSheet: React.FC = () => (
         ))}
         <div
           style={{
-            ...outlinedText("large", COLOR.channelName, COLOR.ink),
+            ...outlinedText("large", COLOR.episodeTitle, COLOR.ink),
             whiteSpace: "nowrap",
           }}
         >

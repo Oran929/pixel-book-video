@@ -77,7 +77,7 @@ export const COLOR = {
   subtitleBorder: PALETTE.paper,
   accent: PALETTE.orange,
   onAccent: PALETTE.paper,
-  channelName: PALETTE.orange,
+  episodeTitle: PALETTE.orange,
 } as const;
 
 /** 尺寸（屏幕像素）：都是像素网格的整数倍，元素才落在整像素上 */
@@ -142,11 +142,6 @@ export const snapToGrid = (value: number) => Math.round(value / GRID) * GRID;
 export const MOTION = {
   /** 组件出现（淡入或落下）用的秒数 */
   enterSeconds: 0.4,
-} as const;
-
-/** 频道形象（票 09 初版，占位） */
-export const CHANNEL = {
-  name: "读一本8bit像素书",
 } as const;
 
 /**

@@ -17,6 +17,7 @@ const line = (id: string, scene: string, seconds: number) => ({
 
 const MANIFEST: EpisodeManifest = {
   voice_fingerprint: "3f2a9c0d1e4b5a6f",
+  title: "程序员修炼之道",
   segments: [
     { id: "s01", title: "开场" },
     { id: "s02", title: "原则" },

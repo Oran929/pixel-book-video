@@ -20,6 +20,7 @@ DEFAULT = Voice(model="base-model", speaker="Vivian")
 YUJIE = Voice(model="base-model", speaker="Serena")
 
 SCRIPT = """\
+title: 示例书
 segments:
   - id: s01
     title: 开场

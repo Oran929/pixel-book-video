@@ -6,6 +6,8 @@ export const EpisodeManifestSchema = z
   .object({
   // 生成这期配音时的音色指纹（tools/src/pixelbook/tts_cache.py）
   voice_fingerprint: z.string().regex(/^[0-9a-f]{16}$/, "应为 16 位十六进制指纹"),
+  // 这一期的书名或主题名（旁白稿顶层的 `title`），显示在画面左上角
+  title: z.string().min(1, "不能为空"),
   segments: z.array(z.object({ id: z.string(), title: z.string() })).min(1),
   scenes: z.array(z.object({ id: z.string(), segment: z.string() })).min(1),
   lines: z

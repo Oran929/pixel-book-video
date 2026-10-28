@@ -54,8 +54,9 @@ def voice_episode(
     句子照常使用，并列进期目录里的检查报告 `report.json`（每次运行都列出）；
     字符对比不通过、靠拼音对比通过的句子（多半是同音字）也列进报告，单独一项。
 
-    给了字幕字体 `font` 时，字幕文本里字体没有字形的字列进报告的 `missing_glyphs`
-    （旁白句 ID 和字）；不给就不检查，报告里也没有这一项。
+    给了字幕字体 `font` 时，字幕文本和书名/主题名 `title` 里字体没有字形的字列进
+    报告的 `missing_glyphs`（旁白句 ID 或 `title`，和字）；不给就不检查，报告里也
+    没有这一项。
     """
     script = load_script(script_path)
     if terms := find_new_terms(script, pronunciation):
@@ -115,6 +116,7 @@ def voice_episode(
 
     manifest = {
         "voice_fingerprint": cache.voice_fingerprint,
+        "title": script.title,
         "segments": segments,
         "scenes": scenes,
         "lines": lines,
@@ -128,8 +130,10 @@ def voice_episode(
         "asr_pinyin_passes": pinyin_passes,
     }
     if font is not None:
+        # 左上角的书名/主题名也用像素字体显示，报告里的 ID 记作 `title`
         report["missing_glyphs"] = missing_glyphs(
-            ((line["id"], line["text"]) for line in lines), font
+            [("title", script.title)] + [(line["id"], line["text"]) for line in lines],
+            font,
         )
     (script_path.parent / REPORT_NAME).write_text(
         json.dumps(

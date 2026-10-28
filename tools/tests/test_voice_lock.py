@@ -64,6 +64,7 @@ def test_bad_book_config_is_rejected_naming_the_file(repo, content, problem):
 # ---- 守卫：书解析出的音色 vs 锁定音色 ----
 
 SCRIPT = """\
+title: 示例书
 segments:
   - id: s01
     title: 开场
