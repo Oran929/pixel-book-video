@@ -32,4 +32,4 @@
   - `voice` 现在还做缺字检查：字幕里有字体没有的字时，报告 `report.json` 多一项 `missing_glyphs: [{id, char}]`，`voice` **以退出码 1 结束**（合成清单照常写出）。一键命令应把它当作"配音"这一步失败报出来。`voice_episode` 的新参数 `font`（CLI 传 `video/public/fonts/…woff2`）；冒烟测试直接调 `voice_episode` 时也传上，才会检查缺字。
   - `Root.tsx` 现在有两个合成：`Episode` 和风格样张 `StyleSheet`。一键命令渲染时要明确写 `Episode`（`npm run render` 已经是 `remotion render Episode`）。
   - 中间帧改成了 PNG，渲染会比 JPEG 慢一点、MP4 没变大多少（样例 1.1 MB）。字体在第一帧前用 `delayRender` 加载，冒烟测试不需要特别处理。
-
+- 来自 09（2026-10-28）：旁白稿顶层多了必填字段 `title`（这一期的书名或主题名，显示在画面左上角，缺了 `voice` 报错）。冒烟测试的固定小样例旁白稿要带上它。合成清单 `episode.json` 也多了顶层 `title`，TS 校验要求非空。验收项"风格表和频道形象初版都生效"里的频道形象，现在指左上角的书名/主题名（不再是写死的频道名），小人按用户意见不常驻画面。

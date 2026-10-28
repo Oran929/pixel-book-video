@@ -68,3 +68,8 @@
   - 验收项"频道名和小人初版出现在样片里"按用户意见已不成立（样片里只剩频道名），勾选状态没动，留给人工验收时一起看。
   - 渲染：`out/sample-ch01-ep01.mp4` 重新渲染；抽帧 `out/frames-09b/frame-000/203/360/440/520.png`（440 是"改了一处 另一处就会忘记改"，句中逗号换成空格），风格样张图 `out/frames-09b/style-sheet.png`（底部是小人组件）。
 - 来自用户（2026-10-28，第二次看样片）：除下面这一点外验收通过。左上角的字不应该是频道名，应该是这一期的书名或主题名。样片里继续用「读一本8bit像素书」当示例值。
+- 按用户意见修改（2026-10-28，agent）：
+  - 旁白稿顶层加必填字段 `title`（这一期的书名或主题名），缺失或为空时报错，错误信息写明是旁白稿的 `title` 字段。合成清单 `episode.json` 多一个顶层 `title`，TS 的 `EpisodeManifestSchema` 要求非空；`calculateMetadata` 把它作为 `Episode` 的 `title` 属性传入，左上角显示。外壳组件 `ChannelName` 改名为 `src/shell/EpisodeTitle.tsx`（参数 `title`），颜色常量 `COLOR.channelName` 改名 `COLOR.episodeTitle`（仍是橙色）。风格表里的 `CHANNEL` 删了；风格样张的字体示例直接写字符串「读一本8bit像素书」。样片 `title` 为「读一本8bit像素书」。
+  - 缺字检查也查 `title`，缺字项的 `id` 记作 `title`（如果某句旁白的 ID 恰好也叫 `title`，报告里分不开；现在的 ID 都是 `s01-l01` 这种格式，没有处理）。
+  - 旁白句文本和 TTS 缓存键没变：重新运行 `voice` 时 `books/sample/cache/tts/` 一个文件都没改（运行前后列表一致），音色指纹仍是 `aa6bbaab77bf3a6e`，没有重新合成。
+  - 渲染：`out/sample-ch01-ep01.mp4` 重新渲染（565 帧）；抽帧 `out/frames-09c/frame-203.png`，左上角放大图 `out/frames-09c/zoom-title.png`。
