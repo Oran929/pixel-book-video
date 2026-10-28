@@ -19,6 +19,8 @@ from pixelbook.voice import Voice
 from pixelbook.voice_lock import LOCK_NAME, lock_mismatch, lock_record, write_lock
 
 MANIFEST_NAME = "episode.json"
+# 分镜：Claude 手写、提交到 git，`stage` 原样复制给 Remotion（不由 Python 解析）
+STORYBOARD_NAME = "storyboard.json"
 # 检查报告：需要人看的问题（复核未通过的句子……），每次配音重写
 REPORT_NAME = "report.json"
 # Remotion 静态目录（video/public/）里存放本期文件的子目录
@@ -147,10 +149,18 @@ def voice_lock_message(
 
 
 def stage_episode(episode_dir: Path, public_dir: Path) -> None:
-    """把期目录里的 JSON（合成清单，以后还有分镜）复制到 Remotion 静态目录。"""
+    """把期目录里的合成清单和分镜复制到 Remotion 静态目录。
+
+    分镜可以没有（只渲染字幕）；没有时删掉静态目录里上一期留下的分镜。
+    """
     manifest = episode_dir / MANIFEST_NAME
     if not manifest.is_file():
         raise PipelineError(f"{manifest} 不存在：先运行 `pixelbook voice` 配音")
-    (public_dir / STAGE_DIR).mkdir(parents=True, exist_ok=True)
-    for name in (MANIFEST_NAME,):
-        shutil.copyfile(episode_dir / name, public_dir / STAGE_DIR / name)
+    stage = public_dir / STAGE_DIR
+    stage.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(manifest, stage / MANIFEST_NAME)
+    storyboard = episode_dir / STORYBOARD_NAME
+    if storyboard.is_file():
+        shutil.copyfile(storyboard, stage / STORYBOARD_NAME)
+    else:
+        (stage / STORYBOARD_NAME).unlink(missing_ok=True)

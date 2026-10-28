@@ -145,6 +145,30 @@ def test_stage_recopies_episode_json_and_leaves_audio_alone(tmp_path, script_pat
         assert (public / line["audio"]).is_file()
 
 
+def test_stage_copies_the_storyboard_when_the_episode_has_one(tmp_path, script_path):
+    public = tmp_path / "public"
+    voice_episode(script_path, FakeTtsEngine(), VOICE, public, {}, verifier=checked())
+    storyboard = script_path.parent / "storyboard.json"
+    storyboard.write_text('{"scenes": []}')
+
+    stage_episode(script_path.parent, public)
+
+    assert (public / "episode" / "storyboard.json").read_text() == '{"scenes": []}'
+
+
+def test_stage_drops_a_stale_storyboard_when_the_episode_has_none(
+    tmp_path, script_path
+):
+    public = tmp_path / "public"
+    voice_episode(script_path, FakeTtsEngine(), VOICE, public, {}, verifier=checked())
+    (public / "episode" / "storyboard.json").write_text('{"scenes": []}')
+
+    stage_episode(script_path.parent, public)
+
+    assert not (public / "episode" / "storyboard.json").exists()
+    assert (public / "episode" / "episode.json").is_file()
+
+
 def test_stage_without_a_manifest_says_to_voice_first(tmp_path):
     with pytest.raises(PipelineError, match="episode.json.*pixelbook voice"):
         stage_episode(tmp_path / "ep01", tmp_path / "public")

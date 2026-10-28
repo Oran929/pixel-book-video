@@ -104,7 +104,7 @@ def main(argv: list[str] | None = None) -> int:
     terms.add_argument("--out", type=Path, default=TERMS_OUT)
 
     stage = commands.add_parser(
-        "stage", help="只把期目录里的合成清单复制到 video/public/（不重新配音）"
+        "stage", help="只把期目录里的合成清单和分镜复制到 video/public/（不重新配音）"
     )
     stage.add_argument("episode", type=Path, help="books/<书>/<章>/<期>/")
 
