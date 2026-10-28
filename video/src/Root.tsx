@@ -11,7 +11,7 @@ export const RemotionRoot: React.FC = () => (
     id="Episode"
     component={Episode}
     calculateMetadata={calculateEpisodeMetadata}
-    defaultProps={{ timeline: null } satisfies EpisodeProps}
+    defaultProps={{ timeline: null, cues: [] } satisfies EpisodeProps}
     // 占位值：实际总帧数由 calculateMetadata 从时间轴算出
     durationInFrames={1}
     fps={VIDEO.fps}
