@@ -25,3 +25,4 @@
   - 检查报告是期目录里的 `report.json`，目前只有 `asr_failures`（复核未通过的句子：`id`、`text`、`spoken`、`heard`、`diff_rate`、`cache`）。复核未通过**不是**失败：`voice` 仍以 0 退出，合成清单照常可用；一键命令汇总报告时把它列出来，不要因此停下。
   - 真实运行时识别模型在第一次识别时才加载（整期命中缓存时不加载）；样例 7 句全新配音加复核约 8–10 秒（M5 Max）。
 - 来自 08（2026-10-28）：`voice` / `stage` 现在也复制期目录里的 `storyboard.json`（没有就删掉旧的）；Remotion 在 `calculateMetadata` 里校验分镜，出错时 `remotion render` 失败并列出第几个画面、第几个触发。冒烟测试的小样例建议带一份分镜，同时覆盖"分镜对真实合成清单校验通过、组件区间不越界"——08 没有这条自动测试，因为 `episode.json` 不提交。样例书现在有分镜和一处停顿覆盖，用当前缓存渲染是 565 帧（18.83 秒），已渲染到 `out/sample-ch01-ep01.mp4`。
+- 来自 07（2026-10-28，复核改为两步）：`report.json` 现在有两个键：`asr_failures`（每项多了 `pinyin_diff_rate`，旧缓存的句子为 `null`）和 `asr_pinyin_passes`（比字不通过、靠不带声调的拼音通过的句子，多半是同音字，算通过，字段同 `asr_failures`）。汇总时 `asr_pinyin_passes` 只列出备查，不算问题。
