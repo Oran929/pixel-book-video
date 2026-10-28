@@ -6,7 +6,8 @@
     "studio": "remotion studio",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "render": "remotion render Episode"
   },
   "dependencies": {
     "@remotion/cli": "^4.0.539",
