@@ -201,9 +201,13 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "mix":
             timeline = args.timeline.resolve()
             # timeline.json 默认在期目录 books/<书>/<章>/<期>/ 里
-            out = args.out or REPO_ROOT / "out" / "mix" / (
-                "-".join(timeline.parent.parts[-3:]) + ".wav"
-            )
+            out = (
+                args.out
+                or REPO_ROOT
+                / "out"
+                / "mix"
+                / ("-".join(timeline.parent.parts[-3:]) + ".wav")
+            ).resolve()
             seconds = mix_timeline(timeline, VIDEO_PUBLIC, out)
             print(f"试听音轨 {out}：{seconds:.2f} 秒")
         else:
