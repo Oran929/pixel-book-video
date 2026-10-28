@@ -11,6 +11,8 @@ __pycache__/
 
 # 原书与转换出的全文（版权内容，不提交）
 books/*/source.*
+books/*/*.epub
+books/*/*.pdf
 books/*/chapters/
 
 # 配音缓存与生成的音视频
