@@ -20,7 +20,7 @@ jobs:
           cache-dependency-path: video/package-lock.json
 
       # setup-uv 不发布 v10 这种主版本标签，只能写完整版本号
-      # 写明 Python 版本，不依赖 runner 镜像自带的 python3
+      # 锁定 Python 3.12：镜像自带的是 3.12 就直接用，换了版本 uv 会自己下载
       - uses: astral-sh/setup-uv@v10.3.2
         with:
           python-version: "3.12"
