@@ -49,7 +49,7 @@ const lamp = (triggers: Record<string, unknown>[], component = "Lamp") => {
           triggers: triggers.map((t) => ({ target: "lamp", line: "s01-l01", ...t })),
         },
       ],
-      music: "pixel-sprinter",
+      music: "forgotten-path",
       pauses: [],
     },
     DECLARATIONS,

@@ -46,7 +46,7 @@ const signIn = (scene: string, props: Record<string, unknown>) => {
           ],
         },
       ],
-      music: "pixel-sprinter",
+      music: "forgotten-path",
       pauses: [],
     },
     DECLARATIONS,

@@ -217,7 +217,7 @@ def main(argv: list[str] | None = None) -> int:
 
     trial = commands.add_parser(
         "music-trial",
-        help="全长音频试验（#39）：出片，再单独渲染配乐声轨，检查循环接缝、静音和淡出",
+        help="全长音频试验（#39、#52）：出片，再单独渲染配乐声轨，检查交叉淡化接缝、静音和淡出",
     )
     trial.add_argument("script", type=Path, help="books/<书>/<章>/<期>/script.yaml")
     trial.add_argument("--draft", action="store_true", help="同 `render --draft`")
@@ -424,7 +424,8 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _music_trial(script: Path, draft: bool, storyboard: Path | None) -> int:
-    """出片到 out/<期>.mp4，配乐声轨到 out/<期>-music.wav，然后检查配乐。
+    """出片到 out/<期>.mp4，配乐声轨到 out/<期>-music.wav，然后检查配乐
+    （参照写在 out/<期>-music-reference.wav）。
 
     给了 `storyboard` 时，出片期间临时换上这份分镜，结束后把期目录里的分镜恢复原样
     （原来没有就删掉）。
@@ -461,9 +462,9 @@ def _run_music_trial(script: Path, draft: bool) -> int:
     report = check_music(mp4, stem, timeline, VIDEO_PUBLIC)
     music = timeline["music"]
     print(
-        f"\n配乐 {music['track']}：循环 {music['loopFrames']} 帧，"
-        f"第 {music['fadeFrom']} 帧起淡出，到第 {music['endFrame']} 帧（片尾开始）放完；"
-        f"配乐声轨 {stem}"
+        f"\n配乐 {music['track']}：曲长 {music['trackFrames']} 帧，放 {len(music['plays'])} 次"
+        f"（每个接缝交叉淡化 1 秒），第 {music['fadeFrom']} 帧起淡出，"
+        f"到第 {music['endFrame']} 帧（片尾开始）放完；配乐声轨 {stem}，参照 {report.reference}"
     )
     for line in report.seams:
         print(f"  {line}")
@@ -473,7 +474,8 @@ def _run_music_trial(script: Path, draft: bool) -> int:
             print(f"  {problem}")
         return 1
     print(
-        "配乐检查通过：音频流和视频流一样长，接缝没有跳变和多出来的静音，淡出单调下降"
+        "配乐检查通过：音频流和视频流一样长，配乐声轨和参照逐帧一致"
+        "（交叉淡化处不掉音、不爆音，淡出照排期），接缝附近没有多出来的静音"
     )
     return 0
 

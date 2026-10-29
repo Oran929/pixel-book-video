@@ -41,14 +41,35 @@ const entry = {
   checkedOn: "2026-10-29",
   sampleRate: 44100,
   sampleCount: 1470 * 100,
-  seamless: true,
 } as const;
 
 describe("defineMusicLibrary", () => {
-  it("许可不是 CC0 时报错，写明曲子 ID 和许可", () => {
-    expect(() => defineMusicLibrary({ demo: { ...entry, license: "CC-BY 4.0" } })).toThrow(
-      "配乐 demo 的许可是 CC-BY 4.0，配乐库只收 CC0",
+  it("收 CC0 和 CC-BY（CC-BY 写了署名）", () => {
+    expect(() =>
+      defineMusicLibrary({
+        a: entry,
+        b: { ...entry, license: "CC-BY 4.0", credit: "Demo by Someone" },
+        c: { ...entry, license: "CC-BY 3.0", credit: "Demo by Someone" },
+      }),
+    ).not.toThrow();
+  });
+
+  it("其他许可报错，写明曲子 ID 和许可", () => {
+    expect(() => defineMusicLibrary({ demo: { ...entry, license: "CC-BY-SA 4.0" } })).toThrow(
+      "配乐 demo 的许可是 CC-BY-SA 4.0，配乐库只收 CC0 和 CC-BY",
     );
+    expect(() => defineMusicLibrary({ demo: { ...entry, license: "OGA-BY 3.0" } })).toThrow(
+      "配乐 demo 的许可是 OGA-BY 3.0，配乐库只收 CC0 和 CC-BY",
+    );
+  });
+
+  it("CC-BY 缺署名报错", () => {
+    expect(() => defineMusicLibrary({ demo: { ...entry, license: "CC-BY 4.0" } })).toThrow(
+      "配乐 demo 的许可是 CC-BY 4.0，要写署名 credit",
+    );
+    expect(() =>
+      defineMusicLibrary({ demo: { ...entry, license: "CC-BY 4.0", credit: "  " } }),
+    ).toThrow("配乐 demo 的许可是 CC-BY 4.0，要写署名 credit");
   });
 
   it("采样数不是一帧采样数的整数倍时报错（30fps：44.1kHz 一帧 1470 个，48kHz 一帧 1600 个）", () => {
@@ -81,8 +102,7 @@ describe.each(Object.entries(MUSIC))("配乐 %s", (id, track) => {
     expect(existsSync(file)).toBe(true);
   });
 
-  it("许可是 CC0，记了核对日期和作品页", () => {
-    expect(track.license).toBe("CC0");
+  it("记了核对日期和作品页", () => {
     expect(track.checkedOn).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(track.source).toMatch(/^https:\/\/opengameart\.org\/content\//);
   });
@@ -102,7 +122,7 @@ describe("配乐目录", () => {
     expect(readdirSync(new URL(`${MUSIC_DIR}/`, PUBLIC)).filter((name) => !registered.includes(name))).toEqual([]);
   });
 
-  it("8 首曲子", () => {
+  it("8 首曲子（#52 的新库）", () => {
     expect(Object.keys(MUSIC)).toHaveLength(8);
   });
 });

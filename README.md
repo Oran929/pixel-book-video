@@ -406,7 +406,7 @@ uv run pixelbook terms ../books/sample/ch01/ep01/script.yaml   # 每个新术语
       ]
     }
   ],
-  "music": "pixel-sprinter",
+  "music": "forgotten-path",
   "pauses": [{ "after": "s01-l04", "seconds": 1.2 }]
 }
 ```
@@ -440,7 +440,7 @@ uv run pixelbook terms ../books/sample/ch01/ep01/script.yaml   # 每个新术语
 - `animation` 的取值（入场和退场通用）：`fade` 淡入 / 淡出，`slide` 从上方落下 / 向上升起，各播 0.4 秒（风格表 `MOTION.animationSeconds`）；`none` 瞬间出现 / 消失，不播动画（也不放音效），用来把同一个东西接到下一个画面。组件还可以有**自己的特殊效果**：在声明的 `effects` 里登记效果名和秒数（秒数取自风格表 `MOTION`），可以作为它的默认动画，分镜的 `animation` 也可以写这个名字，只有这个组件能用（写了组件没有的动画报错，并列出它能用的动画）；退场动画是否在画面结束前播完、重叠检查的区间，都按登记的时长算。现在只有提示牌的 `light`（亮起，0.8 秒）。
 - 每个组件恰好一次 `enter`、最多一次 `exit`、任意次 `state`。帧顺序必须是 **入场 ≤ 切换状态 < 退场**；同一帧切两次状态、切到组件当前已经是的状态都报错。没有 `exit` 的组件显示到画面结束（下一个画面的第一句开始）；有 `exit` 的，显示到退场动画播完，退场动画必须在画面结束前播完，否则报错。
 - `line` 必须是本画面的旁白句。触发帧 = 这句的开始帧 + `offset` 秒 × 帧率，四舍五入到整帧；`offset` 可以为负，但触发帧必须落在本画面之内，否则渲染前报错。画面从它的第一句开始，所以**负偏移不能挂在画面的第一句上**：上例里 `s01-l04`（`s01-c02` 的第二句）的 `-0.3` 表示在上一句 `s01-l03` 快结束时高亮；要是写成 `{ "line": "s01-l03", "offset": -0.3 }`（`s01-l03` 是这个画面的第一句），触发帧就早于画面开始，报「触发帧 … 早于画面 s01-c02 的开始帧 …」。想在画面一开始就出现，写第一句、`offset: 0`。
-- `music`（必填）：配乐登记表里的曲子 ID，从片头结束后循环播放到正文结束，正文最后 2 秒淡出，不覆盖片尾（见下面的「配乐」）。没登记的 ID 报错，并列出登记过的。
+- `music`（必填）：配乐登记表里的曲子 ID，从片头结束后播放到正文结束（比正文短时循环，接缝处交叉淡化），正文最后 2 秒淡出，不覆盖片尾（见下面的「配乐」）。没登记的 ID 报错，并列出登记过的。
 - `pauses`：覆盖 `after` 这句之后的停顿（秒，≥ 0），优先于默认规则（句间 0.3 秒、换画面 0.8 秒）。
 
 分镜在 Remotion 读取时和 `npm run timeline` 里校验（同一个 `planEpisode`），出错时报出第几个画面、第几个组件或触发、哪个字段。
@@ -506,25 +506,33 @@ uv run pixelbook terms ../books/sample/ch01/ep01/script.yaml   # 每个新术语
 
 #### 配乐
 
-配乐库有 8 首 CC0 的 8-bit 循环曲，每期从里面选一首垫在旁白下面（spec #16 用户故事 44–53，修订 D2；入库记录见 #38，播放和全长试验见 #39）。
+配乐库有 8 首完整的歌（8-bit / lofi / 钢琴风格），每期从里面选一首垫在旁白下面，曲子比正文短时循环，接缝处交叉淡化（spec #16 用户故事 44–53、修订 D2 和修订三；#38 入库、#39 播放和全长试验，#52 换成现在的 8 首、许可放宽到 CC-BY、改成交叉淡化循环）。
 
-- **登记表**：`video/src/music/tracks.ts` 的 `MUSIC`（曲子 ID → 文件、曲名、作者、作品页、许可、核对日期、采样率、采样数、是否无缝循环）。和音效登记表一样是纯 TypeScript 模块，Node 和 Remotion 共用。登记表用 `defineMusicLibrary` 定义，导入时就校验：许可不是 `CC0` 报错（简介里永远不用署名，CC-BY 等需要署名的不收），采样数不是一帧采样数的整数倍报错（30fps 下 44.1 kHz 一帧 1470 个、48 kHz 一帧 1600 个，这样循环长度是整数帧，不会被取整）。
-- **曲子**（ID：曲名，作者）：`flowerbed-fields`：Flowerbed Fields [Loop]，`sideways-city`：Sideways City（循环版），`starlight-city`：Starlight City（zip 里的循环版），`pixel-sprinter`：Pixel Sprinter（循环版），这四首是 Zane Little Music；`the-arplands`：The Arplands，LordZintick；`lasso-lady`：Lasso Lady，congusbongus；`arcade-background-music`：arcade background music，aqrezes；`delayed-chiptune`：Delayed Chiptune，Centurion_of_war。都来自 OpenGameArt，许可在作品页上核对过（日期记在登记表里）。
-- **文件**：`video/public/music/<ID>.ogg`，OGG/Vorbis（oggenc `-q 3`，约 110 kbps），8 首共约 8.5 MB。不用 MP3（MP3 编码器会在头尾补静音，循环点会断）。不能放在 `video/public/episode/` 下：配音每次都会删掉那个目录。
-- **入库**（只在本机做，要 ffmpeg 和 oggenc，`brew install vorbis-tools`）：先在作品页上核对许可，把源文件下载到一个目录，每首一个子目录（子目录和文件名见 `video/src/music/intake-music.ts` 的 `SOURCES`），然后
+- **登记表**：`video/src/music/tracks.ts` 的 `MUSIC`（曲子 ID → 文件、曲名、作者、作品页、许可、核对日期、署名、采样率、采样数）。和音效登记表一样是纯 TypeScript 模块，Node 和 Remotion 共用。登记表用 `defineMusicLibrary` 定义，导入时就校验：许可只能是 `CC0` 或 `CC-BY x.y`（写版本号，如 `CC-BY 4.0`），别的（CC-BY-SA、OGA-BY 等）报错；CC-BY 必须写署名 `credit`（一行，照作品页的署名要求写曲名、作者、作品页、许可），没写报错；采样数不是一帧采样数的整数倍报错（30fps 下 44.1 kHz 一帧 1470 个、48 kHz 一帧 1600 个，这样曲长是整数帧，循环的起点不会被取整）。作品页同时给了几种许可时，登记我们选用的那一种。
+- **曲子**（ID：曲名，作者，作品页上的许可）：`ooame`：Ooame，TAD，CC-BY 4.0 和 CC0；`iced-village`：Iced Village (8 Bit Lofi Hip Hop)，TAD，CC-BY 4.0 和 CC0；`the-past`：The Past (8 Bit Lofi Hip Hop)，TAD，CC-BY 4.0 和 CC0；`since-2-am`：Since 2 A.M.，TAD，CC0；`forgotten-path`：forgotten path，johndekale，CC0；`slow-melancholic-theme`：Slow Melancholic Theme C64 Style（带副歌的长版），skrjablin，CC-BY 3.0 和 CC0；`tiny-sad-lonely-theme`：Tiny sad lonely theme，MAOU，CC0；`kalypo`：Kalypo，Spring Spring，OGA-BY 3.0 和 CC0。都来自 OpenGameArt，2026-10-29 在作品页上核对过许可，用户给的文件和作品页上的下载文件逐字节相同（Iced Village、The Past 都有只给 CC-BY 的钢琴版或原版，用户给的是 8-bit lofi 版）。8 首都给了 CC0，都按 CC0 登记，所以现在没有曲子要署名。曲长从 40 秒（forgotten path）到 7 分 17 秒（Iced Village）；Iced Village 和 Kalypo 比一期正文长，不循环。
+- **署名**：时间轴导出时（`npm run timeline`、`pixelbook render`），用了 CC-BY 曲子的那一期在期目录里写出 `credits.txt`（不提交）：一行 `配乐：<署名>`，可以直接贴进视频简介；用的是 CC0 曲子时不写，并删掉换曲之前留下的。和 `segments.txt` 一样，用 `--out` 写到期目录以外时不写。
+- **文件**：`video/public/music/<ID>.ogg`，OGG/Vorbis（oggenc `-q 3`，约 110 kbps；两首单声道的原样是单声道），8 首共约 23 MB。不能放在 `video/public/episode/` 下：配音每次都会删掉那个目录。
+- **入库**（只在本机做，要 ffmpeg 和 oggenc，`brew install vorbis-tools`）：先在作品页上核对许可，把源文件放进一个目录（文件名见 `video/src/music/intake-music.ts` 的 `SOURCES`，就是用户给的 `Slowly Music` 目录里的原名），然后
 
   ```sh
   cd video
   npm run music:intake -- /path/to/downloads   # 写 public/music/<ID>.ogg，打印每首的采样率和采样数
-  npm run music:seams                           # 接缝检查，打印一张 Markdown 表
+  npm run music:seams                           # 交叉淡化接缝检查，打印一张 Markdown 表
   ```
 
-  把打印出的采样率、采样数抄进登记表。入库命令对每首：解码 → 按需去掉首尾静音（`trimSilence`，只有 arcade background music 用：源文件曲首约 46 毫秒、曲尾约 1.7 秒是静音）→ **按周期重采样**把采样数对齐到一帧的整数倍（`video/src/music/stretch.ts`：把曲子当成首尾相接的环，用 Blackman 窗 sinc 插值整体拉长或缩短，快慢变化不到 0.05%；不裁剪也不补零，所以接缝处仍是曲尾接曲首）→ oggenc 编码 → 用 ffprobe 的 `duration_ts` 核对编码后的采样数（不用 `format=duration`）。源文件有 wav 时用 wav；只有 OGG 的（Lasso Lady、Delayed Chiptune）从 OGG 解码再编码一次。
-- **接缝检查**：`npm run music:seams` 解码登记表里的每首曲子，把曲尾接回曲首（`video/src/music/seam.ts` 的 `measureSeam`），量两样：接缝处的采样差（超过 0.01，并且超过接缝两侧各 10 毫秒里相邻采样最大差的 2 倍，算断开），接缝两侧各 50 毫秒的 RMS（跳变超过 10 dB，或一侧低于 -60 dBFS，算不无缝）。量出来的结果和登记表的 `seamless` 不一致时以非零码退出。它只能挡住咔哒声和空档，挡不住节拍接错，听感留到人工关口 3。
-- **播放**：分镜顶层的 `music` 写曲子 ID（必填，没登记的报错）。`planEpisode` 输出 `music`：曲子 ID `track`、开始帧 `startFrame`（片头结束的那一帧，即 422；不用片头时为 0）、结束帧 `endFrame`（不含，正文结束、片尾开始的那一帧；不用片尾时是总帧数）和淡出起始帧 `fadeFrom`（`endFrame` − 60，即正文最后 2 秒；正文不到 2 秒时从 `startFrame` 起）；没有分镜（字幕版）时为 `null`，不放配乐。Episode 在合成顶层放配乐（`video/src/music/EpisodeMusic.tsx`），从片头结束放到正文结束，不覆盖片头（#50）和片尾（#51），音量 `VOLUME.music`（-20 dB），从 `fadeFrom` 到 `endFrame` 线性降到 0，最后一次循环在 `endFrame` 截断。循环**不用 Html5Audio 的 `loop`**：全长试验里它在每个接缝处有约一帧（约 1600 个采样）的数字静音，曲子还每循环一次往后错约 139 个采样（约 3 毫秒）；改成每次循环一个 `Sequence`（长度是登记表算出的整数帧 `loopFrames`），各放一份曲子，首尾正好相接。音量用 `useCurrentFrame` 加 `interpolate` 在顶层算成数值再传进去，**不用 `volume` 回调**：回调拿到的是 Sequence 里的帧数，每次循环都归零，淡出会落在错误的位置。一份音频在它的时间段里音量有变化时，Remotion 渲染时把音量取整到 1/97 的整数倍（`@remotion/renderer` 的 `roundVolumeToAvoidStackOverflow`，ffmpeg 表达式深度的限制）：最后一次循环带着淡出，它的 0.1 被取成 10/97（约 -19.7 dB），比前面几次循环响约 0.26 dB；淡出是约 10 级台阶（每级约 6 帧），最后约 3 帧是 0。时间轴导出命令把 `music`（外加文件 `file`、循环一次的帧数 `loopFrames`、音量 `volumeDb`）写进 `timeline.json`，没有配乐时是 `null`。
-- **只有配乐的声轨**：Studio 里另有一个合成 `EpisodeMusic`，和 Episode 用同一份排期，只放配乐，不放旁白和音效，用来单独检查循环接缝和淡出。
-- **全长试验**（#39）：`cd tools && uv run pixelbook music-trial ../books/<书>/<章>/<期>/script.yaml [--storyboard 试验分镜.json]` 先像 `pixelbook render` 一样出片到 `out/<书>-<章>-<期>.mp4`，再把 `EpisodeMusic` 渲染成 `out/<书>-<章>-<期>-music.wav`，然后检查（`tools/src/pixelbook/music_check.py` 的 `check_music`）：音频流和视频流一样长（相差不超过一帧）；配乐声轨在 `startFrame` 之前（片头期间）和 `endFrame` 之后（片尾期间）每帧都低于 -50 dBFS；拿原曲从 `startFrame` 起首尾相接到 `endFrame`、调到同样音量当参照（ffmpeg `-stream_loop`），和配乐声轨逐帧比 RMS（`astats`），淡出之前每帧和整体音量相差不超过 ±1 dB（接缝不跳变、不掉帧），淡出段逐帧不回升（允许 0.3 dB 测量误差）、最后至少降 20 dB；每个循环接缝前后 1 秒，声轨和成片里都没有参照之外的静音（`silencedetect`，低于 -50 dBFS、20 毫秒以上；8-bit 曲子音符之间本来就有短暂的静音，所以要和参照比）。每个接缝打印一行，有问题时以非零码退出。`--storyboard` 在出片期间临时换上这份分镜，结束后把期目录里的分镜恢复原样（原来没有就删掉）；ch02 ep01 的试验分镜是 `video/src/episode/fixtures/ep01-music-trial.storyboard.json`（几个知识块，配乐 Pixel Sprinter，`npm run test` 检查它能排期）。
-- `npm run test` 检查：登记的每首曲子的文件都在 `music/` 里、文件名就是 ID；许可是 CC0，记了核对日期和作品页；文件是 OGG/Vorbis，采样率和采样数（读 OGG 最后一页的 granule position）与登记表一致，采样数是一帧采样数的整数倍；`music/` 里没有没登记的文件；许可不是 CC0、采样数没对齐时 `defineMusicLibrary` 报错。
+  把打印出的采样率、采样数抄进登记表。入库命令对每首：解码（采样率高于 48 kHz 的降到 48 kHz：Kalypo 的 FLAC 是 96 kHz）→ 去掉首尾低于 -60 dBFS 的静音（`trimSilence`，每首都做：MP3 解码出的编码器补的头尾静音，和曲子本身开头结尾的空白，比如 Iced Village 曲尾约 3 秒）→ 截掉曲尾不满一帧的零头，采样数对齐到一帧的整数倍（交叉淡化循环不要求曲尾接得上曲首，#38 给无缝循环用的按周期重采样已经去掉）→ oggenc 编码 → 用 ffprobe 的 `duration_ts` 核对编码后的采样数（不用 `format=duration`）。
+- **交叉淡化接缝检查**：`npm run music:seams` 解码登记表里的每首曲子，照播放时的做法把曲尾和曲首重叠 1 秒（增益按帧取，`video/src/music/seam.ts` 的 `measureCrossfade`），量：重叠处每 50 毫秒的电平比曲尾、曲首各自的功率之和低 6 dB 以上（互相抵消），或重叠处整体比前后各 1 秒都低 6 dB 以上，算**掉音**；重叠处整体比前后都高 6 dB 以上，或混合后削波，算**爆音**。有一首掉音或爆音就以非零码退出。表里还列出重叠里的曲尾、曲首比整首（100 毫秒窗口的中位数）轻多少 dB：完整的歌多半以淡出结尾、以渐强开头（TAD 的几首曲尾比整首轻 27–43 dB），接缝处会有几秒很轻，这不算掉音，听感留到人工关口 3。
+- **播放**：分镜顶层的 `music` 写曲子 ID（必填，没登记的报错）。`planEpisode` 输出 `music`：曲子 ID `track`、开始帧 `startFrame`（片头结束的那一帧，即 422；不用片头时为 0）、结束帧 `endFrame`（不含，正文结束、片尾开始的那一帧；不用片尾时是总帧数）和淡出起始帧 `fadeFrom`（`endFrame` − 60，即正文最后 2 秒；正文不到 2 秒时从 `startFrame` 起）；没有分镜（字幕版）时为 `null`，不放配乐。Episode 在合成顶层放配乐（`video/src/music/EpisodeMusic.tsx`），从片头结束放到正文结束，不覆盖片头（#50）和片尾（#51）。
+  - **循环**（`video/src/music/crossfade.ts` 的 `musicPlays`）：曲长不短于正文时只放一次。比正文短时每次循环比上一次晚「曲长 − 30 帧」开始，和上一次的最后 30 帧（1 秒，`CROSSFADE_FRAMES`）重叠，直到下一次的起点到了正文结束；最后一次在 `endFrame` 截断。每次循环一个 `Sequence`，各放一份曲子，**不用 Html5Audio 的 `loop`**（#39 实测它在接缝处有约一帧的数字静音）。
+  - **音量**（`musicVolume`）：`VOLUME.music`（-20 dB），交叉淡化处曲尾按 cos、曲首按 sin 淡化（等功率：两份的功率之和不变，曲尾和曲首不相关时响度不掉；每帧取帧中点，第一帧不是 0、最后一帧不是 1），再乘正文最后的线性淡出（`fadeFrom` 到 `endFrame` 降到 0）。音量用 `useCurrentFrame` 在顶层算成数值传给每份曲子，**不用 `volume` 回调**：回调拿到的是 Sequence 里的帧数，每次循环都归零。一份音频在它的时间段里音量有变化时，Remotion 渲染时把音量取整到 1/97 的整数倍（`@remotion/renderer` 的 `roundVolumeToAvoidStackOverflow`，ffmpeg 表达式深度的限制），并且按帧中点、按音频包切换：0.1 被取成 10/97（约 -19.7 dB），淡出是约 10 级台阶（每级约 6 帧），最后约 3 帧是 0。
+  - 时间轴导出命令把 `music`（外加文件 `file`、曲长 `trackFrames`、每次循环 `plays`（`from`、`to`、交叉淡化的帧区间 `fadeIn`、`fadeOut`，没有为 `null`）、音量 `volumeDb`）写进 `timeline.json`，没有配乐时是 `null`。
+- **只有配乐的声轨**：Studio 里另有一个合成 `EpisodeMusic`，和 Episode 用同一份排期，只放配乐，不放旁白和音效，用来单独检查交叉淡化和淡出。
+- **全长试验**（#39，#52 改成交叉淡化）：`cd tools && uv run pixelbook music-trial ../books/<书>/<章>/<期>/script.yaml [--storyboard 试验分镜.json]` 先像 `pixelbook render` 一样出片到 `out/<书>-<章>-<期>.mp4`，再把 `EpisodeMusic` 渲染成 `out/<书>-<章>-<期>-music.wav`，然后检查（`tools/src/pixelbook/music_check.py` 的 `check_music`）：
+  - 音频流和视频流一样长（相差不超过一帧）；配乐声轨在 `startFrame` 之前（片头期间）和 `endFrame` 之后（片尾期间）每帧都低于 -50 dBFS。
+  - **参照**：照 `timeline.json` 的 `plays` 把原曲放出来（`music_reference`，numpy 混音，音量公式和 `musicVolume` 一样，在 Python 里独立写一遍，取整同 Remotion），写成 `out/<书>-<章>-<期>-music-reference.wav`，可以拿来对着听。每次循环像 Remotion 那样放在**整毫秒**上：Remotion 用 `adelay=<毫秒>` 摆放每份音频，第 f 帧放在 round(f / 30 × 1000) 毫秒，帧号除以 3 余 1 的早 1/3 毫秒、余 2 的晚 1/3 毫秒（48 kHz 下 16 个采样）。配乐声轨和参照逐帧比 RMS（`astats`），差取中位数；每帧的电平超出「前后一帧的参照电平加上整体的差」±1 dB 算问题（交叉淡化处掉音、爆音，淡出没做或做错）。前后一帧放宽，是因为 Remotion 的音量台阶按帧中点、按音频包切换，台阶边上的帧和参照对不齐。参照低于 -60 dBFS 的帧（曲子里的停顿、淡出的最后几帧）不比。淡出不再单独查「逐帧不回升」：它和交叉淡化一样折算进了参照。#39 的旧检查在 #50、#51 的试验里报的回升是测量误差：旧参照把每次循环放在整帧上，比 Remotion 早 16 个采样，音符起音碰到帧边界时逐帧的差会抖，淡出前段每帧只降约 0.15 dB，抖动就成了「回升」（见 #52 的评论）。
+  - 每段交叉淡化前后 1 秒，声轨和成片里都没有参照之外的静音（`silencedetect`，低于 -50 dBFS、20 毫秒以上；曲子里本来就有的停顿参照里也有）。
+  - 每段交叉淡化打印一行，有问题时以非零码退出。`--storyboard` 在出片期间临时换上这份分镜，结束后把期目录里的分镜恢复原样（原来没有就删掉）；ch02 ep01 的试验分镜是 `video/src/episode/fixtures/ep01-music-trial.storyboard.json`（几个知识块，配乐用最短的 forgotten path，`npm run test` 检查它能排期）。
+- `npm run test` 检查：登记的每首曲子的文件都在 `music/` 里、文件名就是 ID；记了核对日期和作品页；文件是 OGG/Vorbis，采样率和采样数（读 OGG 最后一页的 granule position）与登记表一致，采样数是一帧采样数的整数倍；`music/` 里没有没登记的文件；`defineMusicLibrary` 收 CC0、CC-BY，拒绝别的许可，CC-BY 缺署名、采样数没对齐时报错；`writeCredits` 用了 CC-BY 曲子时写出署名、CC0 时不写；`musicPlays`、`musicVolume` 排出的循环起点、重叠帧数、淡化曲线，比正文长的曲子不循环。`measureCrossfade` 用合成的波形测过：不相关的曲尾曲首不掉音、反相抵消报掉音、重叠处突然变响报爆音。
 
 ### 组件目录
 
@@ -679,6 +687,7 @@ uv run pixelbook mix ../books/sample/ch01/ep01/timeline.json   # 拼到 out/mix/
 
 - `npm run timeline` 读期目录里的合成清单 `episode.json`，有分镜时也读分镜（取它的停顿覆盖，分镜不合格就报错），用和 Remotion 渲染时同一个 `planEpisode` 算出 `timeline.json`（不提交）：帧率 `fps`、总帧数 `totalFrames`（片头 + 正文 + 片尾）、片头的帧数 `introFrames`（正文从这一帧开始）、片尾的帧数 `outroFrames`（最后这么多帧是片尾，见「片头和片尾」），每个旁白句（`lines`）、画面（`scenes`）、段（`segments`）的 `startFrame`（含）和 `endFrame`（不含）。旁白句的 `endFrame` 是音频结束、不含之后的停顿；正文到最后一句音频结束为止，最后一个画面和段到这里结束，之后是片尾。
 - 同一个命令还写出期目录里的打点时间表 `segments.txt`（不提交）：每段一行 `00:00 段标题`，时间是该段开始帧换算成秒后向下取整，不到 1 小时用 `mm:ss`，超过用 `h:mm:ss`，可以直接贴到视频平台的分段设置。第一行是 `00:00 片头`（平台的分段要从 00:00 开始），正文各段写真实的开始时间（片头之后）。片尾每期都一样，不列。用 `--out` 写到期目录以外时不写打点时间表，免得试听用的时间轴覆盖正式的。
+- 配乐要署名（用了 CC-BY 的曲子）时，同一个命令还写出期目录里的 `credits.txt`（不提交，一行，贴进视频简介），并打印一行；CC0 的不写（见「配乐」）。
 - 命令最后打印总时长（`m:ss`，含停顿，向下取整到秒）和 4:00–6:00 的判断（在范围内 / 太短 / 太长，两端都算在范围内，按显示的整秒判断）；判断也写进 `timeline.json` 的 `duration` 字段（`seconds`、`text`、`verdict`：`within` / `too-short` / `too-long`，`verdictText`：判断的说明文字，`pixelbook render` 的汇总原样打印它；`intro`、`body`、`outro`：片头、正文和片尾各自的 `seconds`、`text`，不用片头时 `intro` 是 `null`，不用片尾时 `outro` 是 `null`；正文从片头结束到片尾开始）。判断按含片头和片尾的总时长；命令和 `pixelbook render` 的汇总在总时长后面写「（片头 m:ss，正文 m:ss，片尾 m:ss）」。样片阶段只报告，不以非零码退出。
 - 只想听默认停顿、不要分镜里的覆盖时，加 `--no-storyboard`，再用 `--out` 写到别处，免得覆盖期目录里的 `timeline.json`：`npm run timeline -- ../books/sample/ch01/ep01 --no-storyboard --out ../out/mix/sample-ch01-ep01-default-pauses.timeline.json`，然后 `uv run pixelbook mix ../out/mix/sample-ch01-ep01-default-pauses.timeline.json --out ../out/mix/sample-ch01-ep01-default-pauses.wav`。
 - 试听音轨只有旁白，不含片头片尾的音轨和音效（只在 Remotion 渲染时放）；时间轴里正文从片头之后开始，所以试听音轨开头有片头长度（约 14 秒）的静音，结尾有片尾长度（10.8 秒）的静音。
@@ -713,7 +722,7 @@ GitHub Actions（`.github/workflows/check.yml`）在每个 PR 和推送到 main 
 make smoke
 ```
 
-它用 `tools/smoke/episode/` 里的固定小样例（4 句、带分镜和 `title`），把真实 TTS 和语音识别换成假引擎（静音 wav，不加载任何模型），在临时目录里经 `pixelbook render` 走完四步，再用 ffprobe 解码数出 MP4 视频流的帧数，和 `timeline.json` 的总帧数比，相差不超过一帧。样例的配乐是 48 kHz 的 Starlight City（旁白、音效是别的采样率，顺带验证混音时的重采样），所以成片里的声音是片头片尾的音轨、配乐和音效（假旁白是静音）。它先查片头片尾（#50、#51）：时间轴的 `introFrames` 是 422、`outroFrames` 是 324，第一句从第 422 帧开始，最后一句（旁白稿的最后一句，配音不再追加片尾）在片尾开始那一帧结束，配乐的 `startFrame` 是 422、`endFrame` 是片尾开始那一帧，片头和片尾期间成片的逐帧电平和它们的音轨一样（响的帧相差不超过 1 dB，没有配乐叠上去），打点时间表从 `00:00 片头` 开始。再拿原曲从片头结束起首尾相接到正文结束当参照，逐帧比 RMS（ffmpeg `astats`），检查分镜里的每个音效（样例用到了全部 7 个）在它的帧比配乐高出 3 dB 以上、第一个音效之前只有配乐；片头之后、淡出之前成片里没有参照之外的静音（`silencedetect`）；音频流和视频流一样长；三个不同的音效同时响起时峰值低于 -1 dBFS（只量正文，片头片尾的音轨本身约 -1 dBFS）。它验证的是渲染管线、时长和声音的时机，不是音质。配音缓存、锁定音色、Remotion 静态目录和 MP4 都在临时目录里，不碰 `books/`、`video/public/episode/` 和 `out/`。改了配音流水线、时间轴或 Remotion 之后跑一次。
+它用 `tools/smoke/episode/` 里的固定小样例（4 句、带分镜和 `title`），把真实 TTS 和语音识别换成假引擎（静音 wav，不加载任何模型），在临时目录里经 `pixelbook render` 走完四步，再用 ffprobe 解码数出 MP4 视频流的帧数，和 `timeline.json` 的总帧数比，相差不超过一帧。样例的配乐是 48 kHz 的 Kalypo（旁白、音效是别的采样率，顺带验证混音时的重采样；正文比曲子短，只放一次），所以成片里的声音是片头片尾的音轨、配乐和音效（假旁白是静音）。它先查片头片尾（#50、#51）：时间轴的 `introFrames` 是 422、`outroFrames` 是 324，第一句从第 422 帧开始，最后一句（旁白稿的最后一句，配音不再追加片尾）在片尾开始那一帧结束，配乐的 `startFrame` 是 422、`endFrame` 是片尾开始那一帧，片头和片尾期间成片的逐帧电平和它们的音轨一样（响的帧相差不超过 1 dB，没有配乐叠上去），打点时间表从 `00:00 片头` 开始。再照排期把原曲从片头结束放到正文结束当参照（`music_reference`，和全长试验同一个），逐帧比 RMS（ffmpeg `astats`），检查分镜里的每个音效（样例用到了全部 7 个）在它的帧比配乐高出 3 dB 以上、第一个音效之前只有配乐；片头之后、淡出之前成片里没有参照之外的静音（`silencedetect`）；音频流和视频流一样长；三个不同的音效同时响起时峰值低于 -1 dBFS（只量正文，片头片尾的音轨本身约 -1 dBFS）。它验证的是渲染管线、时长和声音的时机，不是音质。配音缓存、锁定音色、Remotion 静态目录和 MP4 都在临时目录里，不碰 `books/`、`video/public/episode/` 和 `out/`。改了配音流水线、时间轴或 Remotion 之后跑一次。
 
 ## 预览
 

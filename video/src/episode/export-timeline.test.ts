@@ -55,7 +55,7 @@ const STORYBOARD = {
       ],
     },
   ],
-  music: "pixel-sprinter",
+  music: "forgotten-path",
   pauses: [{ after: "s01-l01", seconds: 1.2 }],
 };
 
@@ -109,20 +109,30 @@ describe("exportTimeline", () => {
     exportTimeline(episode);
 
     // 片头 422 帧之后才放配乐，正文到第 422 + 61 + 36 + 45 + 24 + 75 = 663 帧结束，
-    // 在这之前的 60 帧淡出，片尾（324 帧）期间不放；
-    // 文件、循环长度（Pixel Sprinter 34.3 秒 = 1029 帧）和音量供全长试验找接缝、做参照
+    // 在这之前的 60 帧淡出，片尾（324 帧）期间不放；文件、曲长（forgotten path 40.03 秒
+    // = 1201 帧）、每次循环（正文比曲子短，只放一次）和音量供全长试验做参照
     expect(read(join(episode, "timeline.json"))).toMatchObject({
       totalFrames: 663 + 324,
       music: {
-        track: "pixel-sprinter",
+        track: "forgotten-path",
         startFrame: 422,
         endFrame: 663,
         fadeFrom: 603,
-        file: "music/pixel-sprinter.ogg",
-        loopFrames: 1029,
+        file: "music/forgotten-path.ogg",
+        trackFrames: 1201,
+        plays: [{ from: 422, to: 663, fadeIn: null, fadeOut: null }],
         volumeDb: -20,
       },
     });
+  });
+
+  it("does not write credits.txt for a CC0 track, and removes one left over from a CC-BY track", () => {
+    write("storyboard.json", STORYBOARD);
+    writeFileSync(join(episode, "credits.txt"), "配乐：旧的\n");
+
+    exportTimeline(episode);
+
+    expect(existsSync(join(episode, "credits.txt"))).toBe(false);
   });
 
   it("writes segments.txt next to the episode's timeline.json", () => {
@@ -170,7 +180,7 @@ describe("exportTimeline", () => {
   it("rejects an invalid storyboard instead of silently using default pauses", () => {
     write("storyboard.json", {
       ...STORYBOARD,
-      music: "pixel-sprinter",
+      music: "forgotten-path",
       pauses: [{ after: "s09-l01", seconds: 1 }],
     });
 

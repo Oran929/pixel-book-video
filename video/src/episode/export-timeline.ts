@@ -1,6 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { loopFrames, MUSIC } from "../music/tracks";
+import { writeCredits } from "../music/credits";
+import { type MusicPlay, musicPlays } from "../music/crossfade";
+import { MUSIC, trackFrames } from "../music/tracks";
 import { VOLUME_DB } from "../style/volume";
 import { type MusicPlan, planEpisode } from "./episode-plan";
 import { durationReport, segmentsText, type DurationReport } from "./rhythm";
@@ -16,7 +18,8 @@ export const SEGMENTS_FILE = "segments.txt";
 /**
  * 读期目录里的合成清单（有分镜时也读分镜，取它的停顿覆盖），用 Remotion 里
  * 同一个 `planEpisode` 算出时间轴，连同总时长报告和音效列表写成 `timeline.json`
- * （供 Python 的试听拼接读取）。写到期目录里时，同时写出打点时间表 `segments.txt`。
+ * （供 Python 的试听拼接读取）。写到期目录里时，同时写出打点时间表 `segments.txt`，
+ * 配乐要署名（CC-BY）时还写出署名 `credits.txt`（#52）。
  */
 export type ExportOptions = {
   /** false：不读分镜，只用默认停顿（单独评估默认值时用） */
@@ -27,8 +30,8 @@ export type ExportOptions = {
 
 /**
  * `timeline.json` 的内容：时间轴，外加总时长报告、要放的音效（帧、音效 ID；
- * 冒烟测试用它检查成片里每个音效帧附近有声音）和配乐（曲子 ID、淡出起始帧；
- * 全长试验用它找循环接缝和淡出段）。Python 只读需要的字段。
+ * 冒烟测试用它检查成片里每个音效帧附近有声音）和配乐（曲子 ID、每次循环、淡出起始帧；
+ * 全长试验和冒烟测试用它造参照）。Python 只读需要的字段。
  */
 export type ExportedTimeline = Timeline & {
   duration: DurationReport;
@@ -36,10 +39,14 @@ export type ExportedTimeline = Timeline & {
   music: ExportedMusic | null;
 };
 
-/** 配乐，外加文件（以 `video/public/` 为起点）、循环一次的帧数和音量（dB，相对旁白） */
+/**
+ * 配乐，外加文件（以 `video/public/` 为起点）、曲长几帧、每次循环（起止帧和交叉淡化的帧区间，
+ * 见 `musicPlays`）和音量（dB，相对旁白）
+ */
 export type ExportedMusic = MusicPlan & {
   file: string;
-  loopFrames: number;
+  trackFrames: number;
+  plays: MusicPlay[];
   volumeDb: number;
 };
 
@@ -47,6 +54,8 @@ export type ExportResult = {
   timeline: ExportedTimeline;
   /** 写出的打点时间表；`out` 不是期目录里的 `timeline.json` 时不写，为 null */
   segmentsFile: string | null;
+  /** 写出的配乐署名；不用署名，或 `out` 不是期目录里的 `timeline.json` 时为 null */
+  creditsFile: string | null;
 };
 
 export const exportTimeline = (
@@ -72,17 +81,19 @@ export const exportTimeline = (
     music: music && {
       ...music,
       file: MUSIC[music.track].file,
-      loopFrames: loopFrames(music.track),
+      trackFrames: trackFrames(music.track),
+      plays: musicPlays(music, trackFrames(music.track)),
       volumeDb: VOLUME_DB.music,
     },
   };
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, JSON.stringify(timeline, null, 2) + "\n");
 
-  // 打点时间表只跟期目录里的 timeline.json 走：写到别处的多半是试听用的时间轴，
-  // 不应覆盖期目录里正式的打点时间表
+  // 打点时间表和署名只跟期目录里的 timeline.json 走：写到别处的多半是试听用的时间轴，
+  // 不应覆盖期目录里正式的打点时间表和署名
   const intoEpisode = resolve(out) === resolve(episodeDir, TIMELINE_FILE);
   const segmentsFile = intoEpisode ? join(episodeDir, SEGMENTS_FILE) : null;
   if (segmentsFile) writeFileSync(segmentsFile, segmentsText(timeline));
-  return { timeline, segmentsFile };
+  const creditsFile = intoEpisode ? writeCredits(episodeDir, music && MUSIC[music.track]) : null;
+  return { timeline, segmentsFile, creditsFile };
 };

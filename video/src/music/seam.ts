@@ -1,6 +1,9 @@
-// 循环接缝检查（#38）：把曲尾接回曲首，看接缝两侧是否接得上。
-// 只量两样：接缝处的采样差（和接缝两侧各 10 毫秒里相邻采样的最大差比）和
-// 接缝两侧各 50 毫秒的 RMS 跳变。听感留给人工关口 3。
+// 交叉淡化接缝检查（#52，取代 #38 的无缝接缝检查）：照播放时的做法把曲尾和曲首重叠
+// CROSSFADE_FRAMES 帧（增益按帧取，和 Remotion 一样每帧一个值），看重叠处掉不掉音、爆不爆音。
+// 听感（重复感、曲尾自然淡出后再从头开始）留给人工关口 3，这里只把曲尾、曲首比曲子整体
+// 轻多少报出来。
+import { VIDEO } from "../video-config";
+import { CROSSFADE_FRAMES, fadeInGain, fadeOutGain } from "./crossfade";
 
 export type PcmAudio = {
   /** 交错排列的浮点采样（-1 到 1） */
@@ -9,78 +12,106 @@ export type PcmAudio = {
   sampleRate: number;
 };
 
-/** 采样差超过这个值，并且超过接缝两侧相邻采样最大差的 JUMP_RATIO 倍，就算断开 */
-export const JUMP_FLOOR = 0.01;
-export const JUMP_RATIO = 2;
-/** 比较相邻采样差的窗口（秒） */
-export const LOCAL_SECONDS = 0.01;
-/** 比较 RMS 的窗口（秒）；跳变超过 RMS_JUMP_DB 或一侧低于 SILENCE_DB 就算不无缝 */
-export const RMS_SECONDS = 0.05;
-export const RMS_JUMP_DB = 10;
+/** 重叠处的一个窗口比两份各自的功率之和低这么多 dB，算互相抵消（掉音） */
+export const CANCEL_DB = 6;
+/** 重叠处整体比两侧都低（掉音）、都高（爆音）这么多 dB 算问题 */
+export const LEVEL_DB = 6;
+/** 比较抵消用的窗口（秒）；两份功率之和低于 SILENCE_DB 的窗口不比 */
+export const WINDOW_SECONDS = 0.05;
 export const SILENCE_DB = -60;
+/** 和重叠处比的两侧各多长（秒） */
+export const SIDE_SECONDS = 1;
+/** 量曲子整体电平的窗口（秒），取中位数 */
+const TRACK_WINDOW_SECONDS = 0.1;
 
-export type Seam = {
-  /** 接缝处最大的采样差（各声道取最大） */
-  jump: number;
-  /** 接缝两侧窗口里相邻采样的最大差（取断开最明显的那个声道） */
-  localDiff: number;
-  /** 曲尾、曲首窗口的 RMS（dBFS） */
-  tailDb: number;
-  headDb: number;
-  seamless: boolean;
-  /** 不无缝的原因；无缝时为空 */
+export type CrossfadeSeam = {
+  /** 重叠前 1 秒（只有曲尾）、重叠处（混合后）、重叠后 1 秒（只有曲首）的 RMS（dBFS） */
+  beforeDb: number;
+  overlapDb: number;
+  afterDb: number;
+  /** 重叠里的曲尾、曲首（淡化之前）比曲子整体电平（100 毫秒窗口的中位数）低多少 dB */
+  tailBelowTrackDb: number;
+  headBelowTrackDb: number;
+  /** 掉音、爆音；没有问题时为空 */
   problems: string[];
 };
 
-const toDb = (rms: number) => (rms > 0 ? 20 * Math.log10(rms) : -Infinity);
+const toDb = (power: number) => (power > 0 ? 10 * Math.log10(power) : -Infinity);
 
-export const measureSeam = ({ samples, channels, sampleRate }: PcmAudio): Seam => {
+export const measureCrossfade = ({ samples, channels, sampleRate }: PcmAudio): CrossfadeSeam => {
   const frames = samples.length / channels;
+  const perFrame = sampleRate / VIDEO.fps;
+  const overlap = CROSSFADE_FRAMES * perFrame;
+  const side = Math.round(sampleRate * SIDE_SECONDS);
+  const tailStart = frames - overlap;
   const at = (frame: number, channel: number) => samples[frame * channels + channel]!;
-  const problems: string[] = [];
-
-  // 采样差：逐声道比，取断开最明显（jump / localDiff 最大）的声道
-  const local = Math.round(sampleRate * LOCAL_SECONDS);
-  let jump = 0;
-  let localDiff = 0;
-  let worst = -1;
-  for (let c = 0; c < channels; c++) {
-    const channelJump = Math.abs(at(0, c) - at(frames - 1, c));
-    let channelLocal = 0;
-    for (let i = 1; i < local; i++) {
-      channelLocal = Math.max(
-        channelLocal,
-        Math.abs(at(i, c) - at(i - 1, c)),
-        Math.abs(at(frames - i, c) - at(frames - i - 1, c)),
-      );
-    }
-    const ratio = channelJump / Math.max(channelLocal, Number.EPSILON);
-    if (ratio > worst) {
-      worst = ratio;
-      jump = channelJump;
-      localDiff = channelLocal;
-    }
-  }
-  if (jump > JUMP_FLOOR && jump > JUMP_RATIO * localDiff) {
-    problems.push(
-      `接缝处采样差 ${jump.toFixed(4)}，是两侧相邻采样最大差 ${localDiff.toFixed(4)} 的 ${(jump / localDiff).toFixed(1)} 倍`,
-    );
-  }
-
-  // RMS：所有声道合在一起算
-  const window = Math.round(sampleRate * RMS_SECONDS);
-  const rms = (from: number) => {
+  /** [from, to) 这段的平均功率（所有声道合在一起） */
+  const power = (from: number, to: number) => {
     let sum = 0;
-    for (let i = from * channels; i < (from + window) * channels; i++) sum += samples[i]! ** 2;
-    return Math.sqrt(sum / (window * channels));
+    for (let i = from * channels; i < to * channels; i++) sum += samples[i]! ** 2;
+    return sum / ((to - from) * channels);
   };
-  const tailDb = toDb(rms(frames - window));
-  const headDb = toDb(rms(0));
-  if (Math.min(tailDb, headDb) < SILENCE_DB) {
-    problems.push(`接缝一侧是静音：RMS 曲尾 ${tailDb.toFixed(1)} dBFS、曲首 ${headDb.toFixed(1)} dBFS`);
-  } else if (Math.abs(headDb - tailDb) > RMS_JUMP_DB) {
-    problems.push(`接缝处 RMS 跳变 ${(headDb - tailDb).toFixed(1)} dB（曲尾 ${tailDb.toFixed(1)}、曲首 ${headDb.toFixed(1)} dBFS）`);
+
+  // 重叠处：曲尾乘淡出、曲首乘淡入，按帧取增益
+  const mixed = new Float64Array(overlap * channels);
+  const separate = new Float64Array(overlap);
+  let peak = 0;
+  for (let j = 0; j < overlap; j++) {
+    const k = Math.floor(j / perFrame);
+    const out = fadeOutGain(k, CROSSFADE_FRAMES);
+    const into = fadeInGain(k, CROSSFADE_FRAMES);
+    for (let c = 0; c < channels; c++) {
+      const tail = at(tailStart + j, c) * out;
+      const head = at(j, c) * into;
+      mixed[j * channels + c] = tail + head;
+      separate[j] = separate[j]! + tail ** 2 + head ** 2;
+      peak = Math.max(peak, Math.abs(tail + head));
+    }
+  }
+  const mixedPower = (from: number, to: number) => {
+    let sum = 0;
+    for (let i = from * channels; i < to * channels; i++) sum += mixed[i]! ** 2;
+    return sum / ((to - from) * channels);
+  };
+
+  const problems: string[] = [];
+  const window = Math.round(sampleRate * WINDOW_SECONDS);
+  for (let from = 0; from + window <= overlap; from += window) {
+    let expected = 0;
+    for (let j = from; j < from + window; j++) expected += separate[j]!;
+    const expectedDb = toDb(expected / (window * channels));
+    const actualDb = toDb(mixedPower(from, from + window));
+    if (expectedDb >= SILENCE_DB && actualDb < expectedDb - CANCEL_DB) {
+      problems.push(
+        `掉音：重叠处第 ${(from / sampleRate).toFixed(2)} 秒起曲尾和曲首互相抵消，` +
+          `${actualDb.toFixed(1)} dBFS，两份各自加起来是 ${expectedDb.toFixed(1)} dBFS`,
+      );
+      break;
+    }
   }
 
-  return { jump, localDiff, tailDb, headDb, seamless: problems.length === 0, problems };
+  const beforeDb = toDb(power(tailStart - side, tailStart));
+  const afterDb = toDb(power(overlap, overlap + side));
+  const overlapDb = toDb(mixedPower(0, overlap));
+  const levels = `重叠前 ${beforeDb.toFixed(1)}、重叠处 ${overlapDb.toFixed(1)}、重叠后 ${afterDb.toFixed(1)} dBFS`;
+  if (overlapDb < Math.min(beforeDb, afterDb) - LEVEL_DB) problems.push(`掉音：${levels}`);
+  if (overlapDb > Math.max(beforeDb, afterDb) + LEVEL_DB) problems.push(`爆音：${levels}`);
+  if (peak >= 1) problems.push(`爆音：重叠处削波，峰值 ${peak.toFixed(3)}`);
+
+  const trackWindow = Math.round(sampleRate * TRACK_WINDOW_SECONDS);
+  const windows: number[] = [];
+  for (let from = 0; from + trackWindow <= frames; from += trackWindow) {
+    windows.push(toDb(power(from, from + trackWindow)));
+  }
+  windows.sort((a, b) => a - b);
+  const trackDb = windows[Math.floor(windows.length / 2)]!;
+
+  return {
+    beforeDb,
+    overlapDb,
+    afterDb,
+    tailBelowTrackDb: trackDb - toDb(power(tailStart, frames)),
+    headBelowTrackDb: trackDb - toDb(power(0, overlap)),
+    problems,
+  };
 };

@@ -62,7 +62,7 @@ const STORYBOARD = {
       ],
     },
   ],
-  music: "pixel-sprinter",
+  music: "forgotten-path",
   pauses: [{ after: "s01-l01", seconds: 1.2 }],
 };
 
@@ -133,7 +133,7 @@ const lampScene = (...triggers: Trigger[]) => ({
       })),
     },
   ],
-  music: "pixel-sprinter",
+  music: "forgotten-path",
   pauses: [],
 });
 const plan = (...triggers: Trigger[]) =>
@@ -320,7 +320,7 @@ const boxScene = (boxes: Box[], triggers: Trigger[]) => ({
       triggers: triggers.map((trigger) => ({ line: "s02-l01", ...trigger })),
     },
   ],
-  music: "pixel-sprinter",
+  music: "forgotten-path",
   pauses: [],
 });
 const enterAt = (target: string, offset = 0) => ({
@@ -441,7 +441,7 @@ const blockScene = (props: Record<string, unknown>, triggers: Trigger[] = []) =>
       ],
     },
   ],
-  music: "pixel-sprinter",
+  music: "forgotten-path",
   pauses: [],
 });
 const planBlock = (props: Record<string, unknown>, triggers: Trigger[] = []) =>
@@ -664,7 +664,7 @@ describe("planEpisode: sound effects", () => {
           ],
         },
       ],
-      music: "pixel-sprinter",
+      music: "forgotten-path",
       pauses: [],
     };
     expect(planEpisode(MANIFEST, storyboard, NOISY).sounds).toEqual([]);
@@ -692,7 +692,7 @@ describe("planEpisode: sound effects", () => {
           ],
         },
       ],
-      music: "pixel-sprinter",
+      music: "forgotten-path",
       pauses: [],
     };
     expect(planEpisode(MANIFEST, storyboard, NOISY).sounds).toEqual([
@@ -722,7 +722,7 @@ describe("planEpisode: sound effects", () => {
           ],
         },
       ],
-      music: "pixel-sprinter",
+      music: "forgotten-path",
       pauses: [],
     };
     expect(planEpisode(MANIFEST, storyboard, NOISY).sounds).toEqual([
@@ -741,8 +741,8 @@ describe("planEpisode: music", () => {
   const scored = (music: unknown) => ({ ...lampScene({ action: "enter", offset: 0 }), music });
 
   it("plays the storyboard's track and fades it out over the last 2 seconds", () => {
-    expect(planEpisode(MANIFEST, scored("pixel-sprinter"), DECLARATIONS).music).toEqual({
-      track: "pixel-sprinter",
+    expect(planEpisode(MANIFEST, scored("forgotten-path"), DECLARATIONS).music).toEqual({
+      track: "forgotten-path",
       startFrame: 0,
       endFrame: 213,
       fadeFrom: 153,
@@ -751,12 +751,12 @@ describe("planEpisode: music", () => {
 
   it("rejects a track that is not in the music library and lists the registered ones", () => {
     expect(() => planEpisode(MANIFEST, scored("nope"), DECLARATIONS)).toThrow(
-      /music: 配乐 nope 没有登记，登记过的配乐：.*pixel-sprinter/,
+      /music: 配乐 nope 没有登记，登记过的配乐：.*forgotten-path/,
     );
   });
 
   it("rejects a storyboard without music", () => {
-    const silent: Record<string, unknown> = scored("pixel-sprinter");
+    const silent: Record<string, unknown> = scored("forgotten-path");
     delete silent.music;
     expect(() => planEpisode(MANIFEST, silent, DECLARATIONS)).toThrow(
       /music: 有分镜时要写 music：配乐登记表里的曲子 ID/,
@@ -771,7 +771,7 @@ describe("planEpisode: music", () => {
       scenes: [MANIFEST.scenes[1]],
       lines: [line("s02-l01", "s02-c01", 1.5)],
     };
-    const plan = planEpisode(short, scored("pixel-sprinter"), DECLARATIONS);
+    const plan = planEpisode(short, scored("forgotten-path"), DECLARATIONS);
     expect(plan.timeline.totalFrames).toBe(45);
     expect(plan.music?.fadeFrom).toBe(0);
   });
@@ -821,7 +821,7 @@ const planLinked = (components: Used[], triggers: Trigger[]) =>
           triggers: triggers.map((trigger) => ({ line: "s02-l01", ...trigger })),
         },
       ],
-      music: "pixel-sprinter",
+      music: "forgotten-path",
       pauses: [],
     },
     LINKED,
@@ -998,7 +998,7 @@ describe("planEpisode: a component nested in a corner of its parent", () => {
               triggers: ["intent", "dry"].map((target) => ({ target, line: "s02-l01", offset: 0, action: "enter" })),
             },
           ],
-          music: "pixel-sprinter",
+          music: "forgotten-path",
           pauses: [],
         },
       );
@@ -1037,7 +1037,7 @@ const planGlow = (component: string, ...triggers: Trigger[]) =>
           })),
         },
       ],
-      music: "pixel-sprinter",
+      music: "forgotten-path",
       pauses: [],
     },
     EFFECTS,
@@ -1121,7 +1121,7 @@ const planOne = (
         })),
       },
     ],
-    music: "pixel-sprinter",
+    music: "forgotten-path",
     pauses: [],
   });
 const hint = (props: Record<string, unknown>, triggers: Trigger[] = []) =>
@@ -1264,7 +1264,7 @@ const planIn = (
         })),
       },
     ],
-    music: "pixel-sprinter",
+    music: "forgotten-path",
     pauses: [],
   });
 const fork = (props: Record<string, unknown>, triggers: Trigger[] = []) =>
@@ -1403,7 +1403,7 @@ describe("planEpisode: the timeline", () => {
             })),
           },
         ],
-        music: "pixel-sprinter",
+        music: "forgotten-path",
         pauses: [],
       }),
     ).toThrow(/压住了.*的标签/);
@@ -1424,7 +1424,7 @@ const mascot = (props: Record<string, unknown>, triggers: Trigger[] = [], at = [
         })),
       },
     ],
-    music: "pixel-sprinter",
+    music: "forgotten-path",
     pauses: [],
   });
 
@@ -1551,7 +1551,7 @@ describe("planEpisode: intro and outro", () => {
 
   it("plays the music from the end of the intro to the end of the body, fading over the body's last 2 seconds", () => {
     expect(plan().music).toEqual({
-      track: "pixel-sprinter",
+      track: "forgotten-path",
       startFrame: 422,
       endFrame: 635,
       fadeFrom: 635 - 60,
@@ -1573,7 +1573,7 @@ describe("planEpisode: intro and outro", () => {
     const p = plan({ intro: null });
     expect(p.timeline).toMatchObject({ introFrames: 0, outroFrames: 324, totalFrames: 213 + 324 });
     expect(p.cues[0]).toMatchObject({ enter: { frame: 138 }, exit: { frame: 168 } });
-    expect(p.music).toEqual({ track: "pixel-sprinter", startFrame: 0, endFrame: 213, fadeFrom: 153 });
+    expect(p.music).toEqual({ track: "forgotten-path", startFrame: 0, endFrame: 213, fadeFrom: 153 });
     expect(showsResidents(p.timeline, 0)).toBe(true);
     expect(showsResidents(p.timeline, 213)).toBe(false);
   });
@@ -1582,7 +1582,7 @@ describe("planEpisode: intro and outro", () => {
     const p = plan({ outro: null });
     expect(p.timeline).toMatchObject({ introFrames: 422, outroFrames: 0, totalFrames: 422 + 213 });
     expect(p.cues[0]).toMatchObject({ enter: { frame: 560 }, exit: { frame: 590 } });
-    expect(p.music).toEqual({ track: "pixel-sprinter", startFrame: 422, endFrame: 635, fadeFrom: 575 });
+    expect(p.music).toEqual({ track: "forgotten-path", startFrame: 422, endFrame: 635, fadeFrom: 575 });
     expect(showsResidents(p.timeline, 634)).toBe(true);
   });
 

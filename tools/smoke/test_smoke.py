@@ -2,7 +2,8 @@
 
 慢（要打包并渲染 Remotion），不在 `make check` 里；单独运行 `make smoke`。
 旁白是静音，成片里的声音只有片头片尾的音轨、配乐和音效。配乐（#39）选的是 48 kHz 的曲子（旁白、音效是
-别的采样率，顺带验证混音时的重采样）。检查办法是拿原曲首尾相接当参照逐帧比电平：
+别的采样率，顺带验证混音时的重采样）。检查办法是照排期把原曲放成参照（#52 起按交叉淡化循环、
+淡出，`music_reference`），和成片逐帧比电平：
 第一个音效之前和参照一样，每个音效在它的帧比配乐高出一截（#37 原来用 silencedetect，
 有了配乐之后静音段没有了，改成这样，见 #39 的评论）；成片里没有参照之外的静音；
 三个方块同时入场、各放一个音效时不削波。
@@ -24,6 +25,7 @@ from pixelbook.asr import FakeAsrEngine
 from pixelbook.music_check import (
     duration_problems,
     frame_levels,
+    music_reference,
     silences,
     sound_problems,
     stream_seconds,
@@ -146,10 +148,11 @@ def test_fixed_sample_renders_with_the_computed_number_of_frames(repo, capsys):
         "ding",
         "crash",
     ]
-    # 配乐（#39）：48 kHz 的 Starlight City，片头结束后才开始（#50），正文最后 60 帧淡出，
-    # 片尾开始时放完（#51）；音频流和视频流一样长
+    # 配乐（#39，#52 换库）：48 kHz 的 Kalypo，片头结束后才开始（#50），正文最后 60 帧淡出，
+    # 片尾开始时放完（#51）；正文比曲子短，只放一次；音频流和视频流一样长
     music = timeline["music"]
-    assert music["track"] == "starlight-city"
+    assert music["track"] == "kalypo"
+    assert len(music["plays"]) == 1
     assert music["startFrame"] == intro
     assert music["endFrame"] == body_end
     assert music["fadeFrom"] == body_end - 60
@@ -164,25 +167,18 @@ def test_fixed_sample_renders_with_the_computed_number_of_frames(repo, capsys):
     assert bookend_problems(mix[:intro], intro_track[:intro]) == []
     outro_track = frame_levels(public / "outro" / "bye-bye.wav", fps)
     assert bookend_problems(mix[body_end:], outro_track[: total - body_end]) == []
-    # 参照：片头之后原曲首尾相接到正文结束。音效准时响起，第一个之前只有配乐
-    track = public / music["file"]
-    reference = [float("-inf")] * intro + frame_levels(
-        track, fps, loop_frames=body_end - intro
+    # 参照：照排期把原曲从片头结束放到正文结束。音效准时响起，第一个之前只有配乐
+    reference_wav = music_reference(
+        music, total, fps, public, repo / "out" / "smoke-music-reference.wav"
     )
+    reference = frame_levels(reference_wav, fps)[:body_end]
     assert sound_problems(mix[:body_end], reference, [s["frame"] for s in sounds]) == []
     # 片头之后、淡出之前，成片里的静音都是曲子自己的停顿
     start = intro / fps
     assert (
         unexplained_silences(
             silences(mp4),
-            [
-                (a + start, b + start)
-                for a, b in silences(
-                    track,
-                    loop_seconds=body_end / fps - start,
-                    gain_db=music["volumeDb"],
-                )
-            ],
+            silences(reference_wav),
             within=[(start, music["fadeFrom"] / fps)],
         )
         == []

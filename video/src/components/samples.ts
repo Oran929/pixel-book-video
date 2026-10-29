@@ -73,7 +73,7 @@ export const sampleEpisode = (
         ),
       })),
       // 分镜必须写配乐；样张页（ComponentSample）只放音效，不放配乐
-      music: "pixel-sprinter",
+      music: "forgotten-path",
       pauses: [],
     },
   };

@@ -261,7 +261,7 @@ def test_voice_fails_naming_each_line_and_character_missing_from_the_font(
 
 BAD_STORYBOARD = {
     "scenes": [],
-    "music": "pixel-sprinter",
+    "music": "forgotten-path",
     "pauses": [{"after": "s09-l09", "seconds": 1}],
 }
 

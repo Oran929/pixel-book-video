@@ -35,7 +35,7 @@ const main = (argv: string[]): number => {
     parsed.values.out ?? resolve(episodeDir, TIMELINE_FILE),
   );
   try {
-    const { timeline, segmentsFile } = exportTimeline(episodeDir, {
+    const { timeline, segmentsFile, creditsFile } = exportTimeline(episodeDir, {
       storyboard: !parsed.values["no-storyboard"],
       out,
     });
@@ -49,6 +49,7 @@ const main = (argv: string[]): number => {
         ? `已写出打点时间表 ${segmentsFile}：${segmentsText(timeline).split("\n").length - 1} 段`
         : "未写打点时间表（只在写到期目录里的 timeline.json 时写）",
     );
+    if (creditsFile) console.log(`配乐要署名，已写出 ${creditsFile}（贴进视频简介）`);
     // 样片阶段只报告，不以非零码退出
     console.log(
       `总时长 ${timeline.duration.text}：${timeline.duration.verdictText}` +

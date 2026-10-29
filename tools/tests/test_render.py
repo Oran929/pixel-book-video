@@ -101,7 +101,7 @@ def write_bad_storyboard(episode_dir):
                         ],
                     }
                 ],
-                "music": "pixel-sprinter",
+                "music": "forgotten-path",
                 "pauses": [],
             }
         )

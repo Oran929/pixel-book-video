@@ -1,28 +1,28 @@
-// 循环接缝检查（#38）：`npm run music:seams`。解码登记表里的每首曲子，把曲尾接回曲首，
-// 用 measureSeam 量接缝处的采样差和 RMS 跳变，打印一张 Markdown 表（可以直接贴进评论）。
-// 量出来的结果和登记表的 seamless 不一致时以非零码退出。只在本机运行，要 ffmpeg。
+// 交叉淡化接缝检查（#52）：`npm run music:seams`。解码登记表里的每首曲子，照播放时的做法
+// 把曲尾和曲首重叠 1 秒交叉淡化（measureCrossfade），打印一张 Markdown 表（可以直接贴进评论）。
+// 有曲子掉音或爆音时以非零码退出。只在本机运行，要 ffmpeg。
 import { decode } from "./ffmpeg";
-import { measureSeam } from "./seam";
+import { measureCrossfade } from "./seam";
 import { MUSIC } from "./tracks";
 
 const PUBLIC = new URL("../../public/", import.meta.url);
 
 const rows = [
-  "| 曲子 | 接缝采样差 | 两侧相邻采样最大差 | RMS 曲尾 → 曲首（dBFS） | 结果 | 登记 |",
-  "| --- | --- | --- | --- | --- | --- |",
+  "| 曲子 | 重叠前 1 秒 / 重叠处 / 重叠后 1 秒（dBFS） | 重叠里的曲尾 / 曲首比整首轻（dB） | 结果 |",
+  "| --- | --- | --- | --- |",
 ];
-const mismatched: string[] = [];
+const failed: string[] = [];
 for (const [id, track] of Object.entries(MUSIC)) {
-  const seam = measureSeam(decode(new URL(track.file, PUBLIC).pathname));
-  const result = seam.seamless ? "无缝" : `不无缝：${seam.problems.join("；")}`;
+  const seam = measureCrossfade(decode(new URL(track.file, PUBLIC).pathname));
   rows.push(
-    `| ${id} | ${seam.jump.toFixed(4)} | ${seam.localDiff.toFixed(4)} | ` +
-      `${seam.tailDb.toFixed(1)} → ${seam.headDb.toFixed(1)} | ${result} | ${track.seamless ? "无缝" : "不无缝"} |`,
+    `| ${id} | ${seam.beforeDb.toFixed(1)} / ${seam.overlapDb.toFixed(1)} / ${seam.afterDb.toFixed(1)} | ` +
+      `${seam.tailBelowTrackDb.toFixed(1)} / ${seam.headBelowTrackDb.toFixed(1)} | ` +
+      `${seam.problems.length === 0 ? "不掉音、不爆音" : seam.problems.join("；")} |`,
   );
-  if (seam.seamless !== track.seamless) mismatched.push(id);
+  if (seam.problems.length > 0) failed.push(id);
 }
 console.log(rows.join("\n"));
-if (mismatched.length > 0) {
-  console.error(`\n登记表的 seamless 和量出来的不一致：${mismatched.join("、")}`);
+if (failed.length > 0) {
+  console.error(`\n交叉淡化处有问题：${failed.join("、")}`);
   process.exit(1);
 }

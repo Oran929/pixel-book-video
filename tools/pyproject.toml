@@ -9,6 +9,7 @@ dependencies = [
     "mlx-audio==0.6.2; sys_platform == 'darwin'",
     "opencc>=1.4.2",
     "pypinyin>=0.55.0",
+    "numpy>=2",
     "pyyaml>=6.0.3",
 ]
 
@@ -16,7 +17,7 @@ dependencies = [
 pixelbook = "pixelbook.cli:main"
 
 [dependency-groups]
-dev = ["numpy>=2", "pytest", "ruff"]
+dev = ["pytest", "ruff"]
 
 [build-system]
 requires = ["hatchling"]

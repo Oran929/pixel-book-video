@@ -58,7 +58,7 @@ const STORYBOARD = {
       ],
     },
   ],
-  music: "pixel-sprinter",
+  music: "forgotten-path",
   pauses: [{ after: "s01-l02", seconds: 1.2 }],
 };
 
@@ -174,7 +174,7 @@ describe("scheduleCues", () => {
           triggers: [{ ...STORYBOARD.scenes[0]!.triggers[0]!, line, offset }],
         },
       ],
-      music: "pixel-sprinter",
+      music: "forgotten-path",
       pauses: [],
     });
 

@@ -1,14 +1,17 @@
-"""配乐检查（#39）：成片的配乐和参照（原曲首尾相接、不淡出）逐帧比电平。"""
+"""配乐检查（#39，#52 改成交叉淡化循环）：配乐声轨和参照（按排期交叉淡化、淡出的原曲）逐帧比电平。"""
 
 import subprocess
 
+import numpy as np
 import pytest
 
 from pixelbook.music_check import (
+    SAMPLE_RATE,
     check_music,
     duration_problems,
     frame_levels,
     music_problems,
+    music_reference,
     seam_windows,
     silences,
     sound_problems,
@@ -16,69 +19,82 @@ from pixelbook.music_check import (
     unexplained_silences,
 )
 
-# 参照：原曲的逐帧 RMS（dBFS），起伏像音乐
-REFERENCE = [-30.0 - (f % 7) for f in range(200)]
+# 参照：按排期放出来的配乐的逐帧 RMS（dBFS），起伏像音乐
+REFERENCE = [-50.0 - (f % 7) for f in range(200)]
 
 
-def test_music_following_the_reference_at_a_constant_gain_passes():
-    # 配乐音量 -20 dB，渲染出来整体比参照低 20 dB；最后 60 帧从 140 帧起淡出
-    stem = [db - 20 for db in REFERENCE[:140]] + [
-        db - 20 - (f + 1) * 0.5 for f, db in enumerate(REFERENCE[140:])
-    ]
+def test_music_following_the_reference_at_a_constant_offset_passes():
+    # 渲染出来整体比参照高 0.3 dB（编码、Remotion 的音量取整）
+    stem = [db + 0.3 for db in REFERENCE]
 
-    assert music_problems(stem, REFERENCE, fade_from=140) == []
+    assert music_problems(stem, REFERENCE, start=0, end=200) == []
 
 
-def steady(gain_db: float = -20, frames: int = 200) -> list[float]:
-    """淡出之前一直比参照低 `gain_db`，最后 60 帧每帧再低 0.5 dB。"""
-    fade_from = frames - 60
-    return [
-        db + gain_db - max(0, f - fade_from + 1) * 0.5
-        for f, db in enumerate(REFERENCE[:frames])
-    ]
+def test_a_dropout_at_a_crossfade_is_reported_with_its_frames():
+    stem = list(REFERENCE)
+    stem[100] -= 12  # 第 100 帧（交叉淡化里）掉下去 12 dB
+    stem[101] = float("-inf")  # 第 101 帧整帧没有声音
 
-
-def test_a_dropout_at_a_loop_seam_is_reported_with_its_frame():
-    stem = steady()
-    stem[100] -= 12  # 第 100 帧（接缝）掉下去 12 dB
-
-    problems = music_problems(stem, REFERENCE, fade_from=140)
+    problems = music_problems(stem, REFERENCE, start=0, end=200)
 
     assert len(problems) == 1
-    assert "第 100 帧" in problems[0]
+    assert problems[0].startswith("第 100–101 帧的配乐比参照偏了 -inf dB")
 
 
-def test_a_fade_that_rises_again_is_reported():
-    stem = steady()
-    stem[170] += 3  # 淡出到一半又响了一下
+def test_a_pop_is_reported():
+    stem = list(REFERENCE)
+    stem[60] += 9
 
-    problems = music_problems(stem, REFERENCE, fade_from=140)
-
-    assert problems == [
-        "淡出没有单调下降：第 170 帧比上一帧高 2.5 dB（允许 0.3 dB 的测量误差）"
+    assert music_problems(stem, REFERENCE, start=0, end=200) == [
+        "第 60 帧的配乐比参照偏了 +9.0 dB（允许 ±1 dB，台阶边上按前后一帧放宽）"
     ]
 
 
-def test_a_fade_that_does_not_go_low_enough_is_reported():
-    # 只降了 6 dB：音量从 0.1 降到 0 应当降得远多于 20 dB
-    stem = [db - 20 - max(0, f - 139) * 0.1 for f, db in enumerate(REFERENCE)]
+def test_a_volume_step_landing_up_to_a_frame_off_passes():
+    # 淡出的一级台阶（-6 dB）：参照在第 150 帧降下去，渲染出来早了半帧
+    # （Remotion 的音量按帧中点切换，又按音频包生效），第 149 帧只降了一半
+    reference = [-50.0] * 150 + [-56.0] * 50
+    stem = [-50.0] * 149 + [-53.0] + [-56.0] * 50
 
-    problems = music_problems(stem, REFERENCE, fade_from=140)
-
-    assert problems == ["淡出到最后只降了 6.0 dB，应当至少降 20 dB"]
+    assert music_problems(stem, reference, start=0, end=200) == []
 
 
-def test_silences_near_a_seam_that_the_reference_also_has_are_part_of_the_music():
-    # 曲子自己在 10.0–10.1 秒有个停顿；接缝在 34.3 秒，那里多出一段静音
+def test_a_fade_that_is_missing_is_reported():
+    # 参照在最后 60 帧一路降下去，渲染出来没有淡出
+    reference = [-50.0] * 140 + [-50.0 - (f + 1) * 0.3 for f in range(60)]
+    stem = [-50.0] * 200
+
+    problems = music_problems(stem, reference, start=0, end=200)
+
+    assert len(problems) == 1
+    assert problems[0].startswith("第 144–172 帧的配乐比参照偏了 +9.9 dB")
+
+
+def test_frames_where_the_reference_is_too_quiet_are_not_compared():
+    # 淡出到最后、曲子自己的停顿：参照低于 -60 dBFS，差值全是噪声
+    reference = [-50.0] * 100 + [-70.0] * 100
+    stem = [-50.0] * 100 + [-90.0] * 100
+
+    assert music_problems(stem, reference, start=0, end=200) == []
+
+
+def test_frames_outside_the_music_are_not_compared():
+    stem = [float("-inf")] * 20 + REFERENCE[20:]
+
+    assert music_problems(stem, REFERENCE, start=20, end=200) == []
+
+
+def test_silences_near_a_crossfade_that_the_reference_also_has_are_part_of_the_music():
+    # 曲子自己在 10.0–10.1 秒有个停顿；交叉淡化在 34–35 秒，那里多出一段静音
     reference = [(10.0, 10.1), (40.0, 40.2)]
     found = [(10.0, 10.1), (34.28, 34.35), (40.01, 40.2)]
 
-    within = seam_windows([10.05, 34.3, 40.1])
+    within = seam_windows([(9.5, 10.5), (34.0, 35.0), (39.5, 40.5)])
     assert unexplained_silences(found, reference, within=within) == [(34.28, 34.35)]
 
 
-def test_silences_away_from_the_seams_are_not_counted():
-    within = seam_windows([34.3])
+def test_silences_away_from_the_crossfades_are_not_counted():
+    within = seam_windows([(34.0, 35.0)])
     assert unexplained_silences([(20.0, 20.5)], [], within=within) == []
 
 
@@ -130,12 +146,6 @@ def test_frame_levels_measures_each_frame_of_audio(tmp_path):
     assert all(abs(db - -9.03) < 0.1 for db in levels)
 
 
-def test_frame_levels_can_loop_a_track_to_a_length(tmp_path):
-    levels = frame_levels(sine(tmp_path / "a.wav", 0.5), fps=30, loop_frames=60)
-
-    assert len(levels) == 60
-
-
 def test_silences_finds_the_quiet_stretches(tmp_path):
     found = silences(sine(tmp_path / "a.wav", 1, gap=(0.4, 0.6)))
 
@@ -169,58 +179,49 @@ def test_stream_seconds_reads_both_streams(tmp_path):
     assert seconds["audio"] == pytest.approx(0.5, abs=0.04)
 
 
-def test_silences_can_turn_the_volume_down_first(tmp_path):
-    # -9 dBFS 的正弦波调低 45 dB 就低于 -50 dBFS，整段都算静音
-    found = silences(sine(tmp_path / "a.wav", 1), gain_db=-45)
-
-    assert found == [(0, 1)]
-
-
-# 全长试验的整套检查：用 ffmpeg 合成「曲子」、配乐声轨和成片，不经过 Remotion
+# 参照和全长试验的整套检查：用 ffmpeg 合成「曲子」、配乐声轨和成片，不经过 Remotion
 FPS = 30
+PER_FRAME = SAMPLE_RATE // FPS
 
 
-def track(tmp_path):
-    """0.5 秒（15 帧）一循环的「曲子」：音量随时间起伏的正弦波，首尾接得上。"""
-    return sine_with(
-        tmp_path / "track.wav", "0.5*(0.6+0.4*sin(2*PI*2*t))*sin(2*PI*440*t)", 0.5
-    )
-
-
-def sine_with(path, expr, seconds):
+def track(directory):
+    """3 秒（90 帧）的「曲子」：白噪声（曲尾和曲首互不相关，像两段不同的乐句），RMS 约 -15 dBFS。"""
+    path = directory / "track.wav"
     subprocess.run(
         ["ffmpeg", "-v", "error", "-y", "-f", "lavfi"]
-        + ["-i", f"aevalsrc='{expr}':s=48000:d={seconds}", str(path)],
+        + ["-i", f"anoisesrc=d=3:c=white:a=0.3:r={SAMPLE_RATE}:s=7", str(path)],
         check=True,
     )
     return path
 
 
-def render(tmp_path, source, frames, extra_filter="", start=0, end=None):
-    """像 Remotion 那样从第 `start` 帧（片头结束）起把曲子循环到第 `end` 帧（片尾开始，
-    默认是最后一帧），音量 -20 dB，`end` 之前 60 帧线性淡出到 0；`start` 之前、`end`
-    之后是静音，成片一共 `frames` 帧。"""
-    seconds = frames / FPS
-    end = frames if end is None else end
-    music_seconds = (end - start) / FPS
-    fade = f"afade=t=out:st={music_seconds - 2}:d=2:curve=tri"
-    delay = f",adelay={round(start / FPS * 1000)}:all=1" if start else ""
-    stem = tmp_path / "stem.wav"
-    subprocess.run(
-        ["ffmpeg", "-v", "error", "-y", "-stream_loop", "-1"]
-        + ["-t", f"{music_seconds}", "-i", str(source)]
-        + ["-af", f"volume=-20dB,{fade}{delay},apad=whole_dur={seconds}{extra_filter}"]
-        + [str(stem)],
-        check=True,
-    )
-    mp4 = tmp_path / "episode.mp4"
-    subprocess.run(
-        ["ffmpeg", "-v", "error", "-y", "-f", "lavfi"]
-        + ["-i", f"color=black:s=64x64:r={FPS}:d={seconds}", "-i", str(stem)]
-        + ["-c:v", "libx264", "-c:a", "aac", "-b:a", "192k", str(mp4)],
-        check=True,
-    )
-    return mp4, stem
+def public(tmp_path):
+    (tmp_path / "public" / "music").mkdir(parents=True)
+    track(tmp_path / "public" / "music")
+    return tmp_path / "public"
+
+
+def plays(start, end, track_frames=90, overlap=30):
+    """和 video/src/music/crossfade.ts 的 musicPlays 一样排出每次循环（测试里照着写）。"""
+    result, f = [], start
+    while f < end:
+        loops = f + track_frames < end
+        result.append(
+            {
+                "from": f,
+                "to": min(f + track_frames, end),
+                "fadeIn": {"from": f, "to": f + overlap} if result else None,
+                "fadeOut": (
+                    {"from": f + track_frames - overlap, "to": f + track_frames}
+                    if loops
+                    else None
+                ),
+            }
+        )
+        if not loops:
+            break
+        f += track_frames - overlap
+    return result
 
 
 def plan(frames, start=0, end=None):
@@ -234,72 +235,165 @@ def plan(frames, start=0, end=None):
             "startFrame": start,
             "endFrame": end,
             "fadeFrom": end - 60,
-            "loopFrames": 15,
+            "trackFrames": 90,
+            "plays": plays(start, end),
             "volumeDb": -20,
         },
     }
 
 
-def public(tmp_path):
-    (tmp_path / "public" / "music").mkdir(parents=True)
-    track(tmp_path / "public" / "music")
-    return tmp_path / "public"
+def render(tmp_path, source, frames, extra_filter="", start=0, end=None, fade=True):
+    """不经过 Remotion，用 ffmpeg 自己的交叉淡化（acrossfade，曲线 qsin：等功率）把曲子
+    循环成配乐声轨：从第 `start` 帧放到第 `end` 帧，每次重叠 1 秒，音量 -20 dB，`end` 之前
+    60 帧线性淡出到 0；其余是静音，一共 `frames` 帧。再和黑画面合成成片。
+
+    音量像 Remotion 那样每帧一级、取整到 1/97（`volume` 滤镜按 1600 个采样一包逐包求值），
+    `fade=False` 时不淡出、音量是不取整的 0.1。"""
+    seconds = frames / FPS
+    end = frames if end is None else end
+    music_seconds = (end - start) / FPS
+    copies = len(plays(start, end))
+    inputs = []
+    for _ in range(copies):
+        inputs += ["-i", str(source)]
+    chain = "[0:a]"
+    graph = []
+    for i in range(1, copies):
+        graph.append(f"{chain}[{i}:a]acrossfade=d=1:c1=qsin:c2=qsin[x{i}]")
+        chain = f"[x{i}]"
+    frames_of_music = end - start
+    volume = (
+        f"asetnsamples=n={PER_FRAME}:p=0,volume=eval=frame:volume="
+        f"'round(97*0.1*clip(({frames_of_music}-floor(t*{FPS}+0.5))/60,0,1))/97'"
+        if fade
+        else "volume=0.1"
+    )
+    delay = f",adelay={round(start / FPS * 1000)}:all=1" if start else ""
+    graph.append(
+        f"{chain}atrim=0:{music_seconds},{volume}{delay},"
+        f"apad=whole_dur={seconds}{extra_filter}[out]"
+    )
+    stem = tmp_path / "stem.wav"
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-y"]
+        + inputs
+        + ["-filter_complex", ";".join(graph), "-map", "[out]", "-ac", "2"]
+        + [str(stem)],
+        check=True,
+    )
+    mp4 = tmp_path / "episode.mp4"
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-y", "-f", "lavfi"]
+        + ["-i", f"color=black:s=64x64:r={FPS}:d={seconds}", "-i", str(stem)]
+        + ["-c:v", "libx264", "-c:a", "aac", "-b:a", "192k", str(mp4)],
+        check=True,
+    )
+    return mp4, stem
 
 
-def test_a_cleanly_looped_and_faded_music_bed_passes(tmp_path):
+def test_the_reference_crossfades_each_loop_and_fades_out(tmp_path):
     public_dir = public(tmp_path)
-    mp4, stem = render(tmp_path, public_dir / "music" / "track.wav", 120)
+    out = tmp_path / "reference.wav"
 
-    report = check_music(mp4, stem, plan(120), public_dir)
+    music_reference(plan(200, start=20)["music"], 200, FPS, public_dir, out)
+    levels = frame_levels(out, FPS)
+    track_db = np.median(frame_levels(public_dir / "music" / "track.wav", FPS))
+
+    assert len(levels) == 200
+    # 片头期间没有配乐
+    assert all(db == float("-inf") for db in levels[:20])
+    # 音量 -20 dB（Remotion 的音量取整：0.1 → 10/97，约 +0.26 dB；单声道曲子转成立体声
+    # 每个声道再低 3 dB，和 Remotion 渲染出来的一样）
+    steady = np.median(levels[20:80])
+    assert steady == pytest.approx(track_db - 20 + 0.26 - 3.01, abs=0.3)
+    # 交叉淡化处（第 80–109 帧；第 140–169 帧的那一处已经在淡出里）和别处一样响
+    assert all(abs(db - steady) < 1.0 for db in levels[80:110])
+    # 最后 60 帧淡出：最后一帧比整体低 30 dB 以上
+    assert levels[199] < steady - 30
+
+
+def test_the_reference_places_each_play_at_a_whole_millisecond_like_remotion(tmp_path):
+    # Remotion 用 adelay 把每份音频放到整毫秒上：第 1 帧是 33.33 毫秒，放在第 33 毫秒，
+    # 也就是第 33 × 48 = 1584 个采样（不是 1600）
+    public_dir = public(tmp_path)
+    out = tmp_path / "reference.wav"
+
+    music_reference(plan(200, start=1)["music"], 200, FPS, public_dir, out)
+    raw = subprocess.run(
+        ["ffmpeg", "-v", "error", "-i", str(out), "-f", "f32le", "-"],
+        capture_output=True,
+        check=True,
+    ).stdout
+    samples = np.frombuffer(raw, dtype="<f4").reshape(-1, 2)
+
+    assert np.flatnonzero(np.abs(samples[:, 0]) > 0)[0] == 1584
+
+
+def test_a_cleanly_crossfaded_and_faded_music_bed_passes(tmp_path):
+    public_dir = public(tmp_path)
+    mp4, stem = render(tmp_path, public_dir / "music" / "track.wav", 200)
+
+    report = check_music(mp4, stem, plan(200), public_dir)
 
     assert report.problems == []
-    # 120 帧里 15 帧一循环：接缝在第 15、30、……、105 帧，逐个列出
+    # 3 秒的曲子每 60 帧（2 秒）循环一次，交叉淡化在第 60–89、120–149 帧
     assert [line.split("（")[0] for line in report.seams] == [
-        f"接缝第 {f} 帧" for f in range(15, 120, 15)
+        "交叉淡化第 60–89 帧",
+        "交叉淡化第 120–149 帧",
     ]
 
 
-def test_a_gap_at_a_seam_is_reported(tmp_path):
+def test_a_gap_at_a_crossfade_is_reported(tmp_path):
     public_dir = public(tmp_path)
-    # 第 30 帧（1.0 秒）的接缝处掉了 50 毫秒
-    gap = ",volume=enable='between(t,1.0,1.05)':volume=0"
-    mp4, stem = render(tmp_path, public_dir / "music" / "track.wav", 120, gap)
+    # 第 60–89 帧（2–3 秒）的交叉淡化里掉了 50 毫秒
+    gap = ",volume=enable='between(t,2.5,2.55)':volume=0"
+    mp4, stem = render(tmp_path, public_dir / "music" / "track.wav", 200, gap)
 
-    report = check_music(mp4, stem, plan(120), public_dir)
+    report = check_music(mp4, stem, plan(200), public_dir)
 
-    assert any("第 30" in problem for problem in report.problems)
-    assert any("配乐声轨在接缝附近 1.0" in problem for problem in report.problems)
-    assert any("成片在接缝附近" in problem for problem in report.problems)
+    assert any(problem.startswith("第 75") for problem in report.problems)
+    assert any("配乐声轨在交叉淡化附近 2.5" in problem for problem in report.problems)
+    assert any("成片在交叉淡化附近" in problem for problem in report.problems)
+
+
+def test_a_missing_fade_out_is_reported(tmp_path):
+    public_dir = public(tmp_path)
+    mp4, stem = render(tmp_path, public_dir / "music" / "track.wav", 200, fade=False)
+
+    report = check_music(mp4, stem, plan(200), public_dir)
+
+    assert any("偏了 +" in problem for problem in report.problems)
 
 
 def test_music_shorter_than_the_video_is_reported(tmp_path):
     public_dir = public(tmp_path)
-    mp4, stem = render(tmp_path, public_dir / "music" / "track.wav", 120, ",atrim=0:3")
+    mp4, stem = render(tmp_path, public_dir / "music" / "track.wav", 200, ",atrim=0:3")
 
-    report = check_music(mp4, stem, plan(120), public_dir)
+    report = check_music(mp4, stem, plan(200), public_dir)
 
     assert any(problem.startswith("音频流 3.0") for problem in report.problems)
 
 
 def test_music_starting_after_the_intro_passes(tmp_path):
-    # 片头（#50）占前 30 帧，配乐从第 30 帧起循环，接缝跟着后移
+    # 片头（#50）占前 30 帧，配乐从第 30 帧起循环，交叉淡化跟着后移
     public_dir = public(tmp_path)
-    mp4, stem = render(tmp_path, public_dir / "music" / "track.wav", 150, start=30)
+    mp4, stem = render(tmp_path, public_dir / "music" / "track.wav", 230, start=30)
 
-    report = check_music(mp4, stem, plan(150, start=30), public_dir)
+    report = check_music(mp4, stem, plan(230, start=30), public_dir)
 
     assert report.problems == []
     assert [line.split("（")[0] for line in report.seams] == [
-        f"接缝第 {f} 帧" for f in range(45, 150, 15)
+        "交叉淡化第 90–119 帧",
+        "交叉淡化第 150–179 帧",
     ]
 
 
 def test_music_playing_during_the_intro_is_reported(tmp_path):
     # 排期说配乐从第 30 帧开始，渲染出来却从第 0 帧就有
     public_dir = public(tmp_path)
-    mp4, stem = render(tmp_path, public_dir / "music" / "track.wav", 150)
+    mp4, stem = render(tmp_path, public_dir / "music" / "track.wav", 230)
 
-    report = check_music(mp4, stem, plan(150, start=30), public_dir)
+    report = check_music(mp4, stem, plan(230, start=30), public_dir)
 
     assert any(
         problem.startswith("片头期间（第 0–29 帧）配乐声轨就有声音")
@@ -308,26 +402,61 @@ def test_music_playing_during_the_intro_is_reported(tmp_path):
 
 
 def test_music_ending_where_the_outro_starts_passes(tmp_path):
-    # 片尾（#51）占最后 30 帧：配乐在第 120 帧（正文结束）前淡完，片尾期间没有配乐
+    # 片尾（#51）占最后 30 帧：配乐在第 200 帧（正文结束）前淡完，片尾期间没有配乐
     public_dir = public(tmp_path)
-    mp4, stem = render(tmp_path, public_dir / "music" / "track.wav", 150, end=120)
+    mp4, stem = render(tmp_path, public_dir / "music" / "track.wav", 230, end=200)
 
-    report = check_music(mp4, stem, plan(150, end=120), public_dir)
+    report = check_music(mp4, stem, plan(230, end=200), public_dir)
 
     assert report.problems == []
-    assert [line.split("（")[0] for line in report.seams] == [
-        f"接缝第 {f} 帧" for f in range(15, 120, 15)
-    ]
 
 
 def test_music_playing_during_the_outro_is_reported(tmp_path):
-    # 排期说配乐在第 120 帧结束，渲染出来却一直放到最后
+    # 排期说配乐在第 200 帧结束，渲染出来却一直放到最后
     public_dir = public(tmp_path)
-    mp4, stem = render(tmp_path, public_dir / "music" / "track.wav", 150)
+    mp4, stem = render(tmp_path, public_dir / "music" / "track.wav", 230)
 
-    report = check_music(mp4, stem, plan(150, end=120), public_dir)
+    report = check_music(mp4, stem, plan(230, end=200), public_dir)
 
     assert any(
-        problem.startswith("片尾期间（第 120–149 帧）配乐声轨还有声音")
+        problem.startswith("片尾期间（第 200–229 帧）配乐声轨还有声音")
         for problem in report.problems
+    )
+
+
+def test_remotion_like_volume_steps_slightly_out_of_line_with_the_reference_pass(
+    tmp_path,
+):
+    """Remotion 的音量是每帧一级台阶（取整到 1/97，按帧中点、按音频包切换），台阶边上的
+    帧和参照对不齐。照这个样子造一份声轨（台阶早半帧），再整体错开 16 个采样（#50、#51 里
+    旧的参照没按整毫秒放，就差这么多，淡出检查因此报了「回升」），检查应当通过。"""
+    public_dir = public(tmp_path)
+    music = plan(200)["music"]
+    reference = tmp_path / "reference.wav"
+    music_reference(music, 200, FPS, public_dir, reference)
+    clean = tmp_path / "clean.wav"
+    music_reference(music, 200, FPS, public_dir, clean, lead_frames=0.5)
+    raw = subprocess.run(
+        ["ffmpeg", "-v", "error", "-i", str(clean), "-f", "f32le", "-"],
+        capture_output=True,
+        check=True,
+    ).stdout
+    samples = np.frombuffer(raw, dtype="<f4").reshape(-1, 2)
+    shifted = np.concatenate([np.zeros((16, 2), "<f4"), samples[:-16]])
+    stem = tmp_path / "stem.wav"
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-y", "-f", "f32le", "-ar", str(SAMPLE_RATE)]
+        + ["-ac", "2", "-i", "-", "-c:a", "pcm_f32le", str(stem)],
+        input=shifted.tobytes(),
+        check=True,
+    )
+
+    assert (
+        music_problems(
+            frame_levels(stem, FPS),
+            frame_levels(reference, FPS),
+            start=0,
+            end=200,
+        )
+        == []
     )
