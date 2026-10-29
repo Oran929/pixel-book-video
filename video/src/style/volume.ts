@@ -1,4 +1,4 @@
-// 音量（#37）：旁白、音效、配乐三者的音量放在一处，到人工关口 3 再调。
+// 音量（#37）：旁白、音效、配乐和片头片尾的音量放在一处，到人工关口 3 再调。
 // 用 dB 写（相对旁白），换算成 Remotion `volume` 要的 0–1 线性值，以旁白为 1。
 
 /** 各路声音相对旁白的音量（dB，≤ 0） */
@@ -13,6 +13,8 @@ export const VOLUME_DB = {
   music: -20,
   /** 片头自带的音轨（#50）原样放：用户做好时已经压过峰值（约 -1 dBFS），到关口 3 再调 */
   intro: 0,
+  /** 片尾自带的音轨（#51，配音、配乐、音效一体）原样放：峰值约 -1 dBFS，到关口 3 再调 */
+  outro: 0,
 } as const;
 
 /** dB → 线性增益：0 dB 是 1，-20 dB 是 0.1 */
@@ -24,4 +26,5 @@ export const VOLUME = {
   sfx: decibelsToGain(VOLUME_DB.sfx),
   music: decibelsToGain(VOLUME_DB.music),
   intro: decibelsToGain(VOLUME_DB.intro),
+  outro: decibelsToGain(VOLUME_DB.outro),
 } as const;

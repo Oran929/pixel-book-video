@@ -14,10 +14,14 @@ import { Subtitle } from "../components/resident/Subtitle";
 import { COLOR } from "../style/style";
 import { VOLUME } from "../style/volume";
 import { EpisodeMusic } from "../music/EpisodeMusic";
-import { IntroWithAudio } from "../intro/IntroWithAudio";
+import { BookendWithAudio } from "../bookend/BookendWithAudio";
+import { INTRO_COMPONENTS } from "../intro/intro-components";
+import { type IntroId, INTROS } from "../intro/intros";
+import { OUTRO_COMPONENTS } from "../outro/outro-components";
+import { type OutroId, OUTROS } from "../outro/outros";
 import { type MusicPlan, planEpisode } from "./episode-plan";
 import type { Cue } from "./storyboard";
-import { lineAt, showsResidents, type Timeline } from "./timeline";
+import { bodyEndFrame, lineAt, showsResidents, type Timeline } from "./timeline";
 
 // 合成清单和分镜由 `pixelbook voice` / `pixelbook stage` 复制到 video/public/episode/
 const MANIFEST_FILE = "episode/episode.json";
@@ -32,6 +36,9 @@ export type EpisodeProps = {
   sounds: SoundCue[];
   /** 配乐；没有分镜（字幕版）时为 null，不放配乐 */
   music: MusicPlan | null;
+  /** 片头、片尾（登记表的 ID，项目配置选的）；不用时为 null */
+  intro: IntroId | null;
+  outro: OutroId | null;
 };
 
 const readJson = async (file: string, signal: AbortSignal) => {
@@ -55,17 +62,17 @@ export const calculateEpisodeMetadata: CalculateMetadataFunction<
     );
   }
   const storyboardData = await readJson(STORYBOARD_FILE, abortSignal);
-  const { manifest, timeline, cues, sounds, music } = planEpisode(
+  const { manifest, timeline, cues, sounds, music, intro, outro } = planEpisode(
     manifestData,
     storyboardData,
   );
   return {
     durationInFrames: timeline.totalFrames,
-    props: { title: manifest.title, timeline, cues, sounds, music },
+    props: { title: manifest.title, timeline, cues, sounds, music, intro, outro },
   };
 };
 
-/** 主题：片头期间不显示（spec #16 修订二） */
+/** 主题：片头、片尾期间不显示（spec #16 修订二、修订三） */
 const CurrentTitle: React.FC<{ title: string; timeline: Timeline | null }> = ({
   title,
   timeline,
@@ -76,10 +83,11 @@ const CurrentTitle: React.FC<{ title: string; timeline: Timeline | null }> = ({
   return <EpisodeTitle title={title} />;
 };
 
-/** 当前这句旁白的字幕（两句之间的停顿里继续显示上一句；片头期间还没有旁白，不显示） */
+/** 当前这句旁白的字幕（两句之间的停顿里继续显示上一句；片头、片尾期间不显示） */
 export const CurrentSubtitle: React.FC<{ timeline: Timeline }> = ({ timeline }) => {
-  const line = lineAt(timeline, useCurrentFrame());
-  return line ? <Subtitle text={line.text} /> : null;
+  const frame = useCurrentFrame();
+  const line = lineAt(timeline, frame);
+  return line && showsResidents(timeline, frame) ? <Subtitle text={line.text} /> : null;
 };
 
 export const Episode: React.FC<EpisodeProps> = ({
@@ -88,6 +96,8 @@ export const Episode: React.FC<EpisodeProps> = ({
   cues,
   sounds,
   music,
+  intro,
+  outro,
 }) => (
   <AbsoluteFill style={{ backgroundColor: COLOR.background }}>
     <CurrentTitle title={title} timeline={timeline} />
@@ -104,12 +114,24 @@ export const Episode: React.FC<EpisodeProps> = ({
       </Sequence>
     ))}
     <SoundCues sounds={sounds} />
-    {music && timeline ? (
-      <EpisodeMusic music={music} totalFrames={timeline.totalFrames} />
-    ) : null}
+    {music ? <EpisodeMusic music={music} /> : null}
     {timeline ? <CurrentSubtitle timeline={timeline} /> : null}
-    {/* 片头盖在最上面；它期间没有字幕、主题和组件，正文从片头结束后开始 */}
-    {timeline && timeline.introFrames > 0 ? <IntroWithAudio /> : null}
+    {/* 片头片尾盖在最上面；它们期间没有字幕和主题，正文在片头结束后开始、片尾开始前结束 */}
+    {intro ? (
+      <BookendWithAudio
+        bookend={INTROS[intro]}
+        component={INTRO_COMPONENTS[intro]}
+        volume={VOLUME.intro}
+      />
+    ) : null}
+    {outro && timeline ? (
+      <BookendWithAudio
+        bookend={OUTROS[outro]}
+        component={OUTRO_COMPONENTS[outro]}
+        volume={VOLUME.outro}
+        from={bodyEndFrame(timeline)}
+      />
+    ) : null}
   </AbsoluteFill>
 );
 
@@ -117,7 +139,5 @@ export const Episode: React.FC<EpisodeProps> = ({
  * 只有配乐的声轨：和 Episode 同一份排期，不放旁白和音效。
  * 全长试验（#39）渲染它来单独检查配乐的循环接缝和淡出，免得旁白混在里面。
  */
-export const EpisodeMusicOnly: React.FC<EpisodeProps> = ({ timeline, music }) =>
-  music && timeline ? (
-    <EpisodeMusic music={music} totalFrames={timeline.totalFrames} />
-  ) : null;
+export const EpisodeMusicOnly: React.FC<EpisodeProps> = ({ music }) =>
+  music ? <EpisodeMusic music={music} /> : null;

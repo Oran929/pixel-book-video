@@ -1,5 +1,4 @@
 // 节奏产物：打点时间表、总时长报告。都由时间轴算出，这里只有纯函数。
-import { OUTRO_SEGMENT } from "./manifest";
 import type { Timeline } from "./timeline";
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -16,22 +15,21 @@ export const formatSegmentStart = (seconds: number): string => {
 /** 片头在打点时间表里的标题 */
 export const INTRO_TITLE = "片头";
 
-/** 时间轴里片头的帧数可以不写（只有正文的时间轴），当作 0 */
-type IntroFrames = Partial<Pick<Timeline, "introFrames">>;
+/** 时间轴里片头片尾的帧数可以不写（只有正文的时间轴），当作 0 */
+type BookendFrames = Partial<Pick<Timeline, "introFrames" | "outroFrames">>;
 
 /**
  * 打点时间表 `segments.txt` 的内容：每段一行 `00:00 段标题`，可直接贴到视频平台的分段设置。
  * 有片头时第一行是 `00:00 片头`：平台的分段要从 00:00 开始，正文各段写真实的开始时间（#50）。
- * 固定片尾（ADR-0010）每期都一样，不列。
+ * 片尾（#51）每期都一样，不列。
  */
 export const segmentsText = ({
   fps,
   segments,
   introFrames = 0,
-}: Pick<Timeline, "fps" | "segments"> & IntroFrames): string =>
+}: Pick<Timeline, "fps" | "segments"> & BookendFrames): string =>
   (introFrames > 0 ? `${formatSegmentStart(0)} ${INTRO_TITLE}\n` : "") +
   segments
-    .filter((s) => s.id !== OUTRO_SEGMENT)
     .map((s) => `${formatSegmentStart(s.startFrame / fps)} ${s.title}\n`)
     .join("");
 
@@ -65,11 +63,11 @@ export type DurationReport = {
   verdict: DurationVerdict;
   /** `verdict` 的说明文字，例如"在 4:00–6:00 之内" */
   verdictText: string;
-  /** 片头（#50）：第 0 帧到正文开始；时间轴里没有片头时为 null */
+  /** 片头（#50）：第 0 帧到正文开始；不用片头时为 null */
   intro: PartDuration | null;
-  /** 正文：从片头结束到片尾这一段开始（含片尾前的停顿）；没有片尾时到最后一帧 */
+  /** 正文：从片头结束到片尾开始（最后一句音频结束）；没有片头片尾时就是全部 */
   body: PartDuration;
-  /** 固定片尾（ADR-0010）：片尾这一段开始到最后一帧；时间轴里没有片尾时为 null */
+  /** 片尾（#51）：最后 `outroFrames` 帧；不用片尾时为 null */
   outro: PartDuration | null;
 };
 
@@ -91,9 +89,9 @@ export const partsText = ({ intro, body, outro }: DurationReport): string =>
 export const durationReport = ({
   fps,
   totalFrames,
-  segments,
   introFrames = 0,
-}: Pick<Timeline, "fps" | "totalFrames" | "segments"> & IntroFrames): DurationReport => {
+  outroFrames = 0,
+}: Pick<Timeline, "fps" | "totalFrames"> & BookendFrames): DurationReport => {
   const seconds = totalFrames / fps;
   const whole = Math.floor(seconds);
   const verdict: DurationVerdict =
@@ -106,14 +104,13 @@ export const durationReport = ({
     seconds: frames / fps,
     text: minutesSeconds(Math.floor(frames / fps)),
   });
-  const outroStart = segments.find((s) => s.id === OUTRO_SEGMENT)?.startFrame;
   return {
     seconds,
     text: minutesSeconds(whole),
     verdict,
     verdictText: VERDICT_TEXT[verdict],
     intro: introFrames > 0 ? part(introFrames) : null,
-    body: part((outroStart ?? totalFrames) - introFrames),
-    outro: outroStart === undefined ? null : part(totalFrames - outroStart),
+    body: part(totalFrames - introFrames - outroFrames),
+    outro: outroFrames > 0 ? part(outroFrames) : null,
   };
 };

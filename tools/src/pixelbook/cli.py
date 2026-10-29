@@ -110,7 +110,7 @@ def _verifier() -> Verifier:
 
 
 def _duration_parts(duration: dict[str, Any]) -> str:
-    """片头、正文、片尾分开写（时间轴导出命令算好的，ADR-0010、#50）；都没有时不写。
+    """片头、正文、片尾分开写（时间轴导出命令算好的，#50、#51）；都没有时不写。
 
     写法和时间轴导出命令的 `partsText` 相同。
     """
@@ -462,7 +462,8 @@ def _run_music_trial(script: Path, draft: bool) -> int:
     music = timeline["music"]
     print(
         f"\n配乐 {music['track']}：循环 {music['loopFrames']} 帧，"
-        f"第 {music['fadeFrom']} 帧起淡出；配乐声轨 {stem}"
+        f"第 {music['fadeFrom']} 帧起淡出，到第 {music['endFrame']} 帧（片尾开始）放完；"
+        f"配乐声轨 {stem}"
     )
     for line in report.seams:
         print(f"  {line}")

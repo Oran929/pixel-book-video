@@ -4,8 +4,9 @@ import { VOLUME } from "../style/volume";
 import { loopFrames, MUSIC } from "./tracks";
 
 /**
- * 配乐：从 `startFrame`（片头结束）起循环播放到最后一帧，从 `fadeFrom` 帧起线性淡出，
- * 最后一帧之后归零。片头自带音轨，配乐不覆盖片头（#50）。
+ * 配乐：从 `startFrame`（片头结束）起循环播放到 `endFrame`（正文结束、片尾开始），
+ * 从 `fadeFrom` 帧起线性淡出，到 `endFrame` 归零，最后一次循环在 `endFrame` 截断。
+ * 片头片尾自带音轨，配乐不覆盖它们（#50、#51）。
  *
  * 循环不用 Html5Audio 的 `loop`：实测（#39 全长试验）它在每个接缝处有约一帧的静音，
  * 曲子还会每循环一次往后错约 3 毫秒。改成每次循环一个 Sequence，各放一份曲子；
@@ -16,25 +17,27 @@ import { loopFrames, MUSIC } from "./tracks";
  * Sequence 里的帧数，每次循环都归零，淡出会落在错误的位置（spec #16 修订）。
  * 这个组件要放在合成的顶层（不在 Sequence 里），`useCurrentFrame` 才是整期的帧数。
  */
-export const EpisodeMusic: React.FC<{ music: MusicPlan; totalFrames: number }> = ({
-  music,
-  totalFrames,
-}) => {
+export const EpisodeMusic: React.FC<{ music: MusicPlan }> = ({ music }) => {
   const volume = interpolate(
     useCurrentFrame(),
-    [music.fadeFrom, totalFrames],
+    [music.fadeFrom, music.endFrame],
     [VOLUME.music, 0],
     { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
   );
   const length = loopFrames(music.track);
   const starts = Array.from(
-    { length: Math.ceil((totalFrames - music.startFrame) / length) },
+    { length: Math.ceil((music.endFrame - music.startFrame) / length) },
     (_, i) => music.startFrame + i * length,
   );
   return (
     <>
       {starts.map((from) => (
-        <Sequence key={from} from={from} durationInFrames={length} layout="none">
+        <Sequence
+          key={from}
+          from={from}
+          durationInFrames={Math.min(length, music.endFrame - from)}
+          layout="none"
+        >
           <Html5Audio src={staticFile(MUSIC[music.track].file)} volume={volume} />
         </Sequence>
       ))}

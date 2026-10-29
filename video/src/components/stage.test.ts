@@ -53,8 +53,8 @@ const lamp = (triggers: Record<string, unknown>[], component = "Lamp") => {
       pauses: [],
     },
     DECLARATIONS,
-    // 帧数从 0 算起，不放片头
-    { intro: false },
+    // 帧数从 0 算起，不放片头片尾
+    { intro: null, outro: null },
   );
   return cues[0]!;
 };

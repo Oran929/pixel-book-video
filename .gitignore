@@ -33,5 +33,8 @@ video/public/episode/
 !voices/*.wav
 # 音效要提交（#37）：wav 和生成它的 jsfxr 参数放在一起
 !video/public/sfx/*.wav
-# 片头音轨要提交（#50）：由 video/src/intro/make_audio.py 生成，测试核对它和重新生成的一致
+# 片头片尾的音轨要提交（#50、#51）：由各自目录里的 make_audio.py 生成，测试核对它和重新生成的一致
 !video/public/intro/*.wav
+!video/public/outro/*.wav
+# 片尾的配音是用户录好的，音轨脚本读它们
+!video/src/outro/*/voice/*.wav

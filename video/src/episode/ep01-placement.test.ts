@@ -1,10 +1,10 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { planEpisode } from "./episode-plan";
-import { OUTRO_SEGMENT } from "./manifest";
 
 // ep01 摆放试验（#34）：在动画之前，先看 ch02 ep01 的 17 个画面能不能放进 12×6 网格。
-// 合成清单抄自 books/pragmatic-programmer/ch02/ep01/episode.json（gitignore），去掉了音频路径；
+// 合成清单抄自 books/pragmatic-programmer/ch02/ep01/episode.json（gitignore），去掉了音频路径
+// 和旧的 TTS 片尾段（#51 去掉了）；
 // 分镜是占位摆放，组件需求按 #13 评论里的清单。7 个组件都做完了（小人 #42 是最后一个），
 // 现在全部用组件注册表里真实的声明：格数按参数算，标签按字体度量检查，状态按声明核对。
 const read = (name: string) =>
@@ -17,10 +17,8 @@ const PLACEMENT = read("ep01-placement.storyboard.json");
 describe("ep01 摆放试验", () => {
   const plan = planEpisode(MANIFEST, PLACEMENT);
 
-  it("17 个画面（片尾除外）都摆了组件，越界和重叠检查全部通过", () => {
-    const scenes = plan.manifest.scenes
-      .filter((scene) => scene.segment !== OUTRO_SEGMENT)
-      .map((scene) => scene.id);
+  it("17 个画面都摆了组件，越界和重叠检查全部通过", () => {
+    const scenes = plan.manifest.scenes.map((scene) => scene.id);
     const placed = new Set(plan.cues.map((cue) => cue.key.split("/")[0]));
 
     expect(scenes).toHaveLength(17);

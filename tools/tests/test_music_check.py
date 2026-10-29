@@ -196,18 +196,21 @@ def sine_with(path, expr, seconds):
     return path
 
 
-def render(tmp_path, source, frames, extra_filter="", start=0):
-    """像 Remotion 那样从第 `start` 帧（片头结束）起把曲子循环到 `frames` 帧，
-    音量 -20 dB，最后 60 帧线性淡出到 0；`start` 之前是静音。"""
+def render(tmp_path, source, frames, extra_filter="", start=0, end=None):
+    """像 Remotion 那样从第 `start` 帧（片头结束）起把曲子循环到第 `end` 帧（片尾开始，
+    默认是最后一帧），音量 -20 dB，`end` 之前 60 帧线性淡出到 0；`start` 之前、`end`
+    之后是静音，成片一共 `frames` 帧。"""
     seconds = frames / FPS
-    music_seconds = (frames - start) / FPS
+    end = frames if end is None else end
+    music_seconds = (end - start) / FPS
     fade = f"afade=t=out:st={music_seconds - 2}:d=2:curve=tri"
     delay = f",adelay={round(start / FPS * 1000)}:all=1" if start else ""
     stem = tmp_path / "stem.wav"
     subprocess.run(
         ["ffmpeg", "-v", "error", "-y", "-stream_loop", "-1"]
         + ["-t", f"{music_seconds}", "-i", str(source)]
-        + ["-af", f"volume=-20dB,{fade}{delay}{extra_filter}", str(stem)],
+        + ["-af", f"volume=-20dB,{fade}{delay},apad=whole_dur={seconds}{extra_filter}"]
+        + [str(stem)],
         check=True,
     )
     mp4 = tmp_path / "episode.mp4"
@@ -220,7 +223,8 @@ def render(tmp_path, source, frames, extra_filter="", start=0):
     return mp4, stem
 
 
-def plan(frames, start=0):
+def plan(frames, start=0, end=None):
+    end = frames if end is None else end
     return {
         "fps": FPS,
         "totalFrames": frames,
@@ -228,7 +232,8 @@ def plan(frames, start=0):
             "track": "t",
             "file": "music/track.wav",
             "startFrame": start,
-            "fadeFrom": frames - 60,
+            "endFrame": end,
+            "fadeFrom": end - 60,
             "loopFrames": 15,
             "volumeDb": -20,
         },
@@ -298,5 +303,31 @@ def test_music_playing_during_the_intro_is_reported(tmp_path):
 
     assert any(
         problem.startswith("片头期间（第 0–29 帧）配乐声轨就有声音")
+        for problem in report.problems
+    )
+
+
+def test_music_ending_where_the_outro_starts_passes(tmp_path):
+    # 片尾（#51）占最后 30 帧：配乐在第 120 帧（正文结束）前淡完，片尾期间没有配乐
+    public_dir = public(tmp_path)
+    mp4, stem = render(tmp_path, public_dir / "music" / "track.wav", 150, end=120)
+
+    report = check_music(mp4, stem, plan(150, end=120), public_dir)
+
+    assert report.problems == []
+    assert [line.split("（")[0] for line in report.seams] == [
+        f"接缝第 {f} 帧" for f in range(15, 120, 15)
+    ]
+
+
+def test_music_playing_during_the_outro_is_reported(tmp_path):
+    # 排期说配乐在第 120 帧结束，渲染出来却一直放到最后
+    public_dir = public(tmp_path)
+    mp4, stem = render(tmp_path, public_dir / "music" / "track.wav", 150)
+
+    report = check_music(mp4, stem, plan(150, end=120), public_dir)
+
+    assert any(
+        problem.startswith("片尾期间（第 120–149 帧）配乐声轨还有声音")
         for problem in report.problems
     )

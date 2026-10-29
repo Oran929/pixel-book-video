@@ -63,7 +63,6 @@ describe("planEpisode: 组件上的显示文字", () => {
     ["s02-c02", "更容易改 还是更难改？", "逗号换成空白也算"],
     ["s01-c02", "提示14", "出自画面说明"],
     ["s01-c02", "提示１４", "全角数字经 NFKC 规范化后相同"],
-    ["outro-c01", "下一期见", "片尾画面对照片尾的旁白句"],
   ])("画面 %s 里「%s」通过（%s）", (scene, text) => {
     expect(() => signIn(scene, { text })).not.toThrow();
   });
@@ -77,10 +76,6 @@ describe("planEpisode: 组件上的显示文字", () => {
   it("出自别的画面的字报错", () => {
     // 「解耦」在 s01-c03 的画面说明里，不在 s05-c02
     expect(() => signIn("s05-c02", { text: "解耦" })).toThrow(/「解耦」不在画面 s05-c02/);
-  });
-
-  it("片尾画面不对照别的画面", () => {
-    expect(() => signIn("outro-c01", { text: "DRY" })).toThrow(/「DRY」不在画面 outro-c01/);
   });
 
   it("一项显示文字不能拼接两处出处", () => {

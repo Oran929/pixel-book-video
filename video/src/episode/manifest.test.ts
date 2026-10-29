@@ -62,11 +62,11 @@ describe("parseManifest", () => {
     expect(message).not.toContain("--revoice");
   });
 
-  it("accepts an empty description (the outro scene has none)", () => {
-    const outro = {
+  it("accepts an empty description", () => {
+    const blank = {
       ...VALID,
       scenes: [{ id: "s01-c01", segment: "s01", description: "" }],
     };
-    expect(parseManifest(outro)).toEqual(outro);
+    expect(parseManifest(blank)).toEqual(blank);
   });
 });

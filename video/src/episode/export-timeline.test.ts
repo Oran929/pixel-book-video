@@ -7,8 +7,9 @@ import { exportTimeline } from "./export-timeline";
 import type { EpisodeManifest } from "./manifest";
 import { computeTimeline, DEFAULT_PAUSES } from "./timeline";
 
-// 成片最前面的片头（#50）：导出的时间轴和渲染一样，正文接在它后面
-const INTRO_FRAMES = 422;
+// 项目配置选的片头（#50，422 帧）和片尾（#51，324 帧）：导出的时间轴和渲染一样，
+// 正文接在片头后面，片尾接在正文后面
+const BOOKENDS = { introFrames: 422, outroFrames: 324 };
 
 const line = (id: string, scene: string, seconds: number) => ({
   id,
@@ -73,18 +74,17 @@ describe("exportTimeline", () => {
   it("writes timeline.json equal to computing the timeline directly, plus the duration report", () => {
     exportTimeline(episode);
 
-    // 片头 422 帧（#50），正文 61 + 9（句间）+ 45 + 24（换画面）+ 75 = 214 帧 ≈ 7.13 秒
+    // 片头 422 帧，正文 61 + 9（句间）+ 45 + 24（换画面）+ 75 = 214 帧 ≈ 7.13 秒，片尾 324 帧
     expect(read(join(episode, "timeline.json"))).toEqual({
-      ...computeTimeline(MANIFEST, DEFAULT_PAUSES, VIDEO.fps, {}, INTRO_FRAMES),
+      ...computeTimeline(MANIFEST, DEFAULT_PAUSES, VIDEO.fps, {}, BOOKENDS),
       duration: {
-        seconds: (422 + 214) / 30,
-        text: "0:21",
+        seconds: (422 + 214 + 324) / 30,
+        text: "0:32",
         verdict: "too-short",
         verdictText: "太短（目标 4:00–6:00，只报告）",
         intro: { seconds: 422 / 30, text: "0:14" },
-        // 这份合成清单没有片尾这一段
         body: { seconds: 214 / 30, text: "0:07" },
-        outro: null,
+        outro: { seconds: 10.8, text: "0:10" },
       },
       // 没有分镜：不放音效，也不放配乐
       sounds: [],
@@ -108,12 +108,15 @@ describe("exportTimeline", () => {
 
     exportTimeline(episode);
 
-    // 片头 422 帧之后才放配乐；共 422 + 61 + 36 + 45 + 24 + 75 = 663 帧，最后 60 帧淡出；
+    // 片头 422 帧之后才放配乐，正文到第 422 + 61 + 36 + 45 + 24 + 75 = 663 帧结束，
+    // 在这之前的 60 帧淡出，片尾（324 帧）期间不放；
     // 文件、循环长度（Pixel Sprinter 34.3 秒 = 1029 帧）和音量供全长试验找接缝、做参照
     expect(read(join(episode, "timeline.json"))).toMatchObject({
+      totalFrames: 663 + 324,
       music: {
         track: "pixel-sprinter",
         startFrame: 422,
+        endFrame: 663,
         fadeFrom: 603,
         file: "music/pixel-sprinter.ogg",
         loopFrames: 1029,
@@ -141,7 +144,7 @@ describe("exportTimeline", () => {
     exportTimeline(episode);
 
     expect(read(join(episode, "timeline.json"))).toMatchObject(
-      computeTimeline(MANIFEST, DEFAULT_PAUSES, VIDEO.fps, { "s01-l01": 1.2 }, INTRO_FRAMES),
+      computeTimeline(MANIFEST, DEFAULT_PAUSES, VIDEO.fps, { "s01-l01": 1.2 }, BOOKENDS),
     );
   });
 
@@ -155,7 +158,7 @@ describe("exportTimeline", () => {
     });
 
     expect(read(out)).toMatchObject(
-      computeTimeline(MANIFEST, DEFAULT_PAUSES, VIDEO.fps, {}, INTRO_FRAMES),
+      computeTimeline(MANIFEST, DEFAULT_PAUSES, VIDEO.fps, {}, BOOKENDS),
     );
     expect(existsSync(join(episode, "timeline.json"))).toBe(false);
     // 打点时间表只跟期目录里的 timeline.json 一起写，试听用的时间轴不写

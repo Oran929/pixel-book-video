@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { declareComponent } from "../components/declaration";
-import { planEpisode as planWithIntro } from "./episode-plan";
+import { planEpisode as planWithBookends } from "./episode-plan";
 import { lineAt, showsResidents } from "./timeline";
 
-// 除了最后的「片头」一组，这里的测试只看正文：不放片头，帧数从 0 算起
-const planEpisode = (...[manifest, storyboard, components]: Parameters<typeof planWithIntro>) =>
-  planWithIntro(manifest, storyboard, components, { intro: false });
+// 除了最后的「片头和片尾」一组，这里的测试只看正文：片头片尾都选「不用」，帧数从 0 算起
+const planEpisode = (...[manifest, storyboard, components]: Parameters<typeof planWithBookends>) =>
+  planWithBookends(manifest, storyboard, components, { intro: null, outro: null });
 
 const line = (id: string, scene: string, seconds: number) => ({
   id,
@@ -744,6 +744,7 @@ describe("planEpisode: music", () => {
     expect(planEpisode(MANIFEST, scored("pixel-sprinter"), DECLARATIONS).music).toEqual({
       track: "pixel-sprinter",
       startFrame: 0,
+      endFrame: 213,
       fadeFrom: 153,
     });
   });
@@ -1496,41 +1497,48 @@ describe("planEpisode: the mascot", () => {
   });
 });
 
-// 片头（#50，spec #16 修订二）：每期最前面固定 422 帧，正文、组件、音效整体后移，
-// 配乐从片头结束后开始。下面的期望值按「不放片头时」的帧数（上面各条测试的口径）加 422 写
-describe("planEpisode: intro", () => {
-  const INTRO_FRAMES = 422;
-  const withIntro = (storyboard: unknown) =>
-    planWithIntro(MANIFEST, storyboard, DECLARATIONS);
+// 片头和片尾（#50、#51，spec #16 修订二、修订三）：项目配置选的片头（load-pixel-book，422 帧）
+// 放在最前面，正文、组件、音效整体后移；选的片尾（bye-bye，324 帧）接在正文最后一句之后。
+// 配乐从片头结束放到正文结束，在正文最后 2 秒淡出，不覆盖片头和片尾。
+// 下面的期望值按「都不用时」的帧数（上面各条测试的口径）写：正文用默认停顿共 213 帧，
+// 入场第 138 帧、退场第 168 帧（灯到第 180 帧）
+describe("planEpisode: intro and outro", () => {
   const scored = lampScene(
     { action: "enter", offset: 0 },
     { action: "exit", offset: 1 },
   );
+  const plan = (options?: Parameters<typeof planWithBookends>[3]) =>
+    planWithBookends(MANIFEST, scored, DECLARATIONS, options);
 
-  it("puts the 422-frame intro first: total frames are intro plus body", () => {
-    // 正文用默认停顿共 213 帧
-    const plan = withIntro(scored);
-    expect(plan.timeline.introFrames).toBe(INTRO_FRAMES);
-    expect(plan.timeline.totalFrames).toBe(INTRO_FRAMES + 213);
+  it("uses the project's intro and outro by default: total = intro + body + outro", () => {
+    const { timeline } = plan();
+    expect(timeline).toMatchObject({ introFrames: 422, outroFrames: 324 });
+    expect(timeline.totalFrames).toBe(422 + 213 + 324);
   });
 
-  it("starts the first line, scene and segment right after the intro", () => {
-    const { timeline } = withIntro(scored);
+  it("starts the body right after the intro and ends the last scene and segment where the outro starts", () => {
+    const { timeline } = plan();
     expect(timeline.lines[0]).toMatchObject({ startFrame: 422, endFrame: 482 });
-    expect(timeline.scenes[0]!.startFrame).toBe(422);
-    expect(timeline.segments.map((s) => s.startFrame)).toEqual([422, 560]);
+    expect(timeline.lines.at(-1)!.endFrame).toBe(635);
+    expect(timeline.scenes.map((s) => [s.startFrame, s.endFrame])).toEqual([
+      [422, 560],
+      [560, 635],
+    ]);
+    expect(timeline.segments.map((s) => [s.startFrame, s.endFrame])).toEqual([
+      [422, 560],
+      [560, 635],
+    ]);
   });
 
-  it("shifts trigger frames and sound frames by 422", () => {
-    // 不放片头时：入场第 138 帧、退场第 168 帧，到第 180 帧
-    const [cue] = withIntro(scored).cues;
+  it("shifts trigger frames and sound frames by the intro", () => {
+    const [cue] = plan().cues;
     expect(cue).toMatchObject({
       startFrame: 560,
       endFrame: 602,
       enter: { frame: 560 },
       exit: { frame: 590 },
     });
-    const sounded = planWithIntro(
+    const sounded = planWithBookends(
       MANIFEST,
       lampScene(
         { action: "enter", offset: 0 },
@@ -1538,31 +1546,56 @@ describe("planEpisode: intro", () => {
       ),
       NOISY,
     );
-    // 不放片头时：入场第 138 帧、切换到 broken 第 168 帧
     expect(sounded.sounds.map((s) => s.frame)).toEqual([560, 590]);
   });
 
-  it("starts the music when the intro ends and still fades over the last 2 seconds", () => {
-    expect(withIntro(scored).music).toEqual({
+  it("plays the music from the end of the intro to the end of the body, fading over the body's last 2 seconds", () => {
+    expect(plan().music).toEqual({
       track: "pixel-sprinter",
       startFrame: 422,
-      fadeFrom: 422 + 213 - 60,
+      endFrame: 635,
+      fadeFrom: 635 - 60,
     });
   });
 
-  it("shows no subtitle and no title during the intro", () => {
-    const { timeline } = withIntro(scored);
-    expect(lineAt(timeline, 0)).toBeUndefined();
+  it("shows no subtitle and no title during the intro and the outro", () => {
+    const { timeline } = plan();
     expect(lineAt(timeline, 421)).toBeUndefined();
-    expect(lineAt(timeline, 422)?.id).toBe("s01-l01");
+    expect(showsResidents(timeline, 0)).toBe(false);
     expect(showsResidents(timeline, 421)).toBe(false);
     expect(showsResidents(timeline, 422)).toBe(true);
+    expect(showsResidents(timeline, 634)).toBe(true);
+    expect(showsResidents(timeline, 635)).toBe(false);
+    expect(showsResidents(timeline, 958)).toBe(false);
   });
 
-  it("can be left out (component sample pages have no intro)", () => {
-    const plan = planWithIntro(MANIFEST, scored, DECLARATIONS, { intro: false });
-    expect(plan.timeline.introFrames).toBe(0);
-    expect(plan.timeline.totalFrames).toBe(213);
-    expect(plan.music?.startFrame).toBe(0);
+  it("can leave out the intro: body from frame 0, triggers not shifted, outro still at the end", () => {
+    const p = plan({ intro: null });
+    expect(p.timeline).toMatchObject({ introFrames: 0, outroFrames: 324, totalFrames: 213 + 324 });
+    expect(p.cues[0]).toMatchObject({ enter: { frame: 138 }, exit: { frame: 168 } });
+    expect(p.music).toEqual({ track: "pixel-sprinter", startFrame: 0, endFrame: 213, fadeFrom: 153 });
+    expect(showsResidents(p.timeline, 0)).toBe(true);
+    expect(showsResidents(p.timeline, 213)).toBe(false);
+  });
+
+  it("can leave out the outro: the episode ends with the body's last line", () => {
+    const p = plan({ outro: null });
+    expect(p.timeline).toMatchObject({ introFrames: 422, outroFrames: 0, totalFrames: 422 + 213 });
+    expect(p.cues[0]).toMatchObject({ enter: { frame: 560 }, exit: { frame: 590 } });
+    expect(p.music).toEqual({ track: "pixel-sprinter", startFrame: 422, endFrame: 635, fadeFrom: 575 });
+    expect(showsResidents(p.timeline, 634)).toBe(true);
+  });
+
+  it("can leave out both (component sample pages)", () => {
+    const p = plan({ intro: null, outro: null });
+    expect(p.timeline).toMatchObject({ introFrames: 0, outroFrames: 0, totalFrames: 213 });
+    expect(p.cues[0]).toMatchObject({ enter: { frame: 138 }, exit: { frame: 168 } });
+  });
+
+  it("refuses an intro or outro that is not registered, listing the registered ones", () => {
+    expect(() => plan({ outro: "nope" as never })).toThrow("片尾 nope 没有登记；登记过的：bye-bye");
+    expect(() => plan({ intro: "nope" as never })).toThrow(
+      "片头 nope 没有登记；登记过的：load-pixel-book",
+    );
   });
 });

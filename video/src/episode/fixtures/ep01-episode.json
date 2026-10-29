@@ -21,10 +21,6 @@
     {
       "id": "s05",
       "title": "DRY 管的是知识"
-    },
-    {
-      "id": "outro",
-      "title": "片尾"
     }
   ],
   "scenes": [
@@ -112,11 +108,6 @@
       "id": "s05-c05",
       "segment": "s05",
       "description": "改一处时，代码、文档、数据库 Schema 要一起改"
-    },
-    {
-      "id": "outro-c01",
-      "segment": "outro",
-      "description": ""
     }
   ],
   "lines": [
@@ -721,27 +712,6 @@
       "text": "如果是，你的代码就不满足 DRY。",
       "audio": "",
       "seconds": 3.04
-    },
-    {
-      "id": "outro-l01",
-      "scene": "outro-c01",
-      "text": "本期先讲到这里，",
-      "audio": "",
-      "seconds": 1.28
-    },
-    {
-      "id": "outro-l02",
-      "scene": "outro-c01",
-      "text": "欢迎大家阅读原著了解更原汁原味的内容，",
-      "audio": "",
-      "seconds": 3.36
-    },
-    {
-      "id": "outro-l03",
-      "scene": "outro-c01",
-      "text": "我们下一期见",
-      "audio": "",
-      "seconds": 1.0294166666666666
     }
   ]
 }

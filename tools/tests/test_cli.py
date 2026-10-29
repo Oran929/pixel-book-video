@@ -8,7 +8,6 @@ import shutil
 
 import pytest
 import yaml
-from conftest import OUTRO
 
 from pixelbook import REPO_ROOT, cli
 from pixelbook.asr import FakeAsrEngine
@@ -112,8 +111,8 @@ def test_voice_uses_the_book_override(repo, engine, asr):
 
     assert cli.main(["voice", _script(repo)]) == 0
 
-    # 每句（包括片尾的三句）用一次音色
-    assert engine.voices == [YUJIE] * 4
+    # 每句用一次音色（片尾不再配音，#51）
+    assert engine.voices == [YUJIE]
     assert _locked_speaker(repo) == "Serena"
 
 
@@ -127,7 +126,7 @@ def test_voice_refuses_a_changed_voice_until_revoice(repo, engine, asr, capsys):
 
     assert cli.main(["voice", _script(repo), "--revoice"]) == 0
     assert _locked_speaker(repo) == "Serena"
-    assert engine.voices == [DEFAULT] * 4 + [YUJIE] * 4
+    assert engine.voices == [DEFAULT, YUJIE]
 
 
 def _mark_draft(repo):
@@ -151,7 +150,7 @@ def test_voice_with_draft_voices_a_draft_script(repo, engine, asr):
 
     assert cli.main(["voice", _script(repo), "--draft"]) == 0
 
-    assert engine.voices == [DEFAULT] * 4
+    assert engine.voices == [DEFAULT]
 
 
 def test_term_audition_uses_the_book_voice_without_guard_or_lock(repo, engine):
@@ -175,7 +174,7 @@ def test_voice_verifies_with_the_configured_asr_and_retries(repo, engine, asr, c
 
     assert [e.name for e in asr.engines] == ["whisper"]
     # max_retries: 1，一共生成两次
-    assert engine.texts == ["今天读一本 D R Y 的书"] * 2 + OUTRO
+    assert engine.texts == ["今天读一本 D R Y 的书"] * 2
     out = capsys.readouterr().out
     assert "1 句复核未通过" in out
     assert "s01-l01" in out
@@ -198,7 +197,7 @@ def test_voice_lists_lines_that_passed_only_on_pinyin(repo, engine, asr, capsys)
 
     assert cli.main(["voice", _script(repo)]) == 0
 
-    assert engine.texts == ["今天读一本 D R Y 的书", *OUTRO]
+    assert engine.texts == ["今天读一本 D R Y 的书"]
     out = capsys.readouterr().out
     assert "复核未通过" not in out
     assert "1 句靠拼音通过" in out
@@ -317,7 +316,7 @@ def test_render_passes_draft_through_to_the_voicing_step(repo, engine, asr, caps
     assert cli.main(["render", _script(repo), "--draft"]) == 1
 
     assert "第 2 步「时间轴」失败" in capsys.readouterr().out
-    assert engine.voices == [DEFAULT] * 4
+    assert engine.voices == [DEFAULT]
 
 
 def test_mix_without_out_refuses_a_timeline_outside_an_episode_dir(repo, capsys):

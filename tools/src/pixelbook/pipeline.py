@@ -13,7 +13,6 @@ from typing import Any
 from pixelbook.audio import wav_seconds
 from pixelbook.episode_path import EpisodePath
 from pixelbook.glyphs import missing_glyphs
-from pixelbook.outro import OutroError, with_outro
 from pixelbook.pronunciation import find_new_terms, spoken_text
 from pixelbook.script import DRAFT, Script, load_script
 from pixelbook.tts import TtsEngine
@@ -121,8 +120,6 @@ def voice_episode(
 ) -> VoicedEpisode:
     """为 `script_path` 这一期逐句配音，写出期目录里的合成清单和检查报告并返回。
 
-    旁白稿后面接上固定片尾（`outro.with_outro`）：合成清单的最后一段是片尾。
-
     配音前守卫比较书的音色 `settings.voice` 和书的锁定音色，不一致就拒绝，除非
     `settings.revoice`；配音完成后写入锁定。朗读文本按读音表生成（手写的
     `speech` 优先）。旁白稿是 `status: draft`（还没定稿）时拒绝配音，除非 `draft`。
@@ -175,18 +172,13 @@ def voice_episode(
 def _guarded_script(
     script_path: Path, pronunciation: dict[str, str], draft: bool
 ) -> Script:
-    """读旁白稿并接上片尾；草稿（除非 `draft`）、有新术语时拒绝配音。"""
+    """读旁白稿；草稿（除非 `draft`）、有新术语时拒绝配音。"""
     script = load_script(script_path)
     if script.status == DRAFT and not draft:
         raise PipelineError(
             f"{script_path}: 旁白稿还是 `status: {DRAFT}`（没有定稿），不配音；"
             "确实要给草稿配音，加 `--draft`"
         )
-    # 固定片尾接在旁白稿后面，和正文一样缺字检查、配音、复核，进合成清单（ADR-0010）
-    try:
-        script = with_outro(script)
-    except OutroError as error:
-        raise PipelineError(f"{script_path}: {error}") from error
     if terms := find_new_terms(script, pronunciation):
         raise PipelineError(new_terms_message(script_path, terms))
     return script
