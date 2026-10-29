@@ -11,7 +11,8 @@
     "timeline": "tsx src/episode/timeline-cli.ts",
     "sfx": "tsx src/sound/generate-sfx.ts",
     "music:intake": "tsx src/music/intake-music.ts",
-    "music:seams": "tsx src/music/check-seams.ts"
+    "music:seams": "tsx src/music/check-seams.ts",
+    "music:pick": "tsx src/music/pick-music-cli.ts"
   },
   "dependencies": {
     "@remotion/cli": "^4.0.539",

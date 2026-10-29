@@ -2,11 +2,16 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { declareComponent } from "../components/declaration";
 import { planEpisode as planWithBookends } from "./episode-plan";
+import { withEveryScene } from "./fixtures/every-scene";
 import { lineAt, showsResidents } from "./timeline";
 
-// 除了最后的「片头和片尾」一组，这里的测试只看正文：片头片尾都选「不用」，帧数从 0 算起
+// 除了最后的「片头和片尾」一组，这里的测试只看正文：片头片尾都选「不用」，帧数从 0 算起。
+// 分镜没写到的画面补一个占位组件（每个画面至少一个组件的检查本身见「every scene」两条）
 const planEpisode = (...[manifest, storyboard, components]: Parameters<typeof planWithBookends>) =>
-  planWithBookends(manifest, storyboard, components, { intro: null, outro: null });
+  planWithBookends(manifest, ...withEveryScene(manifest, storyboard, components), {
+    intro: null,
+    outro: null,
+  });
 
 const line = (id: string, scene: string, seconds: number) => ({
   id,
@@ -41,6 +46,18 @@ const MANIFEST = {
 
 const STORYBOARD = {
   scenes: [
+    {
+      scene: "s01-c01",
+      components: [
+        {
+          id: "block",
+          component: "PixelBlock",
+          props: { label: "方块", size: "medium", color: "blue" },
+          at: [0, 0],
+        },
+      ],
+      triggers: [{ target: "block", line: "s01-l01", offset: 0, action: "enter" }],
+    },
     {
       scene: "s02-c01",
       components: [
@@ -82,8 +99,9 @@ describe("planEpisode", () => {
     expect(plan.manifest.title).toBe("程序员修炼之道");
     // 分镜把第一句后的停顿改成 1.2 秒 = 36 帧（30fps）
     expect(gapAfterFirstLine(plan)).toBe(36);
-    // 触发在 s02-l01 开始后 0.5 秒 = 15 帧
+    // 方块在 s01-l01 开始时入场；DRY 在 s02-l01 开始后 0.5 秒 = 15 帧
     expect(plan.cues.map((cue) => cue.startFrame)).toEqual([
+      lineSpan(plan, "s01-l01").startFrame,
       lineSpan(plan, "s02-l01").startFrame + 15,
     ]);
   });
@@ -102,6 +120,24 @@ describe("planEpisode", () => {
     ) as unknown;
 
     expect(() => planEpisode(MANIFEST, bad)).toThrow(/Nope/);
+  });
+
+  // 每个画面至少一个组件（spec #16 用户故事 56）。片尾不再是画面（修订三、#51），没有例外
+  it("every scene: rejects a scene the storyboard leaves out", () => {
+    const withoutFirst = { ...STORYBOARD, scenes: STORYBOARD.scenes.slice(1) };
+
+    expect(() => planWithBookends(MANIFEST, withoutFirst)).toThrow(
+      /画面 s01-c01 没有组件/,
+    );
+  });
+
+  it("every scene: rejects a scene listed with no components", () => {
+    const empty = {
+      ...STORYBOARD,
+      scenes: [{ scene: "s01-c01", components: [], triggers: [] }, ...STORYBOARD.scenes.slice(1)],
+    };
+
+    expect(() => planEpisode(MANIFEST, empty)).toThrow(/画面 s01-c01 没有组件/);
   });
 });
 
@@ -416,7 +452,8 @@ describe("planEpisode: components on screen together must not overlap", () => {
   it("lets a component take the cells once the one before has finished exiting", () => {
     const plan = takingOver(42 / 30);
 
-    expect(plan.cues.map((cue) => [cue.startFrame, cue.endFrame])).toEqual([
+    const inScene = plan.cues.filter((cue) => cue.key.startsWith("s02-c01/"));
+    expect(inScene.map((cue) => [cue.startFrame, cue.endFrame])).toEqual([
       [138, 180],
       [180, 213],
     ]);
@@ -1508,7 +1545,7 @@ describe("planEpisode: intro and outro", () => {
     { action: "exit", offset: 1 },
   );
   const plan = (options?: Parameters<typeof planWithBookends>[3]) =>
-    planWithBookends(MANIFEST, scored, DECLARATIONS, options);
+    planWithBookends(MANIFEST, ...withEveryScene(MANIFEST, scored, DECLARATIONS), options);
 
   it("uses the project's intro and outro by default: total = intro + body + outro", () => {
     const { timeline } = plan();
@@ -1540,11 +1577,14 @@ describe("planEpisode: intro and outro", () => {
     });
     const sounded = planWithBookends(
       MANIFEST,
-      lampScene(
-        { action: "enter", offset: 0 },
-        { action: "state", offset: 1, state: "broken" },
+      ...withEveryScene(
+        MANIFEST,
+        lampScene(
+          { action: "enter", offset: 0 },
+          { action: "state", offset: 1, state: "broken" },
+        ),
+        NOISY,
       ),
-      NOISY,
     );
     expect(sounded.sounds.map((s) => s.frame)).toEqual([560, 590]);
   });

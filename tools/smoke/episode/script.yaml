@@ -8,7 +8,7 @@ segments:
     title: 开场
     scenes:
       - id: s01-c01
-        description: 只有字幕
+        description: 一个知识块写着一本书
         lines:
           - id: s01-l01
             text: 今天读一本书。

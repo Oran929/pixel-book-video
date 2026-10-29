@@ -7,6 +7,7 @@ import {
   displayText,
 } from "../components/declaration";
 import { planEpisode } from "./episode-plan";
+import { withEveryScene } from "./fixtures/every-scene";
 
 // 显示文字检查（#36）：组件上的每一段字都要出自本画面的画面说明或某个旁白句。
 // 用 ep01 的真实合成清单（#34 的样例），组件是假的：一个显示文字参数是字符串，一个是字符串数组。
@@ -34,9 +35,10 @@ const DECLARATIONS: ComponentDeclarations = {
 /** 在画面 `scene` 里放一个 Sign，参数是 `props`，在本画面第一句入场 */
 const signIn = (scene: string, props: Record<string, unknown>) => {
   const line = MANIFEST.lines.find((l) => l.scene === scene)!;
+  // 其余画面补占位组件：每个画面至少一个组件（#46）
   return planEpisode(
     MANIFEST,
-    {
+    ...withEveryScene(MANIFEST, {
       scenes: [
         {
           scene,
@@ -48,8 +50,7 @@ const signIn = (scene: string, props: Record<string, unknown>) => {
       ],
       music: "forgotten-path",
       pauses: [],
-    },
-    DECLARATIONS,
+    }, DECLARATIONS),
   );
 };
 

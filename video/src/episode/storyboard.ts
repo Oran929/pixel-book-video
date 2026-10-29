@@ -278,6 +278,18 @@ const storyboardSchema = (
       });
     });
 
+    // 每个画面至少一个组件（spec #16 用户故事 56）；片尾不是画面（修订三），没有例外
+    const withComponents = new Set(
+      storyboard.scenes
+        .filter((scene) => scene.components.length > 0)
+        .map((scene) => scene.scene),
+    );
+    manifest.scenes.forEach(({ id }) => {
+      if (!withComponents.has(id)) {
+        issue(["scenes"], `画面 ${id} 没有组件：每个画面至少放一个组件`);
+      }
+    });
+
     if (!isMusicId(storyboard.music)) {
       issue(
         ["music"],

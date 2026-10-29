@@ -389,7 +389,7 @@ uv run pixelbook terms ../books/sample/ch01/ep01/script.yaml   # 每个新术语
 
 ### 分镜
 
-每期可以有一份分镜 `books/<书>/<章>/<期>/storyboard.json`（提交到 git），写每个画面用哪些组件、在哪句旁白出现，不写绝对时间。`voice` 和 `stage` 把它复制到 `video/public/episode/`；没有分镜时照常渲染，只有字幕。
+每期可以有一份分镜 `books/<书>/<章>/<期>/storyboard.json`（提交到 git），写每个画面用哪些组件、在哪句旁白出现，不写绝对时间。旁白稿定稿后用 `/storyboard <期目录>` 写：它先跑选曲命令（见「配乐 › 选曲」），按画面说明和下面的「组件目录」写分镜，跑 `npm run timeline` 直到通过，再 `pixelbook render`，停在人工关口 3。`voice` 和 `stage` 把它复制到 `video/public/episode/`；没有分镜时照常渲染，只有字幕。
 
 ```json
 {
@@ -412,6 +412,7 @@ uv run pixelbook terms ../books/sample/ch01/ep01/script.yaml   # 每个新术语
 ```
 
 - `scene`：合成清单里的画面 ID。`components`：本画面用的组件，`id` 是本画面里的名字，`component` 是组件名，`props` 按该组件的参数格式校验。
+- **每个画面至少一个组件**（spec #16 用户故事 56，#46）：合成清单里的每个画面都要写进 `scenes`，`components` 不能为空，否则报「画面 … 没有组件」。片尾不是画面（#51），没有例外。
 - `at`：组件左上角所在的格 `[列, 行]`，从 0 开始（见下面的「网格」）。连线类组件（箭头）不写 `at`，改写 `from`、`to`；其余组件必须写 `at`。组件占几格由组件按参数自己算，分镜只写位置。
 - `parent`（可选）：父组件的 id，表示有意嵌套（大方块里占一小角）；`from`、`to`：连线类组件的起点和终点。见下面的「嵌套」和「组件目录 › 箭头」。
 - 新组件要登记三处：**声明**在 `video/src/components/declarations.ts`（用 `declareComponent`，格式见 `declaration.ts`：参数格式 `props`（zod）、状态清单 `states`（第一个是初始状态）、占几格 `cells`（按参数算，`[列数, 行数]`）、入场和退场的默认动画 `enter`、`exit`、可选的自己的特殊效果 `effects`（见下面的 `animation`）、是否是连线类组件 `connector`、默认音效 `sounds`（见下面的「音效」）、可选的标签位置 `labelArea`（见下面的「嵌套」）、可选的按参数能用的状态 `availableStates`（见下面的「带序号的状态」）；会显示在画面上的参数用 `displayText` 标出，见下面的「显示文字」），**实现**在 `video/src/components/registry.ts`，**样张**在 `video/src/components/samples.ts`；少登记一处，类型检查会报错。还要在下面的「组件目录」里给它写一个小节，列出每个状态名（`npm run test` 检查）。分镜检查只依赖声明，不含 JSX，时间轴导出命令在 Node 里也用它校验分镜。
@@ -510,6 +511,7 @@ uv run pixelbook terms ../books/sample/ch01/ep01/script.yaml   # 每个新术语
 
 - **登记表**：`video/src/music/tracks.ts` 的 `MUSIC`（曲子 ID → 文件、曲名、作者、作品页、许可、核对日期、署名、采样率、采样数）。和音效登记表一样是纯 TypeScript 模块，Node 和 Remotion 共用。登记表用 `defineMusicLibrary` 定义，导入时就校验：许可只能是 `CC0` 或 `CC-BY x.y`（写版本号，如 `CC-BY 4.0`），别的（CC-BY-SA、OGA-BY 等）报错；CC-BY 必须写署名 `credit`（一行，照作品页的署名要求写曲名、作者、作品页、许可），没写报错；采样数不是一帧采样数的整数倍报错（30fps 下 44.1 kHz 一帧 1470 个、48 kHz 一帧 1600 个，这样曲长是整数帧，循环的起点不会被取整）。作品页同时给了几种许可时，登记我们选用的那一种。
 - **曲子**（ID：曲名，作者，作品页上的许可）：`ooame`：Ooame，TAD，CC-BY 4.0 和 CC0；`iced-village`：Iced Village (8 Bit Lofi Hip Hop)，TAD，CC-BY 4.0 和 CC0；`the-past`：The Past (8 Bit Lofi Hip Hop)，TAD，CC-BY 4.0 和 CC0；`since-2-am`：Since 2 A.M.，TAD，CC0；`forgotten-path`：forgotten path，johndekale，CC0；`slow-melancholic-theme`：Slow Melancholic Theme C64 Style（带副歌的长版），skrjablin，CC-BY 3.0 和 CC0；`tiny-sad-lonely-theme`：Tiny sad lonely theme，MAOU，CC0；`kalypo`：Kalypo，Spring Spring，OGA-BY 3.0 和 CC0。都来自 OpenGameArt，2026-10-29 在作品页上核对过许可，用户给的文件和作品页上的下载文件逐字节相同（Iced Village、The Past 都有只给 CC-BY 的钢琴版或原版，用户给的是 8-bit lofi 版）。8 首都给了 CC0，都按 CC0 登记，所以现在没有曲子要署名。曲长从 40 秒（forgotten path）到 7 分 17 秒（Iced Village）；Iced Village 和 Kalypo 比一期正文长，不循环。
+- **选曲**（#46，spec #16 用户故事 52、修订 D5）：`cd video && npm run music:pick -- <期目录>`（`video/src/music/pick-music.ts`）。期目录的分镜里已经有 `music` 时原样保留；否则找同一本书里按章、期的编号排序、排在本期之前、已经有分镜（带 `music`）的最近一期，只有字幕版（没有分镜）的跳过，从剩下的曲子里随机选一首（避开那一期的）；找不到这样的一期时从全部曲子里选。随机数由命令生成（`Math.random`），不让模型挑。选好的写进期目录的 `storyboard.json`：没有分镜时写一份只有 `music` 的骨架（`scenes`、`pauses` 为空），已有分镜时只加上 `music`。打印选中的曲子、许可、要不要署名，以及避开了哪一期的哪首。
 - **署名**：时间轴导出时（`npm run timeline`、`pixelbook render`），用了 CC-BY 曲子的那一期在期目录里写出 `credits.txt`（不提交）：一行 `配乐：<署名>`，可以直接贴进视频简介；用的是 CC0 曲子时不写，并删掉换曲之前留下的。和 `segments.txt` 一样，用 `--out` 写到期目录以外时不写。
 - **文件**：`video/public/music/<ID>.ogg`，OGG/Vorbis（oggenc `-q 3`，约 110 kbps；两首单声道的原样是单声道），8 首共约 23 MB。不能放在 `video/public/episode/` 下：配音每次都会删掉那个目录。
 - **入库**（只在本机做，要 ffmpeg 和 oggenc，`brew install vorbis-tools`）：先在作品页上核对许可，把源文件放进一个目录（文件名见 `video/src/music/intake-music.ts` 的 `SOURCES`，就是用户给的 `Slowly Music` 目录里的原名），然后
@@ -531,8 +533,8 @@ uv run pixelbook terms ../books/sample/ch01/ep01/script.yaml   # 每个新术语
   - 音频流和视频流一样长（相差不超过一帧）；配乐声轨在 `startFrame` 之前（片头期间）和 `endFrame` 之后（片尾期间）每帧都低于 -50 dBFS。
   - **参照**：照 `timeline.json` 的 `plays` 把原曲放出来（`music_reference`，numpy 混音，音量公式和 `musicVolume` 一样，在 Python 里独立写一遍，取整同 Remotion），写成 `out/<书>-<章>-<期>-music-reference.wav`，可以拿来对着听。每次循环像 Remotion 那样放在**整毫秒**上：Remotion 用 `adelay=<毫秒>` 摆放每份音频，第 f 帧放在 round(f / 30 × 1000) 毫秒，帧号除以 3 余 1 的早 1/3 毫秒、余 2 的晚 1/3 毫秒（48 kHz 下 16 个采样）。配乐声轨和参照逐帧比 RMS（`astats`），差取中位数；每帧的电平超出「前后一帧的参照电平加上整体的差」±1 dB 算问题（交叉淡化处掉音、爆音，淡出没做或做错）。前后一帧放宽，是因为 Remotion 的音量台阶按帧中点、按音频包切换，台阶边上的帧和参照对不齐。参照低于 -60 dBFS 的帧（曲子里的停顿、淡出的最后几帧）不比。淡出不再单独查「逐帧不回升」：它和交叉淡化一样折算进了参照。#39 的旧检查在 #50、#51 的试验里报的回升是测量误差：旧参照把每次循环放在整帧上，比 Remotion 早 16 个采样，音符起音碰到帧边界时逐帧的差会抖，淡出前段每帧只降约 0.15 dB，抖动就成了「回升」（见 #52 的评论）。
   - 每段交叉淡化前后 1 秒，声轨和成片里都没有参照之外的静音（`silencedetect`，低于 -50 dBFS、20 毫秒以上；曲子里本来就有的停顿参照里也有）。
-  - 每段交叉淡化打印一行，有问题时以非零码退出。`--storyboard` 在出片期间临时换上这份分镜，结束后把期目录里的分镜恢复原样（原来没有就删掉）；ch02 ep01 的试验分镜是 `video/src/episode/fixtures/ep01-music-trial.storyboard.json`（几个知识块，配乐用最短的 forgotten path，`npm run test` 检查它能排期）。
-- `npm run test` 检查：登记的每首曲子的文件都在 `music/` 里、文件名就是 ID；记了核对日期和作品页；文件是 OGG/Vorbis，采样率和采样数（读 OGG 最后一页的 granule position）与登记表一致，采样数是一帧采样数的整数倍；`music/` 里没有没登记的文件；`defineMusicLibrary` 收 CC0、CC-BY，拒绝别的许可，CC-BY 缺署名、采样数没对齐时报错；`writeCredits` 用了 CC-BY 曲子时写出署名、CC0 时不写；`musicPlays`、`musicVolume` 排出的循环起点、重叠帧数、淡化曲线，比正文长的曲子不循环。`measureCrossfade` 用合成的波形测过：不相关的曲尾曲首不掉音、反相抵消报掉音、重叠处突然变响报爆音。
+  - 每段交叉淡化打印一行，有问题时以非零码退出。`--storyboard` 在出片期间临时换上这份分镜，结束后把期目录里的分镜恢复原样（原来没有就删掉）；ch02 ep01 的试验分镜是 `video/src/episode/fixtures/ep01-music-trial.storyboard.json`（每个画面一个知识块，配乐用最短的 forgotten path，`npm run test` 检查它能排期）。
+- `npm run test` 检查：登记的每首曲子的文件都在 `music/` 里、文件名就是 ID；记了核对日期和作品页；文件是 OGG/Vorbis，采样率和采样数（读 OGG 最后一页的 granule position）与登记表一致，采样数是一帧采样数的整数倍；`music/` 里没有没登记的文件；`defineMusicLibrary` 收 CC0、CC-BY，拒绝别的许可，CC-BY 缺署名、采样数没对齐时报错；`writeCredits` 用了 CC-BY 曲子时写出署名、CC0 时不写；`musicPlays`、`musicVolume` 排出的循环起点、重叠帧数、淡化曲线，比正文长的曲子不循环。选曲命令保留已有的 `music`、本书第一期从全部曲子里选、上一期在另一章、跳过只有字幕版的一期、结果不等于上一期的曲子；`measureCrossfade` 用合成的波形测过：不相关的曲尾曲首不掉音、反相抵消报掉音、重叠处突然变响报爆音。
 
 ### 组件目录
 

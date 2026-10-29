@@ -54,6 +54,14 @@ const STORYBOARD = {
         },
       ],
     },
+    // 每个画面至少一个组件（#46）；none 入场不放音效，不影响下面的音效列表
+    {
+      scene: "s01-c01",
+      components: [
+        { id: "block", component: "PixelBlock", props: { label: "方块", size: "medium", color: "blue" }, at: [0, 0] },
+      ],
+      triggers: [{ target: "block", line: "s01-l01", offset: 0, action: "enter", animation: "none" }],
+    },
   ],
   music: "forgotten-path",
   pauses: [{ after: "s01-l01", seconds: 1.2 }],
@@ -195,7 +203,7 @@ describe("exportTimeline", () => {
     const [trigger] = scene!.triggers;
     write("storyboard.json", {
       ...STORYBOARD,
-      scenes: [{ ...scene, triggers: [{ ...trigger, offset: -0.5 }] }],
+      scenes: [{ ...scene, triggers: [{ ...trigger, offset: -0.5 }] }, ...STORYBOARD.scenes.slice(1)],
     });
 
     expect(() => exportTimeline(episode)).toThrow(/早于画面 s02-c01 的开始帧/);

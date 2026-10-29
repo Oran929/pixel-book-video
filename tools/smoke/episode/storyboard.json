@@ -1,6 +1,15 @@
 {
   "scenes": [
     {
+      "scene": "s01-c01",
+      "components": [
+        { "id": "book", "component": "PixelBlock", "props": { "label": "一本书", "size": "medium", "color": "blue" }, "at": [4, 1] }
+      ],
+      "triggers": [
+        { "target": "book", "line": "s01-l01", "offset": 0, "action": "enter", "animation": "none" }
+      ]
+    },
+    {
       "scene": "s01-c02",
       "components": [
         { "id": "rule", "component": "PixelBlock", "props": { "label": "一", "size": "medium", "color": "orange" }, "at": [0, 0] }
