@@ -35,7 +35,11 @@ describe("segmentsText", () => {
 
 describe("durationReport", () => {
   const at30fps = (seconds: number) =>
-    durationReport({ fps: 30, totalFrames: Math.round(seconds * 30) });
+    durationReport({
+      fps: 30,
+      totalFrames: Math.round(seconds * 30),
+      segments: [],
+    });
 
   it.each([
     [3 * 60 + 59, "3:59", "too-short"],
@@ -58,11 +62,11 @@ describe("durationReport", () => {
   );
 
   it("reports the exact seconds of the timeline's total frames", () => {
-    expect(durationReport({ fps: 30, totalFrames: 565 }).seconds).toBeCloseTo(
+    expect(durationReport({ fps: 30, totalFrames: 565, segments: [] }).seconds).toBeCloseTo(
       18.8333,
       4,
     );
-    expect(durationReport({ fps: 30, totalFrames: 565 }).text).toBe("0:18");
+    expect(durationReport({ fps: 30, totalFrames: 565, segments: [] }).text).toBe("0:18");
   });
 
   it("judges the m:ss it shows, so a part-second never contradicts the text", () => {
@@ -73,6 +77,32 @@ describe("durationReport", () => {
     expect(at30fps(3 * 60 + 59.9)).toMatchObject({
       text: "3:59",
       verdict: "too-short",
+    });
+  });
+
+  it("reports the body and the fixed outro separately; the verdict covers both", () => {
+    // 正文到片尾这一段开始为止（含片尾前的停顿），片尾到最后一帧
+    const report = durationReport({
+      fps: 30,
+      totalFrames: (3 * 60 + 55) * 30 + 7 * 30 + 15,
+      segments: [
+        { id: "s01", title: "开场", startFrame: 0, endFrame: 7050 },
+        { id: "outro", title: "片尾", startFrame: 7050, endFrame: 7275 },
+      ],
+    });
+
+    expect(report).toMatchObject({
+      text: "4:02",
+      verdict: "within",
+      body: { seconds: 235, text: "3:55" },
+      outro: { seconds: 7.5, text: "0:07" },
+    });
+  });
+
+  it("has no outro part for a timeline without the outro segment", () => {
+    expect(at30fps(5 * 60)).toMatchObject({
+      body: { seconds: 300, text: "5:00" },
+      outro: null,
     });
   });
 });

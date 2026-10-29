@@ -7,7 +7,7 @@ from dataclasses import replace
 
 import pytest
 import yaml
-from conftest import SCRIPT, VOICE
+from conftest import OUTRO, SCRIPT, VOICE
 
 from pixelbook import REPO_ROOT
 from pixelbook.asr import FakeAsrEngine
@@ -40,22 +40,94 @@ def test_manifest_lists_segments_scenes_and_lines_in_order(tmp_path, script_path
 
     manifest = json.loads((script_path.parent / "episode.json").read_text())
     assert manifest["title"] == "程序员修炼之道"
+    # 旁白稿之后是固定片尾：保留的段、画面和旁白句 ID（票 #15）
     assert manifest["segments"] == [
         {"id": "s01", "title": "开场"},
         {"id": "s02", "title": "原则"},
+        {"id": "outro", "title": "片尾"},
     ]
     assert manifest["scenes"] == [
         {"id": "s01-c01", "segment": "s01"},
         {"id": "s02-c01", "segment": "s02"},
+        {"id": "outro-c01", "segment": "outro"},
     ]
     lines = manifest["lines"]
     assert [(line["id"], line["scene"], line["text"]) for line in lines] == [
         ("s01-l01", "s01-c01", "今天读一本书"),
         ("s01-l02", "s01-c01", "它讲怎样写好代码"),
         ("s02-l01", "s02-c01", "不要重复"),
+        ("outro-l01", "outro-c01", "本期先讲到这里，"),
+        ("outro-l02", "outro-c01", "欢迎大家阅读原著了解更原汁原味的内容，"),
+        ("outro-l03", "outro-c01", "我们下一期见"),
     ]
     # 假引擎每个字 0.2 秒；手写了 speech 的句子按 speech 配音
-    assert [line["seconds"] for line in lines] == pytest.approx([1.2, 1.6, 1.4])
+    assert [line["seconds"] for line in lines[:3]] == pytest.approx([1.2, 1.6, 1.4])
+
+
+def test_the_outro_is_the_users_wording_split_into_subtitles(tmp_path, script_path):
+    manifest = voice_episode(
+        script_path,
+        FakeTtsEngine(),
+        VOICE,
+        tmp_path / "public",
+        {},
+        verifier=fake_asr_verifier(),
+    )
+
+    outro = [line["text"] for line in manifest["lines"] if line["scene"] == "outro-c01"]
+    # 措辞是用户定的，只在自然停顿处断开，一个字不改
+    assert "".join(outro) == (
+        "本期先讲到这里，欢迎大家阅读原著了解更原汁原味的内容，我们下一期见"
+    )
+    assert all(len(text) <= 20 for text in outro)
+
+
+def test_the_outro_is_voiced_and_verified_like_any_line(tmp_path, script_path):
+    # 识别把片尾第三句听错：重试用完仍不通过，照常列进检查报告
+    asr = FakeAsrEngine(mishear={"我们下一期见": ["我们下一集见了"]})
+    engine = FakeTtsEngine()
+
+    voice_episode(
+        script_path,
+        engine,
+        VOICE,
+        tmp_path / "public",
+        {},
+        verifier=fake_asr_verifier(asr, max_retries=0),
+    )
+
+    assert engine.texts[-3:] == [
+        "本期先讲到这里，",
+        "欢迎大家阅读原著了解更原汁原味的内容，",
+        "我们下一期见",
+    ]
+    assert [item["id"] for item in _report(script_path)["asr_failures"]] == [
+        "outro-l03"
+    ]
+    # 缓存在书的目录下，和正文共用
+    voice_episode(
+        script_path,
+        (again := FakeTtsEngine()),
+        VOICE,
+        tmp_path / "public",
+        {},
+        verifier=fake_asr_verifier(asr, max_retries=0),
+    )
+    assert again.texts == []
+
+
+def test_a_script_id_taken_by_the_outro_is_refused(tmp_path, script_path):
+    script_path.write_text(SCRIPT.replace("id: s02\n", "id: outro\n"))
+
+    with pytest.raises(PipelineError, match="outro"):
+        voice_episode(
+            script_path,
+            FakeTtsEngine(),
+            VOICE,
+            tmp_path / "public",
+            {},
+            verifier=fake_asr_verifier(),
+        )
 
 
 def test_public_dir_holds_only_this_episode_and_every_audio_exists(
@@ -276,8 +348,9 @@ def test_sample_book_script_is_valid(tmp_path):
         verifier=fake_asr_verifier(),
     )
 
-    assert len(manifest["segments"]) == 2
-    assert 6 <= len(manifest["lines"]) <= 8
+    # 正文两段，加上片尾
+    assert len(manifest["segments"]) == 3
+    assert 6 + len(OUTRO) <= len(manifest["lines"]) <= 8 + len(OUTRO)
 
 
 # ---- 按句配音缓存（票 05） ----
@@ -353,7 +426,7 @@ def test_changing_voice_settings_regenerates_every_line(tmp_path, script_path, c
         verifier=fake_asr_verifier(),
     )
 
-    assert len(engine.texts) == 3
+    assert len(engine.texts) == 3 + len(OUTRO)
 
 
 def test_changing_engine_settings_regenerates_every_line(tmp_path, script_path):
@@ -378,7 +451,7 @@ def test_changing_engine_settings_regenerates_every_line(tmp_path, script_path):
         verifier=fake_asr_verifier(),
     )
 
-    assert len(engine.texts) == 3
+    assert len(engine.texts) == 3 + len(OUTRO)
 
 
 def test_random_seed_is_not_part_of_the_cache_key(tmp_path, script_path):
@@ -442,7 +515,7 @@ def test_new_reference_audio_content_at_the_same_path_regenerates_every_line(
         verifier=fake_asr_verifier(),
     )
 
-    assert len(engine.texts) == 3
+    assert len(engine.texts) == 3 + len(OUTRO)
 
 
 def test_missing_reference_audio_is_rejected_before_any_voicing(tmp_path, script_path):
@@ -473,7 +546,7 @@ def test_deleting_the_cache_rebuilds_every_line(tmp_path, script_path):
         script_path, engine, VOICE, public, {}, verifier=fake_asr_verifier()
     )
 
-    assert len(engine.texts) == 3
+    assert len(engine.texts) == 3 + len(OUTRO)
     assert second == first
     for line in second["lines"]:
         assert (public / line["audio"]).is_file()
@@ -497,7 +570,7 @@ def test_each_cached_wav_has_a_same_named_json_with_generation_info(
     assert sorted(infos) == wavs
     assert all(re.fullmatch(r"[0-9a-f]{16}", stem) for stem in wavs)
     assert sorted(info["text"] for info in infos.values()) == sorted(
-        ["今天读一本书", "它讲怎样写好代码", "不要重复你自己"]
+        ["今天读一本书", "它讲怎样写好代码", "不要重复你自己", *OUTRO]
     )
     for info in infos.values():
         assert info["voice"]["model"] == "base-model"
@@ -544,7 +617,7 @@ def test_interrupted_generation_leaves_no_broken_cache_file(tmp_path, script_pat
         {},
         verifier=fake_asr_verifier(),
     )
-    assert engine.texts == ["它讲怎样写好代码", "不要重复你自己"]
+    assert engine.texts == ["它讲怎样写好代码", "不要重复你自己", *OUTRO]
 
 
 def test_manifest_records_the_voice_fingerprint_used(tmp_path, script_path):
@@ -648,7 +721,12 @@ def test_revoice_updates_the_lock_and_regenerates_every_line(tmp_path, script_pa
         verifier=fake_asr_verifier(),
     )
 
-    assert engine.texts == ["今天读一本书", "它讲怎样写好代码", "不要重复你自己"]
+    assert engine.texts == [
+        "今天读一本书",
+        "它讲怎样写好代码",
+        "不要重复你自己",
+        *OUTRO,
+    ]
     assert yaml.safe_load(_lock(script_path).read_text())["ref_text"] == "大家好。"
     # 锁定已更新：之后不加 --revoice 也能用新音色配音
     voice_episode(
@@ -737,7 +815,12 @@ def test_lines_heard_as_spoken_pass_on_the_first_take(tmp_path, script_path):
         verifier=fake_asr_verifier(asr),
     )
 
-    assert engine.texts == ["今天读一本书", "它讲怎样写好代码", "不要重复你自己"]
+    assert engine.texts == [
+        "今天读一本书",
+        "它讲怎样写好代码",
+        "不要重复你自己",
+        *OUTRO,
+    ]
     assert _report(script_path) == {"asr_failures": [], "asr_pinyin_passes": []}
     for text, info in _cache_records(script_path).items():
         assert info["verification"]["passed"] is True
@@ -813,7 +896,7 @@ def test_a_line_failing_every_retry_keeps_its_closest_take_and_is_reported(
 ):
     script_path.write_text(SCRIPT.replace("今天读一本书", "今天读一本好书"))
     # 第一句 7 个字：三次分别多说 3、1、2 个字，第二次最接近（差异率 1/7）
-    engine = RamblingTtsEngine([3, 1, 2] + [0, 0])
+    engine = RamblingTtsEngine([3, 1, 2] + [0] * (2 + len(OUTRO)))
 
     manifest = voice_episode(
         script_path,
@@ -824,7 +907,7 @@ def test_a_line_failing_every_retry_keeps_its_closest_take_and_is_reported(
         verifier=fake_asr_verifier(),
     )
 
-    assert len(engine.texts) == 3 + 2
+    assert len(engine.texts) == 3 + 2 + len(OUTRO)
     # 缓存、上屏的是第二次生成的那一版：7 + 1 个字，每字 0.2 秒
     assert manifest["lines"][0]["seconds"] == pytest.approx(1.6)
     [failure] = _report(script_path)["asr_failures"]
@@ -928,7 +1011,7 @@ def test_retries_change_a_fixed_random_seed(tmp_path, script_path):
         verifier=fake_asr_verifier(asr),
     )
 
-    assert engine.seeds == [7, 8, 9, 7, 7]
+    assert engine.seeds == [7, 8, 9, 7, 7] + [7] * len(OUTRO)
 
 
 # ---- 复核分两步：先比字，不通过再比拼音（票 07，2026-10-28 用户决定） ----

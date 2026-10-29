@@ -112,6 +112,14 @@ def _verifier() -> Verifier:
     )
 
 
+def _parts(duration: dict[str, Any]) -> str:
+    """正文和片尾分开写（时间轴导出命令算好的，ADR-0010）；没有片尾时不写。"""
+    outro = duration.get("outro")
+    if not outro:
+        return ""
+    return f"（正文 {duration['body']['text']}，片尾 {outro['text']}）"
+
+
 def _print_render_summary(summary: dict[str, Any]) -> None:
     # 总时长的说明文字由时间轴导出命令写进 timeline.json，这里原样打印
     duration = summary["duration"]
@@ -119,7 +127,7 @@ def _print_render_summary(summary: dict[str, Any]) -> None:
         f"\n成片 {summary['mp4']}\n"
         f"  帧数：视频流 {summary['frames']} 帧，时间轴 {summary['total_frames']} 帧"
         f"（{summary['fps']}fps，相差不超过一帧）\n"
-        f"  总时长 {duration['text']}：{duration['verdictText']}\n"
+        f"  总时长 {duration['text']}：{duration['verdictText']}{_parts(duration)}\n"
         f"  打点时间表 {summary['segments']}"
     )
     if passes := summary["asr_pinyin_passes"]:

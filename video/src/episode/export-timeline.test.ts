@@ -77,6 +77,9 @@ describe("exportTimeline", () => {
         text: "0:07",
         verdict: "too-short",
         verdictText: "太短（目标 4:00–6:00，只报告）",
+        // 这份合成清单没有片尾这一段
+        body: { seconds: 214 / 30, text: "0:07" },
+        outro: null,
       },
     });
   });

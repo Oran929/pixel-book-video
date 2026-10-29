@@ -12,6 +12,7 @@ from typing import Any
 from pixelbook.audio import wav_seconds
 from pixelbook.episode_path import EpisodePath
 from pixelbook.glyphs import missing_glyphs
+from pixelbook.outro import OutroError, with_outro
 from pixelbook.pronunciation import find_new_terms, spoken_text
 from pixelbook.script import DRAFT, load_script
 from pixelbook.tts import TtsEngine
@@ -48,6 +49,8 @@ def voice_episode(
 ) -> dict[str, Any]:
     """为 `script_path` 这一期逐句配音，写出期目录里的合成清单并返回它。
 
+    旁白稿后面接上固定片尾（`outro.with_outro`）：合成清单的最后一段是片尾。
+
     `voice` 是这本书解析出的音色（`voice_lock.resolve_book_voice`）。配音前守卫
     比较它和书的锁定音色，不一致就拒绝，除非 `revoice`；配音完成后写入锁定。
     朗读文本按读音表 `pronunciation` 生成（手写的 `speech` 优先）。
@@ -70,6 +73,11 @@ def voice_episode(
             f"{script_path}: 旁白稿还是 `status: {DRAFT}`（没有定稿），不配音；"
             "确实要给草稿配音，加 `--draft`"
         )
+    # 固定片尾接在旁白稿后面，和正文一样缺字检查、配音、复核，进合成清单（ADR-0010）
+    try:
+        script = with_outro(script)
+    except OutroError as error:
+        raise PipelineError(f"{script_path}: {error}") from error
     if terms := find_new_terms(script, pronunciation):
         raise PipelineError(new_terms_message(script_path, terms))
     # 配音缓存和锁定音色放在书的目录下

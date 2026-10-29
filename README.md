@@ -269,7 +269,7 @@ lines:                           # 每个旁白句一条，按旁白稿顺序
    | 3 渲染 | `remotion render Episode`（只渲染成片，不渲染风格样张） | Remotion 报错（附上输出的最后几行） |
    | 4 核对时长 | 用 ffprobe 数 MP4 **视频流**的帧数，和 `timeline.json` 的总帧数比，相差超过一帧就算失败 | — |
 
-   全部通过后打印汇总报告：MP4 路径、帧数、总时长和 4:00–6:00 的判断、打点时间表位置、复核未通过的句子（需要试听）、靠拼音通过的句子（只列出备查）。**复核未通过和总时长超出范围不算失败**，只列在汇总里。
+   全部通过后打印汇总报告：MP4 路径、帧数、总时长（含片尾，另外分开写正文和片尾）和 4:00–6:00 的判断、打点时间表位置、复核未通过的句子（需要试听）、靠拼音通过的句子（只列出备查）。**复核未通过和总时长超出范围不算失败**，只列在汇总里。
 
    `--out <路径>` 改输出位置；`--revoice` 同 `voice --revoice`（音色和书的锁定音色不一致、确认整本书换音色时用）；`--draft` 同 `voice --draft`（旁白稿还是 `status: draft` 时放行）。
 
@@ -286,6 +286,14 @@ npm run render -- ../out/sample-ch01-ep01.mp4                  # 渲染 MP4
 ```
 
 `voice` 先看定稿状态（`status: draft` 时拒绝，加 `--draft` 放行），再按读音表检查新术语（见下），没有新术语才用这本书的音色（见下文“书的音色与锁定”）逐句配音，写出期目录里的合成清单 `episode.json`，再清空 `video/public/episode/`，把每句 wav 和合成清单复制进去。Remotion 只读 `video/public/episode/episode.json`。
+
+### 片尾
+
+每期末尾自动接一段固定片尾（ADR-0010），所有期、所有书都一样：「本期先讲到这里，欢迎大家阅读原著了解更原汁原味的内容，我们下一期见」。**片尾的文字只在 `tools/src/pixelbook/outro.py` 的 `OUTRO_LINES` 里定义**，要改就改那里：每项是一条字幕（不超过 20 字），在自然停顿处断开。
+
+- 片尾不写进 `script.yaml`，没有出处，不参加 `pixelbook check`（出处、照搬、提示编号、估算时长）和语义核对。
+- `voice`（和 `render` 的配音一步）把它接在旁白稿后面：和正文一样做缺字检查、用这本书的锁定音色配音、走配音缓存和语音识别复核（复核未通过的片尾句照常列进报告），在合成清单里是最后一段——段 `outro`（标题「片尾」）、画面 `outro-c01`、旁白句 `outro-l01`……。这些 ID 是保留的，旁白稿里用了就拒绝配音。
+- 之后照普通的段处理：字幕照常显示，时间轴、帧数核对、总时长都算上片尾，打点时间表多一行「片尾」；分镜可以给 `outro-c01` 放组件，也可以覆盖片尾前的停顿。总时长报告另外分开写正文（到片尾开始为止，含片尾前的停顿）和片尾的时长。
 
 每句配音缓存在 `books/<书>/cache/tts/<指纹>.wav`（不提交），指纹由朗读文本和音色指纹算出；音色指纹包括模型、参考音频的**文件内容**、参考文本、生成参数和引擎自身的设置（如参考音频补的静音），不包括随机种子。所以再次运行时只有改过的句子会重新生成，改了音色设置或换了参考音频的内容就全部重新生成。每个 wav 旁边的 `<指纹>.json` 记录生成信息。缓存可以随时删掉，删了就整期重新生成。
 
@@ -377,7 +385,7 @@ uv run pixelbook mix ../books/sample/ch01/ep01/timeline.json   # 拼到 out/mix/
 
 - `npm run timeline` 读期目录里的合成清单 `episode.json`，有分镜时也读分镜（取它的停顿覆盖，分镜不合格就报错），用和 Remotion 渲染时同一个时间轴函数算出 `timeline.json`（不提交）：帧率 `fps`、总帧数 `totalFrames`，每个旁白句（`lines`）、画面（`scenes`）、段（`segments`）的 `startFrame`（含）和 `endFrame`（不含）。旁白句的 `endFrame` 是音频结束、不含之后的停顿；总帧数到最后一句音频结束为止。
 - 同一个命令还写出期目录里的打点时间表 `segments.txt`（不提交）：每段一行 `00:00 段标题`，时间是该段开始帧换算成秒后向下取整，不到 1 小时用 `mm:ss`，超过用 `h:mm:ss`，可以直接贴到视频平台的分段设置。用 `--out` 写到期目录以外时不写打点时间表，免得试听用的时间轴覆盖正式的。
-- 命令最后打印总时长（`m:ss`，含停顿，向下取整到秒）和 4:00–6:00 的判断（在范围内 / 太短 / 太长，两端都算在范围内，按显示的整秒判断）；判断也写进 `timeline.json` 的 `duration` 字段（`seconds`、`text`、`verdict`：`within` / `too-short` / `too-long`，`verdictText`：判断的说明文字，`pixelbook render` 的汇总原样打印它）。样片阶段只报告，不以非零码退出。
+- 命令最后打印总时长（`m:ss`，含停顿，向下取整到秒）和 4:00–6:00 的判断（在范围内 / 太短 / 太长，两端都算在范围内，按显示的整秒判断）；判断也写进 `timeline.json` 的 `duration` 字段（`seconds`、`text`、`verdict`：`within` / `too-short` / `too-long`，`verdictText`：判断的说明文字，`pixelbook render` 的汇总原样打印它；`body`、`outro`：正文和片尾各自的 `seconds`、`text`，没有片尾时 `outro` 是 `null`）。判断按含片尾的总时长；命令和 `pixelbook render` 的汇总在总时长后面写「（正文 m:ss，片尾 m:ss）」。样片阶段只报告，不以非零码退出。
 - 只想听默认停顿、不要分镜里的覆盖时，加 `--no-storyboard`，再用 `--out` 写到别处，免得覆盖期目录里的 `timeline.json`：`npm run timeline -- ../books/sample/ch01/ep01 --no-storyboard --out ../out/mix/sample-ch01-ep01-default-pauses.timeline.json`，然后 `uv run pixelbook mix ../out/mix/sample-ch01-ep01-default-pauses.timeline.json --out ../out/mix/sample-ch01-ep01-default-pauses.wav`。
 - `pixelbook mix` 只读 `timeline.json`，不知道停顿是多少秒：每句的 wav（`audio`，以 `video/public/` 为起点）从"开始帧 ÷ 帧率"秒处开始，其余是静音，补到时间轴的总时长。拼完测量音轨，和时间轴总时长相差超过一帧就报错。`timeline.json` 格式不对时逐个写明字段位置。它用的是 `video/public/episode/` 里的 wav，所以要在 `pixelbook voice` 之后、对同一期导出时间轴；重新配音后要重新导出。
 

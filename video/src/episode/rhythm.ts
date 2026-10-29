@@ -1,4 +1,5 @@
 // 节奏产物：打点时间表、总时长报告。都由时间轴算出，这里只有纯函数。
+import { OUTRO_SEGMENT } from "./manifest";
 import type { Timeline } from "./timeline";
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -39,6 +40,9 @@ const VERDICT_TEXT: Record<DurationVerdict, string> = {
   "too-long": `太长（目标 ${RANGE_TEXT}，只报告）`,
 };
 
+/** 一部分的时长：秒（不取整）和 `m:ss`（向下取整到秒） */
+export type PartDuration = { seconds: number; text: string };
+
 export type DurationReport = {
   /** 总帧数 ÷ 帧率，不取整 */
   seconds: number;
@@ -48,12 +52,17 @@ export type DurationReport = {
   verdict: DurationVerdict;
   /** `verdict` 的说明文字，例如"在 4:00–6:00 之内" */
   verdictText: string;
+  /** 正文：从开头到片尾这一段开始（含片尾前的停顿）；没有片尾时就是全部 */
+  body: PartDuration;
+  /** 固定片尾（ADR-0010）：片尾这一段开始到最后一帧；时间轴里没有片尾时为 null */
+  outro: PartDuration | null;
 };
 
 export const durationReport = ({
   fps,
   totalFrames,
-}: Pick<Timeline, "fps" | "totalFrames">): DurationReport => {
+  segments,
+}: Pick<Timeline, "fps" | "totalFrames" | "segments">): DurationReport => {
   const seconds = totalFrames / fps;
   const whole = Math.floor(seconds);
   const verdict: DurationVerdict =
@@ -62,10 +71,17 @@ export const durationReport = ({
       : whole > DURATION_RANGE.max
         ? "too-long"
         : "within";
+  const part = (frames: number): PartDuration => ({
+    seconds: frames / fps,
+    text: minutesSeconds(Math.floor(frames / fps)),
+  });
+  const outroStart = segments.find((s) => s.id === OUTRO_SEGMENT)?.startFrame;
   return {
     seconds,
     text: minutesSeconds(whole),
     verdict,
     verdictText: VERDICT_TEXT[verdict],
+    body: part(outroStart ?? totalFrames),
+    outro: outroStart === undefined ? null : part(totalFrames - outroStart),
   };
 };

@@ -1,5 +1,10 @@
 import { z } from "zod";
 
+// 固定片尾（ADR-0010）：配音时接在旁白稿后面，是合成清单里保留 ID 的最后一段，
+// 其余照普通的段处理（字幕、音频、时间轴）；只有时长报告把它单独列出来。
+// 和 tools/src/pixelbook/outro.py 的 OUTRO_SEGMENT 一致
+export const OUTRO_SEGMENT = "outro";
+
 // 合成清单（ADR-0004）：Python 生成，Remotion 只读这一份交接文件。
 // 字段与 tools/src/pixelbook/pipeline.py 写出的格式一一对应。
 export const EpisodeManifestSchema = z

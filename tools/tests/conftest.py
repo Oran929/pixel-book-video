@@ -5,7 +5,11 @@
 
 import pytest
 
+from pixelbook.outro import OUTRO_LINES
 from pixelbook.voice import Voice
+
+# 配音时接在每期旁白稿后面的固定片尾（票 #15）：TTS 收到的文字以它结尾
+OUTRO = list(OUTRO_LINES)
 
 # 用参考音频克隆的音色；配音用假引擎，参考音频只参与指纹
 VOICE = Voice(
