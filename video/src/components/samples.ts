@@ -380,6 +380,144 @@ export const COMPONENT_SAMPLES: Record<ComponentName, ComponentSample> = {
       },
     ],
   },
+  Fork: {
+    title: "样张：岔路 Fork",
+    scenes: [
+      {
+        description:
+          "岔路：四条路 好改、难改、看不出、近路，逐条标出，再逐条放上路障，撤掉路障，然后退场",
+        lines: [
+          { text: "入场：正常 normal，默认 fade（pop）", seconds: 1.5 },
+          ...[1, 2, 3, 4].map((road) => ({
+            text: `标出第 ${road} 条路 mark-${road}（blip）`,
+            seconds: 1,
+          })),
+          ...[1, 2, 3, 4].map((road) => ({
+            text: `路障放到第 ${road} 条路 block-${road}（drop）`,
+            seconds: 1.2,
+          })),
+          { text: "撤掉路障：切回正常 normal（blip）", seconds: 1.5 },
+          { text: "退场：默认 fade（leave）", seconds: 1.5 },
+        ],
+        components: [
+          {
+            id: "fork",
+            component: "Fork",
+            props: { roads: 4, labels: ["好改", "难改", "看不出", "近路"] },
+            at: [3, 1],
+          },
+        ],
+        triggers: [
+          { target: "fork", line: 1, offset: 0, action: "enter" },
+          ...(["mark", "block"] as const).flatMap((kind, k) =>
+            [1, 2, 3, 4].map((road) => ({
+              target: "fork",
+              line: 2 + k * 4 + (road - 1),
+              offset: 0,
+              action: "state" as const,
+              state: `${kind}-${road}`,
+            })),
+          ),
+          { target: "fork", line: 10, offset: 0, action: "state", state: "normal" },
+          { target: "fork", line: 11, offset: 0, action: "exit" },
+        ],
+      },
+      {
+        description: "两条路、三条路的岔路 fade、slide 入场，退场后再来一个 none，路上不写字",
+        lines: [
+          { text: "入场：fade slide", seconds: 2 },
+          { text: "退场：fade slide", seconds: 2 },
+          { text: "入场和退场：none", seconds: 2 },
+        ],
+        components: [
+          { id: "fade", component: "Fork", props: { roads: 2 }, at: [0, 1] },
+          { id: "slide", component: "Fork", props: { roads: 3 }, at: [6, 1] },
+          { id: "none", component: "Fork", props: { roads: 3 }, at: [3, 1] },
+        ],
+        triggers: [
+          ...(["fade", "slide"] as const).flatMap((animation, i) =>
+            (["enter", "exit"] as const).map((action) => ({
+              target: animation,
+              line: action === "enter" ? 12 : 13,
+              offset: i * 0.6,
+              action,
+              animation,
+            })),
+          ),
+          { target: "none", line: 14, offset: 0, action: "enter", animation: "none" },
+          { target: "none", line: 14, offset: 1.5, action: "exit", animation: "none" },
+        ],
+      },
+    ],
+  },
+  Timeline: {
+    title: "样张：时间线 Timeline",
+    scenes: [
+      {
+        description:
+          "时间线：起点、需求、设计、编码、发布、维护，逐个点亮，全部熄灭，再一口气点亮，然后退场",
+        lines: [
+          { text: "入场：正常 normal，默认 fade（pop）", seconds: 1.5 },
+          ...[1, 2, 3, 4, 5, 6].map((n) => ({
+            text: `点亮到第 ${n} 个 lit-${n}（ding）`,
+            seconds: 1,
+          })),
+          { text: "全部熄灭：切回正常 normal（不放音效）", seconds: 1.5 },
+          { text: "一口气点亮到第 6 个 lit-6（ding）", seconds: 3 },
+          { text: "退场：默认 fade（leave）", seconds: 1.5 },
+        ],
+        components: [
+          {
+            id: "timeline",
+            component: "Timeline",
+            props: { nodes: ["起点", "需求", "设计", "编码", "发布", "维护"] },
+            at: [0, 2],
+          },
+        ],
+        triggers: [
+          { target: "timeline", line: 1, offset: 0, action: "enter" },
+          ...[1, 2, 3, 4, 5, 6].map((n) => ({
+            target: "timeline",
+            line: 1 + n,
+            offset: 0,
+            action: "state" as const,
+            state: `lit-${n}`,
+          })),
+          { target: "timeline", line: 8, offset: 0, action: "state", state: "normal" },
+          { target: "timeline", line: 9, offset: 0, action: "state", state: "lit-6" },
+          { target: "timeline", line: 10, offset: 0, action: "exit" },
+        ],
+      },
+      {
+        description: "三条两个节点的时间线：起点、发布，依次 fade、slide、none 入场，再依次退场",
+        lines: [
+          { text: "入场：fade slide none", seconds: 2.5 },
+          { text: "退场：fade slide none", seconds: 2.5 },
+        ],
+        components: (
+          [
+            ["fade", [0, 0]],
+            ["slide", [4, 2]],
+            ["none", [8, 4]],
+          ] as const
+        ).map(([id, at]) => ({
+          id,
+          component: "Timeline",
+          props: { nodes: ["起点", "发布"] },
+          at: [...at] as [number, number],
+        })),
+        triggers: (["fade", "slide", "none"] as const).flatMap((animation, i) =>
+          (["enter", "exit"] as const).map((action) => ({
+            target: animation,
+            line: action === "enter" ? 11 : 12,
+            offset: i * 0.6,
+            action,
+            animation,
+          })),
+        ),
+      },
+    ],
+  },
 };
 
 /** 样张的排期（和成片同一个 `planEpisode`） */

@@ -84,6 +84,12 @@ export type ComponentDeclaration<
    * 不写表示没有要让开的字，子组件可以放在任何格子里。
    */
   labelArea?(props: z.infer<Props>): { at: Cells; cells: Cells };
+  /**
+   * 这组参数下能用的状态（`states` 的子集，要包含初始状态）：状态和参数有关时写，
+   * 比如岔路只有 3 条路时不能用 `block-4`。分镜切到不在其中的状态时报错。
+   * 不写表示 `states` 全都能用。
+   */
+  availableStates?(props: z.infer<Props>): readonly NoInfer<State>[];
 };
 
 /** 组件名 → 声明 */

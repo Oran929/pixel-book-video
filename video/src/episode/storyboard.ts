@@ -250,6 +250,15 @@ const storyboardSchema = (
               at("triggers", j, "state"),
               `组件 ${used.id}（${used.component}）没有状态 ${trigger.state}，声明过的状态：${states.join("、")}`,
             );
+          } else if (declared?.availableStates) {
+            const parsed = declared.props.safeParse(used.props);
+            const available = parsed.success ? declared.availableStates(parsed.data) : null;
+            if (available && !available.includes(trigger.state)) {
+              issue(
+                at("triggers", j, "state"),
+                `组件 ${used.id}（${used.component}）按它的参数不能用状态 ${trigger.state}，能用的状态：${available.join("、")}`,
+              );
+            }
           }
         }
         const line = lines.get(trigger.line);

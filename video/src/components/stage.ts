@@ -8,6 +8,11 @@ import type { Rect } from "../style/grid";
 export type Stage = {
   /** 当前状态：入场时是组件声明的第一个状态，之后按分镜的切换状态触发变化 */
   state: string;
+  /**
+   * 切到当前状态之前的状态（组件从哪个状态变过来，比如撤掉路障时要知道路障在哪条路）；
+   * 还没切换过状态时为 null
+   */
+  previousState: string | null;
   /** 进入当前状态以来的帧数：进入这个状态的那一帧是 0（初始状态从入场帧算起） */
   stateFrames: number;
   /** 入场动画的进度，0 → 1（线性）；播完以后、或入场动画是 `none` 时为 1 */
@@ -40,9 +45,11 @@ const progress = (frame: number, { frame: from, frames }: CueAction) => {
 
 /** 组件在整期第 `frame` 帧的舞台信息（`frame` 应落在 `cue` 的区间里） */
 export const stageAt = (cue: Cue, frame: number): Stage => {
-  const current = cue.states.findLast((switched) => switched.frame <= frame);
+  const index = cue.states.findLastIndex((switched) => switched.frame <= frame);
+  const current = cue.states[index];
   return {
     state: current?.state ?? cue.initialState,
+    previousState: current ? (cue.states[index - 1]?.state ?? cue.initialState) : null,
     stateFrames: frame - (current?.frame ?? cue.enter.frame),
     enter: progress(frame, cue.enter),
     exit: cue.exit ? progress(frame, cue.exit) : 0,

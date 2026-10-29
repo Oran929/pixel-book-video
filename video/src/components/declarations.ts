@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { layoutGrid } from "../style/grid";
-import { BLOCK_COLORS, FONT_SIZE, MASCOTS, MOTION, SIZE } from "../style/style";
+import { layoutGrid, type Rect } from "../style/grid";
+import { BLOCK_COLORS, FONT_SIZE, MASCOTS, MOTION, SIZE, snapToGrid } from "../style/style";
 import { textWidth } from "../style/text-width";
 import { VIDEO } from "../video-config";
 import {
@@ -179,11 +179,9 @@ export const computerLayout = () => {
   };
 };
 
-/** 屏幕上一行字能放多宽：屏幕宽减去两侧内边距，再让出崩溃后最后一行往右错开的距离 */
+/** 屏幕上一行字能放多宽：屏幕宽减去两侧内边距（崩溃后字只往下错开，不占横向） */
 export const computerLineRoom = (): number =>
-  computerLayout().screen.width -
-  2 * SIZE.blockPadding -
-  (COMPUTER_MAX_LINES - 1) * SIZE.computerSlip;
+  computerLayout().screen.width - 2 * SIZE.blockPadding;
 
 /** 电脑的状态：正常、崩溃 */
 export const COMPUTER_STATES = ["normal", "crashed"] as const;
@@ -205,6 +203,209 @@ export const ComputerProps = z.strictObject({
               code: "custom",
               path: [i],
               message: `屏幕上的「${line}」估算宽 ${width} 像素，屏幕最多放 ${room} 像素：缩短或拆成两行`,
+            });
+          }
+        });
+      }),
+  ),
+});
+
+/** 岔路占几格：左边一段路进路口，往右分出几条路 */
+export const FORK_CELLS = [6, 4] as const;
+
+/** 岔路最少、最多几条路 */
+export const FORK_ROADS = { min: 2, max: 4 } as const;
+
+/** 岔路标签的字号 */
+export const FORK_FONT = "subtitle" as const;
+
+/**
+ * 岔路的状态：`normal` 什么都没有；`mark-N` 标出第 N 条路（从上往下数，从 1 起）；
+ * `block-N` 在第 N 条路上放路障。一次只处在一个状态：从 `block-N` 切到别的状态就是撤掉路障。
+ * 每种情况单独声明一个状态（不用带参数的状态名），分镜照常写 `state`；
+ * 路的序号超出这组参数的条数时，`availableStates` 让分镜检查报错。
+ */
+export const FORK_STATES = [
+  "normal",
+  "mark-1",
+  "mark-2",
+  "mark-3",
+  "mark-4",
+  "block-1",
+  "block-2",
+  "block-3",
+  "block-4",
+] as const;
+export type ForkState = (typeof FORK_STATES)[number];
+
+/** 岔路状态里的路：`mark-2` → 标出第 2 条路；`normal` → null */
+export const forkRoadOf = (
+  state: string,
+): { kind: "mark" | "block"; road: number } | null => {
+  const match = /^(mark|block)-(\d+)$/u.exec(state);
+  return match ? { kind: match[1] as "mark" | "block", road: Number(match[2]) } : null;
+};
+
+/**
+ * 岔路的各部分（相对组件左上角的屏幕像素，都不含描边）：左边一段进路口的路（trunk），
+ * 分岔的竖路（spine），往右的几条路（roads，从上往下）；每条路上路障立的位置和标签的位置。
+ * 右下留出硬阴影的偏移。
+ */
+export const forkLayout = (roads: number) => {
+  const grid = layoutGrid(VIDEO.width, VIDEO.height);
+  const width = FORK_CELLS[0] * grid.cellWidth - SIZE.shadowOffset;
+  const height = FORK_CELLS[1] * grid.cellHeight - SIZE.shadowOffset;
+  const road = SIZE.forkRoad;
+  // 外框描边（细描边，路挨得近）画在路面外面，路面整体往里收一圈描边
+  const inset = SIZE.stroke;
+  const centers = Array.from({ length: roads }, (_, k) =>
+    snapToGrid(inset + ((height - 2 * inset) * (2 * k + 1)) / (2 * roads)),
+  );
+  const spineX = inset + SIZE.forkTrunk;
+  const roadX = spineX + road;
+  const right = width - inset;
+  const middle = snapToGrid(height / 2);
+  const barrierX = roadX + 2 * SIZE.blockPadding;
+  const labelX = barrierX + SIZE.forkBarrierWidth + 2 * SIZE.blockPadding;
+  return {
+    width,
+    height,
+    trunk: { x: inset, y: middle - road / 2, width: SIZE.forkTrunk + road, height: road },
+    spine: {
+      x: spineX,
+      y: centers[0]! - road / 2,
+      width: road,
+      height: centers.at(-1)! - centers[0]! + road,
+    },
+    roads: centers.map((center) => ({
+      road: { x: spineX, y: center - road / 2, width: right - spineX, height: road },
+      barrier: {
+        x: barrierX,
+        y: center - road / 2 - SIZE.forkBarrierOverhang,
+        width: SIZE.forkBarrierWidth,
+        height: road + 2 * SIZE.forkBarrierOverhang,
+      },
+      label: {
+        x: labelX,
+        y: center - road / 2,
+        width: right - SIZE.blockPadding - labelX,
+        height: road,
+      },
+    })),
+  } satisfies Record<string, unknown> & { trunk: Rect; spine: Rect };
+};
+
+/** 岔路上一条路的标签能放多宽：路障右边到路的右端（再留一个内边距） */
+export const forkLabelRoom = (): number => forkLayout(FORK_ROADS.max).roads[0]!.label.width;
+
+/** Fork：一个路口加几条路；可以标出某条路，可以给某条路放上或撤掉路障 */
+export const ForkProps = z
+  .strictObject({
+    /** 几条路 */
+    roads: z.int().min(FORK_ROADS.min).max(FORK_ROADS.max),
+    /** 每条路的标签，从上往下一项一条路，项数等于 `roads`；不写就是不带字的路。显示文字：逐项检查 */
+    labels: displayText(z.array(z.string().min(1))).optional(),
+  })
+  .superRefine(({ roads, labels }, ctx) => {
+    if (labels === undefined) return;
+    if (labels.length !== roads) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["labels"],
+        message: `labels 有 ${labels.length} 项，要和 roads（${roads} 条路）一样多`,
+      });
+    }
+    const room = forkLabelRoom();
+    labels.forEach((label, i) => {
+      const width = textWidth(label, FONT_SIZE[FORK_FONT]);
+      if (width > room) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["labels", i],
+          message: `路上的标签「${label}」估算宽 ${width} 像素，最多放 ${room} 像素：缩短标签`,
+        });
+      }
+    });
+  });
+
+/** 时间线最少、最多几个节点；每个节点占几列 */
+export const TIMELINE_NODES = { min: 2, max: 6, columns: 2 } as const;
+
+/** 时间线占几格：每个节点 2 列；上一行是横轴和节点，下一行是节点下面的字 */
+export const timelineCells = (nodes: number) =>
+  [nodes * TIMELINE_NODES.columns, 2] as const;
+
+/** 时间线节点文字的字号 */
+export const TIMELINE_FONT = "subtitle" as const;
+
+/**
+ * 时间线的状态：`normal` 一个都没点亮；`lit-N` 点亮了前 N 个节点（从左往右，从 1 起）。
+ * 点亮到第 N 个时从上一个状态点亮到的地方沿横轴一路亮过去。
+ * 和岔路一样每种情况单独声明一个状态，节点序号超出这组参数的节点数时分镜检查报错。
+ */
+export const TIMELINE_STATES = [
+  "normal",
+  "lit-1",
+  "lit-2",
+  "lit-3",
+  "lit-4",
+  "lit-5",
+  "lit-6",
+] as const;
+export type TimelineState = (typeof TIMELINE_STATES)[number];
+
+/** 时间线状态点亮了几个节点：`lit-3` → 3，`normal` → 0 */
+export const timelineLitOf = (state: string): number => {
+  const match = /^lit-(\d+)$/u.exec(state);
+  return match ? Number(match[1]) : 0;
+};
+
+/**
+ * 时间线的各部分（相对组件左上角的屏幕像素）：第一行正中一条横轴，
+ * 每个节点在自己那两列的正中；第二行是节点下面的字。
+ */
+export const timelineLayout = (nodes: number) => {
+  const grid = layoutGrid(VIDEO.width, VIDEO.height);
+  const [columns] = timelineCells(nodes);
+  const width = columns * grid.cellWidth - SIZE.shadowOffset;
+  const slot = TIMELINE_NODES.columns * grid.cellWidth;
+  const axisY = snapToGrid(grid.cellHeight / 2);
+  const node = SIZE.timelineNode;
+  const centers = Array.from({ length: nodes }, (_, k) => snapToGrid(k * slot + slot / 2));
+  return {
+    width,
+    axis: { x: 0, y: axisY - SIZE.timelineAxis / 2, width, height: SIZE.timelineAxis },
+    centers,
+    nodes: centers.map((x) => ({ x: x - node / 2, y: axisY - node / 2, width: node, height: node })),
+    labels: centers.map((x) => ({
+      x: x - slot / 2 + SIZE.blockPadding,
+      y: grid.cellHeight,
+      width: slot - 2 * SIZE.blockPadding,
+      height: grid.cellHeight - SIZE.shadowOffset,
+    })),
+  };
+};
+
+/** 时间线一个节点下面的字能放多宽：节点那两列，减去两侧内边距 */
+export const timelineLabelRoom = (): number => timelineLayout(TIMELINE_NODES.min).labels[0]!.width;
+
+/** Timeline：一条横轴加几个带字的节点，节点可以逐个点亮 */
+export const TimelineProps = z.strictObject({
+  /** 节点下面的字，从左往右一项一个节点。显示文字：逐项检查 */
+  nodes: displayText(
+    z
+      .array(z.string().min(1))
+      .min(TIMELINE_NODES.min)
+      .max(TIMELINE_NODES.max)
+      .superRefine((nodes, ctx) => {
+        const room = timelineLabelRoom();
+        nodes.forEach((node, i) => {
+          const width = textWidth(node, FONT_SIZE[TIMELINE_FONT]);
+          if (width > room) {
+            ctx.addIssue({
+              code: "custom",
+              path: [i],
+              message: `节点「${node}」估算宽 ${width} 像素，一个节点最多放 ${room} 像素：缩短`,
             });
           }
         });
@@ -282,5 +483,49 @@ export const COMPONENT_DECLARATIONS = {
     connector: false,
     // 出现时弹一声，崩溃时爆一声，重启回正常时轻点一声
     sounds: { enter: "pop", exit: "leave", states: { normal: "blip", crashed: "crash" } },
+  }),
+  Fork: declareComponent({
+    props: ForkProps,
+    states: FORK_STATES,
+    cells: () => FORK_CELLS,
+    // 路上写了字时整块岔路都算标签（字在路的右段，路占满上下）；不写字时子组件可以嵌进来
+    labelArea: ({ labels }) =>
+      labels ? { at: [0, 0], cells: FORK_CELLS } : { at: [0, 0], cells: [0, 0] },
+    availableStates: ({ roads }) =>
+      FORK_STATES.filter((state) => (forkRoadOf(state)?.road ?? 0) <= roads),
+    enter: "fade",
+    exit: "fade",
+    connector: false,
+    // 出现时弹一声；标出一条路轻点一声，路障落下一声，撤掉路障（切回正常）轻点一声
+    sounds: {
+      enter: "pop",
+      exit: "leave",
+      states: Object.fromEntries(
+        FORK_STATES.map((state) => [
+          state,
+          forkRoadOf(state)?.kind === "block" ? "drop" : "blip",
+        ]),
+      ) as Record<ForkState, "drop" | "blip">,
+    },
+  }),
+  Timeline: declareComponent({
+    props: TimelineProps,
+    states: TIMELINE_STATES,
+    cells: ({ nodes }) => timelineCells(nodes.length),
+    // 下一行是节点下面的字，子组件只能嵌在横轴那一行
+    labelArea: ({ nodes }) => ({ at: [0, 1], cells: [timelineCells(nodes.length)[0], 1] }),
+    availableStates: ({ nodes }) =>
+      TIMELINE_STATES.filter((state) => timelineLitOf(state) <= nodes.length),
+    enter: "fade",
+    exit: "fade",
+    connector: false,
+    // 出现时弹一声，点亮时叮一声；全部熄灭（切回正常）不放音效
+    sounds: {
+      enter: "pop",
+      exit: "leave",
+      states: Object.fromEntries(
+        TIMELINE_STATES.map((state) => [state, state === "normal" ? null : "ding"]),
+      ) as Record<TimelineState, "ding" | null>,
+    },
   }),
 } as const satisfies ComponentDeclarations;

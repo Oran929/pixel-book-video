@@ -1223,3 +1223,182 @@ describe("planEpisode: the computer", () => {
     );
   });
 });
+
+// 岔路和时间线（#43）：s01-c01 是分岔口，s02-c01 是时间线；组件上的字都写在画面说明里
+const EP01_ROADS = {
+  ...MANIFEST,
+  scenes: [
+    {
+      id: "s01-c01",
+      segment: "s01",
+      description: "一个写着 ETC 的向导站在几条路线的分岔口：好改、难改、看不出",
+    },
+    {
+      id: "s02-c01",
+      segment: "s02",
+      description: "一条开发过程的时间线：起点、需求、编码、发布、维护",
+    },
+  ],
+};
+const planIn = (
+  scene: "s01-c01" | "s02-c01",
+  used: Record<string, unknown>,
+  triggers: Trigger[],
+) =>
+  planEpisode(EP01_ROADS, {
+    scenes: [
+      {
+        scene,
+        components: [{ id: "it", at: [1, 1], ...used }],
+        triggers: [{ action: "enter", offset: 0 }, ...triggers].map((trigger) => ({
+          target: "it",
+          line: scene === "s01-c01" ? "s01-l01" : "s02-l01",
+          ...trigger,
+        })),
+      },
+    ],
+    music: "pixel-sprinter",
+    pauses: [],
+  });
+const fork = (props: Record<string, unknown>, triggers: Trigger[] = []) =>
+  planIn("s01-c01", { component: "Fork", props: { roads: 3, ...props } }, triggers);
+
+describe("planEpisode: the fork in the road", () => {
+  it("takes 6×4 cells and can block a road and clear it again, with sounds", () => {
+    const [cue] = fork({}, [
+      { action: "state", offset: 1, state: "block-2" },
+      { action: "state", offset: 2, state: "normal" },
+    ]).cues;
+
+    expect(cue).toMatchObject({
+      area: { at: [1, 1], cells: [6, 4] },
+      initialState: "normal",
+      enter: { frame: 0, sound: "pop" },
+      states: [
+        { frame: 30, state: "block-2", sound: "drop" },
+        { frame: 60, state: "normal", sound: "blip" },
+      ],
+    });
+  });
+
+  it("can mark a road, with a blip", () => {
+    const [cue] = fork({}, [{ action: "state", offset: 1, state: "mark-3" }]).cues;
+    expect(cue!.states).toEqual([{ frame: 30, state: "mark-3", sound: "blip" }]);
+  });
+
+  it.each([
+    [2, "block-3"],
+    [3, "mark-4"],
+  ])("rejects a road past the %i roads it has (%s), listing the states it can use", (roads, state) => {
+    expect(() => fork({ roads }, [{ action: "state", offset: 1, state }])).toThrow(
+      new RegExp(
+        `第 1 个画面 第 2 个触发 state: 组件 it（Fork）按它的参数不能用状态 ${state}，能用的状态：normal、mark-1、`,
+      ),
+    );
+  });
+
+  it("rejects a state the fork does not declare at all", () => {
+    expect(() => fork({ roads: 4 }, [{ action: "state", offset: 1, state: "block-5" }])).toThrow(
+      /组件 it（Fork）没有状态 block-5，声明过的状态：normal、mark-1/,
+    );
+  });
+
+  it("labels each road with display text from the scene", () => {
+    expect(() => fork({ labels: ["好改", "难改", "看不出"] })).not.toThrow();
+    expect(() => fork({ labels: ["好改", "难改", "最快"] })).toThrow(/props labels \[2\]: .*「最快」/);
+  });
+
+  it("needs one label per road", () => {
+    expect(() => fork({ labels: ["好改", "难改"] })).toThrow(
+      /props labels: labels 有 2 项，要和 roads（3 条路）一样多/,
+    );
+  });
+
+  it("rejects a road label too wide for the road", () => {
+    expect(() =>
+      fork({ roads: 2, labels: ["一个写着 ETC 的向导站在几条路线的分岔口", "好改"] }),
+    ).toThrow(/props labels \[0\]: 路上的标签「.*」估算宽 \d+ 像素，最多放 \d+ 像素/);
+  });
+
+  it.each([1, 5])("rejects %i roads", (roads) => {
+    expect(() => fork({ roads })).toThrow(/props roads/);
+  });
+});
+
+const timeline = (nodes: string[], triggers: Trigger[] = []) =>
+  planIn("s02-c01", { component: "Timeline", props: { nodes } }, triggers);
+
+describe("planEpisode: the timeline", () => {
+  it("takes two columns per node and two rows, lighting nodes one by one with a ding", () => {
+    // s02-c01 从第 138 帧开始
+    const [cue] = timeline(["起点", "编码", "发布", "维护"], [
+      { action: "state", offset: 0.5, state: "lit-1" },
+      { action: "state", offset: 1, state: "lit-4" },
+      { action: "state", offset: 1.5, state: "normal" },
+    ]).cues;
+
+    expect(cue).toMatchObject({
+      area: { at: [1, 1], cells: [8, 2] },
+      initialState: "normal",
+      enter: { frame: 138, sound: "pop" },
+      states: [
+        { frame: 153, state: "lit-1", sound: "ding" },
+        { frame: 168, state: "lit-4", sound: "ding" },
+        { frame: 183, state: "normal", sound: null },
+      ],
+    });
+  });
+
+  it("rejects lighting up past its last node", () => {
+    expect(() => timeline(["起点", "发布"], [{ action: "state", offset: 1, state: "lit-3" }])).toThrow(
+      /组件 it（Timeline）按它的参数不能用状态 lit-3，能用的状态：normal、lit-1、lit-2$/m,
+    );
+  });
+
+  it("rejects node text that is not in the scene", () => {
+    expect(() => timeline(["起点", "上线"])).toThrow(/props nodes \[1\]: .*「上线」/);
+  });
+
+  it.each([
+    [["起点"], "only one node"],
+    [["起点", "需求", "编码", "发布", "维护", "起点", "需求"], "seven nodes"],
+  ])("rejects %j (%s)", (nodes) => {
+    expect(() => timeline(nodes)).toThrow(/props nodes/);
+  });
+
+  it("rejects a node label too wide for its two columns", () => {
+    expect(() => timeline(["起点", "一条开发过程的时间线"])).toThrow(
+      /props nodes \[1\]: 节点「一条开发过程的时间线」估算宽 \d+ 像素/,
+    );
+  });
+
+  it("keeps a nested child off the node labels", () => {
+    expect(() =>
+      planEpisode(EP01_ROADS, {
+        scenes: [
+          {
+            scene: "s02-c01",
+            components: [
+              { id: "line", component: "Timeline", props: { nodes: ["起点", "发布"] }, at: [0, 2] },
+              {
+                id: "tag",
+                component: "PixelBlock",
+                props: { label: "维护", size: "small", color: "orange" },
+                at: [2, 3],
+                parent: "line",
+              },
+            ],
+            triggers: ["line", "tag"].map((target) => ({
+              target,
+              line: "s02-l01",
+              offset: 0,
+              action: "enter",
+            })),
+          },
+        ],
+        music: "pixel-sprinter",
+        pauses: [],
+      }),
+    ).toThrow(/压住了.*的标签/);
+  });
+});

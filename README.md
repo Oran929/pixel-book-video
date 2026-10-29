@@ -389,7 +389,7 @@ uv run pixelbook terms ../books/sample/ch01/ep01/script.yaml   # 每个新术语
 - `scene`：合成清单里的画面 ID。`components`：本画面用的组件，`id` 是本画面里的名字，`component` 是组件名，`props` 按该组件的参数格式校验。
 - `at`：组件左上角所在的格 `[列, 行]`，从 0 开始（见下面的「网格」）。连线类组件（箭头）不写 `at`，改写 `from`、`to`；其余组件必须写 `at`。组件占几格由组件按参数自己算，分镜只写位置。
 - `parent`（可选）：父组件的 id，表示有意嵌套（大方块里占一小角）；`from`、`to`：连线类组件的起点和终点。见下面的「箭头和嵌套」。
-- 新组件要登记三处：**声明**在 `video/src/components/declarations.ts`（用 `declareComponent`，格式见 `declaration.ts`：参数格式 `props`（zod）、状态清单 `states`（第一个是初始状态）、占几格 `cells`（按参数算，`[列数, 行数]`）、入场和退场的默认动画 `enter`、`exit`、可选的自己的特殊效果 `effects`（见下面的 `animation`）、是否是连线类组件 `connector`、默认音效 `sounds`（见下面的「音效」）、可选的标签位置 `labelArea`（见下面的「箭头和嵌套」）；会显示在画面上的参数用 `displayText` 标出，见下面的「显示文字」），**实现**在 `video/src/components/registry.ts`，**样张**在 `video/src/components/samples.ts`；少登记一处，类型检查会报错。分镜检查只依赖声明，不含 JSX，时间轴导出命令在 Node 里也用它校验分镜。
+- 新组件要登记三处：**声明**在 `video/src/components/declarations.ts`（用 `declareComponent`，格式见 `declaration.ts`：参数格式 `props`（zod）、状态清单 `states`（第一个是初始状态）、占几格 `cells`（按参数算，`[列数, 行数]`）、入场和退场的默认动画 `enter`、`exit`、可选的自己的特殊效果 `effects`（见下面的 `animation`）、是否是连线类组件 `connector`、默认音效 `sounds`（见下面的「音效」）、可选的标签位置 `labelArea`（见下面的「箭头和嵌套」）、可选的按参数能用的状态 `availableStates`（见下面的「岔路和时间线」）；会显示在画面上的参数用 `displayText` 标出，见下面的「显示文字」），**实现**在 `video/src/components/registry.ts`，**样张**在 `video/src/components/samples.ts`；少登记一处，类型检查会报错。分镜检查只依赖声明，不含 JSX，时间轴导出命令在 Node 里也用它校验分镜。
 - **渲染接口**（`video/src/components/stage.ts`）：组件实现是 `React.FC<RenderProps<参数>>`，拿到两样东西：
 
   ```ts
@@ -397,6 +397,7 @@ uv run pixelbook terms ../books/sample/ch01/ep01/script.yaml   # 每个新术语
   type Ends = { from: Rect; to: Rect }; // 连线类组件两端组件的矩形（屏幕像素），其余组件为 null
   type Stage = {
     state: string;       // 当前状态：入场时是声明的第一个状态，之后按 state 触发变化
+    previousState: string | null; // 切到当前状态之前的状态；还没切换过时为 null
     stateFrames: number; // 进入当前状态以来的帧数（进入的那一帧是 0；初始状态从入场帧算起）
     enter: number;       // 入场动画的进度 0 → 1（线性）；播完或动画是 none 时为 1
     exit: number;        // 退场动画的进度 0 → 1（线性）；退场之前为 0
@@ -409,7 +410,7 @@ uv run pixelbook terms ../books/sample/ch01/ep01/script.yaml   # 每个新术语
 - **样张**：每个组件在 Studio 里有一页 `Sample-<组件名>`，用 `samples.ts` 里的假分镜（经同一个 `planEpisode` 排期）把它的每个状态、每种入场和退场动画、每个默认音效都演一遍，字幕位置写着这一刻在演什么，同时放出音效。`npm run test` 检查每个登记的组件都有样张、样张通过分镜检查、演到了每个状态和每种入场退场动画、放到了入场、退场和切到每个状态的默认音效。导出某一帧：`npx remotion still Sample-PixelBlock ../out/samples/pixelblock.png --frame=300`。
 - `triggers`：每条触发让 `target` 组件在 `line` 这句开始后偏移 `offset` 秒做一个动作（ADR-0011），`action` 三选一：
   - `enter` 入场、`exit` 退场：可选 `animation`，不写就用组件声明的默认动画。
-  - `state` 切换状态：必须写 `state: <状态名>`，状态名必须是组件声明过的；组件入场时是初始状态。
+  - `state` 切换状态：必须写 `state: <状态名>`，状态名必须是组件声明过的；组件声明了 `availableStates` 时还必须是这组参数下能用的（比如 3 条路的岔路不能用 `block-4`），否则报错并列出能用的状态。组件入场时是初始状态。
 - 三种动作都可以写 `sound`：写音效 ID（音效登记表里的）就替换这个动作的默认音效，写 `null` 就不放，不写就用组件声明的默认音效（见下面的「音效」）。
 - `animation` 的取值（入场和退场通用）：`fade` 淡入 / 淡出，`slide` 从上方落下 / 向上升起，各播 0.4 秒（风格表 `MOTION.animationSeconds`）；`none` 瞬间出现 / 消失，不播动画（也不放音效），用来把同一个东西接到下一个画面。组件还可以有**自己的特殊效果**：在声明的 `effects` 里登记效果名和秒数（秒数取自风格表 `MOTION`），可以作为它的默认动画，分镜的 `animation` 也可以写这个名字，只有这个组件能用（写了组件没有的动画报错，并列出它能用的动画）；退场动画是否在画面结束前播完、重叠检查的区间，都按登记的时长算。现在只有提示牌的 `light`（亮起，0.8 秒）。
 - 每个组件恰好一次 `enter`、最多一次 `exit`、任意次 `state`。帧顺序必须是 **入场 ≤ 切换状态 < 退场**；同一帧切两次状态、切到组件当前已经是的状态都报错。没有 `exit` 的组件显示到画面结束（下一个画面的第一句开始）；有 `exit` 的，显示到退场动画播完，退场动画必须在画面结束前播完，否则报错。
@@ -478,19 +479,43 @@ uv run pixelbook terms ../books/sample/ch01/ep01/script.yaml   # 每个新术语
 - 默认入场是它自己的特殊效果 `light`（亮起，`MOTION.hintLightSeconds` 0.8 秒）：牌子先是暗的（`COLOR.hintUnlit`），闪一下、灭掉，从一半起亮住，外面扩出一圈黄光（`COLOR.hintGlow`）后消失。退场默认 `fade`；退场写 `animation: "light"` 时倒着播，即熄灭。也可以用 `fade`、`slide`、`none` 入场。
 - 只有一个状态 `normal`。默认音效：入场 `ding`、退场 `leave`。整块都是字（`labelArea` 是整块），不能嵌子组件。
 
-**电脑**（`Computer`，spec #16 用户故事 36）是一台老式显示器加底座，占 4 列 × 4 行，参数只有 `screen`：屏幕上的字，一项一行，最多 3 行，可以是空数组（屏幕上没有字）。`screen` 是显示文字，逐行检查；每行字号 `subtitle`，最多 440 像素宽（约 9 个汉字，让出崩溃后字往右下错开的距离），放不下报错。
+**电脑**（`Computer`，spec #16 用户故事 36）是一台老式显示器加底座，占 4 列 × 4 行，参数只有 `screen`：屏幕上的字，一项一行，最多 3 行，可以是空数组（屏幕上没有字）。`screen` 是显示文字，逐行检查；每行字号 `subtitle`，最多 448 像素宽（约 9 个汉字），放不下报错。
 
 ```json
 { "id": "computer", "component": "Computer", "props": { "screen": ["两条", "自相矛盾的知识"] }, "at": [7, 1] }
 ```
 
-- 状态 `normal`（初始，深色屏幕绿字，最后一行后面一个光标一亮一灭）、`crashed`（切过来的 0.8 秒里左右抖动、红白闪屏、冒出花屏横条，之后停在蓝屏，每行字往右下错开）。可以从 `crashed` 切回 `normal`（重启）。
+- 状态 `normal`（初始，深色屏幕绿字，最后一行后面一个光标一亮一灭）、`crashed`（切过来的 0.8 秒里左右抖动、红白闪屏、冒出花屏横条，之后停在蓝屏，每行字比上一行往下错开一点，横向不动）。可以从 `crashed` 切回 `normal`（重启）。
 - 默认入场、退场都是 `fade`。默认音效：入场 `pop`、退场 `leave`，切到 `crashed` 时 `crash`，切回 `normal` 时 `blip`。上面三行格是屏幕（`labelArea`），子组件只能嵌在底座那一行。
 - 颜色（`COLOR.computer*`）、尺寸（`SIZE.computer*`）、时长（`MOTION.computerCrashSeconds` 等）都在风格表里；提示牌和电脑增补的颜色在风格样张的「用途色」一节里能看到。
 
 样张：`Sample-HintSign`（亮起、亮着、熄灭；三块提示牌三种入场和退场动画），`Sample-Computer`（入场、崩溃、重启、退场；三台电脑三种入场和退场动画，最后一台屏幕上没有字）。
 
-`video/src/episode/ep01-placement.test.ts` 用 ch02 ep01 的合成清单（`fixtures/ep01-episode.json`，去掉了音频路径）和一份占位分镜，把 17 个画面各摆了一遍，作为摆放的参考：s01-c03 三个方块各有一个箭头指向 ETC；s05-c04 的「复制粘贴源码」先单独出现，旁白说「只是很小的一部分」时用 `none` 瞬间换成大方块「知识和意图」左上角的子组件（子组件不能早于父组件入场）；s05-c05 代码在左，箭头指向右上的文档和右下的数据库 Schema。
+#### 岔路和时间线
+
+**岔路**（`Fork`，spec #16 用户故事 35）是一个路口加几条路，占 6 列 × 4 行：左边一段路进路口，分岔的竖路往右分出 `roads` 条路（2–4 条，从上往下数，第 1 条在最上面）。`labels` 可选：每条路的标签，项数必须等于 `roads`，是显示文字，逐项检查；字号 `subtitle`，写在路障右边，最多 480 像素宽（`forkLabelRoom()`，约 10 个汉字），放不下报错。不写 `labels` 就是不带字的路。
+
+```json
+{ "id": "fork", "component": "Fork", "props": { "roads": 3, "labels": ["好改", "难改", "看不出"] }, "at": [5, 1] }
+```
+
+- 状态：`normal`（初始，什么都没有）、`mark-N`（标出第 N 条路：路面从路口往右铺成黄色）、`block-N`（在第 N 条路上放路障：红白条纹的路障从上方落下）。一次只处在一个状态：从 `block-N` 切到别的状态就是撤掉路障（路障抬起消失），所以「标出一条路，同时另一条有路障」表现不了，要的话再加状态。动画都用一个通用动画的时长。
+- 默认入场、退场都是 `fade`。默认音效：入场 `pop`、退场 `leave`，切到 `mark-N` 和 `normal` 时 `blip`，切到 `block-N` 时 `drop`。写了 `labels` 时整块都算标签（`labelArea`），不能嵌子组件；不写字时可以嵌。
+
+**时间线**（`Timeline`，spec #16 用户故事 38）是一条横轴加几个带字的节点：`nodes` 是节点下面的字（2–6 项，从左往右），显示文字，逐项检查；每个节点占 2 列，所以占 `2 × 节点数` 列 × 2 行（上一行横轴和节点，下一行字）。字号 `subtitle`，每项最多 264 像素宽（`timelineLabelRoom()`，约 5 个汉字）。
+
+```json
+{ "id": "timeline", "component": "Timeline", "props": { "nodes": ["起点", "开发过程", "发布"] }, "at": [3, 2] }
+```
+
+- 状态：`normal`（初始，一个都没点亮）、`lit-N`（点亮了前 N 个节点）。从点亮较少的状态切到 `lit-N` 时，横轴从上次亮到的地方沿着往右亮过去（每多一个节点多 0.4 秒），亮光走到的节点变黄、字变深；熄灭（切到较少的 `lit-N` 或 `normal`）是一下子变的。
+- 默认入场、退场都是 `fade`。默认音效：入场 `pop`、退场 `leave`，切到 `lit-N` 时 `ding`，切回 `normal` 不放音效。下一行是字（`labelArea`），子组件只能嵌在横轴那一行。
+
+**状态写法**：「第 N 条路有路障」「点亮到第 N 个节点」用**每种情况单独声明一个状态**（`block-1` … `block-4`、`lit-1` … `lit-6`），不用带参数的状态名，分镜的 `state` 写法和别的组件一样。状态清单按参数的上限声明；声明里的 `availableStates(参数)` 给出这组参数下能用的状态，分镜检查据此拦下超出条数、节点数的序号（「按它的参数不能用状态 block-3，能用的状态：…」）；写了根本没声明的名字（如 `block-5`）照常报「没有状态」。组件实现从舞台信息的 `previousState` 知道是从哪个状态切过来的（撤掉哪条路上的路障、从哪个节点接着亮）。
+
+颜色（`COLOR.fork*`、`COLOR.timeline*`）、尺寸（`SIZE.fork*`、`SIZE.timeline*`）在风格表里，风格样张的「用途色」一节能看到。样张：`Sample-Fork`（四条带字的路逐条标出、逐条放路障、撤掉、退场；两条、三条不带字的路三种入场和退场动画），`Sample-Timeline`（六个节点逐个点亮、全部熄灭、一口气点亮、退场；三条两节点的时间线三种入场和退场动画）。
+
+`video/src/episode/ep01-placement.test.ts` 用 ch02 ep01 的合成清单（`fixtures/ep01-episode.json`，去掉了音频路径）和一份占位分镜，把 17 个画面各摆了一遍，作为摆放的参考：s01-c03 三个方块各有一个箭头指向 ETC；s05-c04 的「复制粘贴源码」先单独出现，旁白说「只是很小的一部分」时用 `none` 瞬间换成大方块「知识和意图」左上角的子组件（子组件不能早于父组件入场）；s05-c05 代码在左，箭头指向右上的文档和右下的数据库 Schema；s02-c01 岔路标出第 2 条路，s03-c02 岔路放上路障又撤掉，s04-c04 时间线「起点、开发过程、发布」点亮到第 3 个。
 
 #### 显示文字
 
@@ -512,7 +537,7 @@ uv run pixelbook terms ../books/sample/ch01/ep01/script.yaml   # 每个新术语
 - **文件**：音效放在 `video/public/sfx/`，每个音效两份文件：`<ID>.wav`（16 位单声道 PCM，44.1 kHz）和生成它的 jsfxr 参数 `<ID>.sfxr.json`，都提交（`.gitignore` 全局忽略 `*.wav`，对这个目录开了例外）。不能放在 `video/public/episode/` 下：配音每次都会删掉那个目录。
 - **生成**：`cd video && npm run sfx` 用 jsfxr（devDependency，固定 1.4.1）的 `sfxr.toWave` 在 Node 里把登记表里每个音效的参数生成成 wav，并打印时长和削波的采样数。只在本机运行，CI 不重新生成。参数是**展开后的完整参数**（波形、包络、频率、音量 `sound_vol`、采样率和采样位数 `sample_size: 16` 都写明），不是预设名：jsfxr 的预设每次随机。新加音效：在登记表里加一项，写好同名的 `.sfxr.json`，再运行 `npm run sfx`。
 - **重新生成不保证逐字节相同**：噪声波形（`wave_type: 3`，现在是 `crash`）生成时用了随机数，重新生成只能做到听感一致；其余波形是确定的。
-- **组件声明的默认音效**：`sounds: { enter, exit, states }`，每个动作、每个状态各写一个音效 ID，或写 `null` 表示不用音效；`states` 必须为每个状态都写一项（少写类型检查会报错）。组件入场时处在初始状态，**只响入场音效**，不响初始状态的音效；之后切回初始状态时才响它。知识块：入场 `drop`、退场 `leave`，切到 `normal`、`highlight` 时 `blip`，切到 `changed` 时 `buzz`。小人：入场 `pop`、退场 `leave`，没有状态音效。箭头、提示牌、电脑见各自的小节。
+- **组件声明的默认音效**：`sounds: { enter, exit, states }`，每个动作、每个状态各写一个音效 ID，或写 `null` 表示不用音效；`states` 必须为每个状态都写一项（少写类型检查会报错）。组件入场时处在初始状态，**只响入场音效**，不响初始状态的音效；之后切回初始状态时才响它。知识块：入场 `drop`、退场 `leave`，切到 `normal`、`highlight` 时 `blip`，切到 `changed` 时 `buzz`。小人：入场 `pop`、退场 `leave`，没有状态音效。箭头、提示牌、电脑、岔路、时间线见各自的小节。
 - **规则**：触发上的 `sound` 替换的是这个触发的动作的音效。引用登记表里没有的音效 ID 时报错（报出第几个画面、第几个触发）。动画是 `none` 的入场和退场不放音效，在这样的触发上写音效 ID 也报错（写 `null` 可以）。同一帧的同一个音效只放一次（比如三个知识块同时落下，只响一声 `drop`，不会叠得更响）；同一帧的不同音效都放。
 - **播放**：`planEpisode` 输出音效列表 `sounds`（帧、音效 ID，按帧排序），Episode 和样张页在对应的帧播放（`video/src/sound/SoundCues.tsx`）。时间轴导出命令也把它写进 `timeline.json` 的 `sounds`。
 - **音量**：旁白、音效、配乐的音量常量在 `video/src/style/volume.ts` 的 `VOLUME_DB`，用 dB 写（相对旁白），换算成 Remotion 要的 0–1 线性值 `VOLUME`（以旁白为 1）。现在音效 -12 dB、配乐 -20 dB，到人工关口 3 再调。音效文件本身的峰值在 -6 到 -8 dBFS（`npm run test` 检查每个音效文件是 16 位单声道、有声音、峰值低于 -1 dBFS）。

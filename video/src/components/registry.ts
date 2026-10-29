@@ -2,9 +2,11 @@ import type { z } from "zod";
 import type { RenderProps } from "./stage";
 import { Arrow } from "./Arrow";
 import { Computer } from "./Computer";
+import { Fork } from "./Fork";
 import { HintSign } from "./HintSign";
 import { Mascot } from "./Mascot";
 import { PixelBlock } from "./PixelBlock";
+import { Timeline } from "./Timeline";
 import { COMPONENT_DECLARATIONS } from "./declarations";
 
 // 组件注册表：分镜里的组件名 → 组件实现。声明（参数格式、状态、默认动画等）在 declarations.ts 里，
@@ -20,6 +22,8 @@ const COMPONENTS: {
   Arrow,
   HintSign,
   Computer,
+  Fork,
+  Timeline,
 };
 
 /**

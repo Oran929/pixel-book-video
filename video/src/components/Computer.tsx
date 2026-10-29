@@ -2,7 +2,7 @@ import { AbsoluteFill } from "remotion";
 import type { z } from "zod";
 import type { Rect } from "../style/grid";
 import { border, COLOR, hardShadow, pixelText, SIZE, snapToGrid } from "../style/style";
-import { computerLook } from "./computer-look";
+import { computerLook, lineOffset } from "./computer-look";
 import { COMPUTER_FONT, type ComputerProps, computerLayout } from "./declarations";
 import type { RenderProps } from "./stage";
 
@@ -28,7 +28,7 @@ const shell = (rect: Rect): React.CSSProperties => ({
 /**
  * 电脑：一台老式显示器加底座，屏幕上一行一行显示 `screen` 里的字（可以没有字）。
  * 状态和动画见 `computerLook`：正常时绿字加闪烁的光标；切到崩溃时抖动、闪屏、花屏，停在蓝屏，
- * 字往右下错开。屏幕宽度和每行字的宽度检查（`computerLineRoom`）同一个口径。
+ * 字往下错开。屏幕宽度和每行字的宽度检查（`computerLineRoom`）同一个口径。
  */
 export const Computer: React.FC<RenderProps<z.infer<typeof ComputerProps>>> = ({
   props: { screen },
@@ -59,7 +59,7 @@ export const Computer: React.FC<RenderProps<z.infer<typeof ComputerProps>>> = ({
             style={{
               display: "flex",
               alignItems: "center",
-              transform: `translate(${i * look.slip}px, ${i * look.slip}px)`,
+              transform: `translate(${lineOffset(look, i).x}px, ${lineOffset(look, i).y}px)`,
             }}
           >
             <span>{line}</span>

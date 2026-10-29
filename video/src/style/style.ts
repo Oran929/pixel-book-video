@@ -100,6 +100,24 @@ export const COLOR = {
   /** 电脑刚崩溃时屏幕在这两色之间闪，同时冒出横条花屏 */
   computerFlash: PALETTE.red,
   computerFlashAlt: PALETTE.cream,
+  /** 岔路的路面（描边是 `ink`）、路中间的虚线、路上的标签 */
+  forkRoad: PALETTE.sand,
+  forkRoadLine: PALETTE.cream,
+  forkLabel: PALETTE.ink,
+  /** 岔路上被标出的那条路的路面 */
+  forkMarked: PALETTE.yellow,
+  /** 路障：红白相间的横杆 */
+  forkBarrier: PALETTE.red,
+  forkBarrierStripe: PALETTE.cream,
+  /** 时间线的横轴：没点亮的一段、点亮的一段 */
+  timelineAxis: PALETTE.stone,
+  timelineAxisLit: PALETTE.orange,
+  /** 时间线的节点（描边是 `ink`）：没点亮、点亮 */
+  timelineNode: PALETTE.sand,
+  timelineNodeLit: PALETTE.yellow,
+  /** 时间线节点下面的字：没点亮、点亮 */
+  timelineLabel: PALETTE.stone,
+  timelineLabelLit: PALETTE.ink,
 } as const;
 
 /**
@@ -157,8 +175,23 @@ export const SIZE = {
   computerGlitchBar: cells(8),
   /** 电脑崩溃时左右抖动的幅度 */
   computerShake: cells(4),
-  /** 崩溃后屏幕上每行字比上一行多往右下错开多少 */
+  /** 崩溃后屏幕上每行字比上一行多往下错开多少 */
   computerSlip: cells(4),
+  /** 岔路的路宽（不含两侧描边），放得下一行字幕字号的字形 */
+  forkRoad: cells(14),
+  /** 岔路左边进路口的那一段路有多长（到分岔的竖路左沿） */
+  forkTrunk: cells(48),
+  /** 路中间的虚线：每一段的长、段间的空、线的粗细 */
+  forkDash: cells(6),
+  forkDashGap: cells(6),
+  forkDashHeight: cells(2),
+  /** 路障横杆的宽、上下各伸出路面多少、红白条纹每条多宽 */
+  forkBarrierWidth: cells(12),
+  forkBarrierOverhang: cells(6),
+  forkBarrierStripe: cells(4),
+  /** 时间线横轴的粗细、节点方块的边长 */
+  timelineAxis: cells(4),
+  timelineNode: cells(16),
 } as const;
 
 /** 描边规则：实心、不模糊，宽度取 `SIZE.stroke` / `SIZE.strokeThick` */

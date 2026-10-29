@@ -16,7 +16,7 @@ export type ComputerLook = {
   shake: number;
   screen: string;
   text: string;
-  /** 每行字往右下错开多少（崩溃后错开，正常时为 0） */
+  /** 每行字比上一行多往下错开多少（崩溃后错开，正常时为 0）；只往下错，不往右缩进 */
   slip: number;
   /** 花屏横条的上沿，按屏幕高度的比例（0 → 1）；不花屏时为空 */
   glitch: number[];
@@ -27,7 +27,7 @@ export type ComputerLook = {
 /**
  * 电脑这一帧的样子。`normal`：深色屏幕、绿字，字后面一个光标一亮一灭。
  * `crashed`：切过来的头 `MOTION.computerCrashSeconds` 秒左右抖动、红白闪屏、冒出花屏横条，
- * 之后停在蓝屏，每行字比上一行往右下多错开一点。
+ * 之后停在蓝屏，每行字比上一行往下多错开一点。
  */
 export const computerLook = (stage: Stage): ComputerLook => {
   const state = stage.state as ComputerState;
@@ -67,3 +67,12 @@ export const computerLook = (stage: Stage): ComputerLook => {
     cursor: false,
   };
 };
+
+/**
+ * 第 `i` 行字（从 0 数）相对正常位置的偏移（屏幕像素）。只往下错开：往右错开时
+ * 第二行开头看着像多了一个空格的缩进（#41 样帧），所以横向不动。
+ */
+export const lineOffset = (look: ComputerLook, i: number): { x: number; y: number } => ({
+  x: 0,
+  y: i * look.slip,
+});

@@ -68,13 +68,13 @@ const cue = lamp([
 
 describe("stageAt", () => {
   it.each([
-    [0, { state: "off", stateFrames: 0, enter: 0, exit: 0 }],
-    [6, { state: "off", stateFrames: 6, enter: 0.5, exit: 0 }],
-    [12, { state: "off", stateFrames: 12, enter: 1, exit: 0 }],
-    [22, { state: "on", stateFrames: 7, enter: 1, exit: 0 }],
-    [45, { state: "broken", stateFrames: 0, enter: 1, exit: 0 }],
-    [66, { state: "broken", stateFrames: 21, enter: 1, exit: 0.5 }],
-    [71, { state: "broken", stateFrames: 26, enter: 1, exit: 11 / 12 }],
+    [0, { state: "off", previousState: null, stateFrames: 0, enter: 0, exit: 0 }],
+    [6, { state: "off", previousState: null, stateFrames: 6, enter: 0.5, exit: 0 }],
+    [12, { state: "off", previousState: null, stateFrames: 12, enter: 1, exit: 0 }],
+    [22, { state: "on", previousState: "off", stateFrames: 7, enter: 1, exit: 0 }],
+    [45, { state: "broken", previousState: "on", stateFrames: 0, enter: 1, exit: 0 }],
+    [66, { state: "broken", previousState: "on", stateFrames: 21, enter: 1, exit: 0.5 }],
+    [71, { state: "broken", previousState: "on", stateFrames: 26, enter: 1, exit: 11 / 12 }],
   ])("at frame %i", (frame, stage) => {
     expect(stageAt(cue, frame)).toEqual({
       ...stage,
