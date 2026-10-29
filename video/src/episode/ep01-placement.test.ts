@@ -11,7 +11,7 @@ import { OUTRO_SEGMENT } from "./manifest";
 
 // ep01 摆放试验（#34）：在动画之前，先看 ch02 ep01 的 17 个画面能不能放进 12×6 网格。
 // 合成清单抄自 books/pragmatic-programmer/ch02/ep01/episode.json（gitignore），去掉了音频路径；
-// 分镜是占位摆放，组件需求按 #13 评论里的清单；箭头和嵌套（#40）用组件注册表里真实的声明。知识块用组件注册表里真实的声明（`size` 决定格数，
+// 分镜是占位摆放，组件需求按 #13 评论里的清单；箭头和嵌套（#40）、提示牌和电脑（#41）用组件注册表里真实的声明。知识块用组件注册表里真实的声明（`size` 决定格数，
 // 标签按字体度量检查），其余组件还没做，用下面只占格子的占位声明。
 const read = (name: string) =>
   JSON.parse(
@@ -37,11 +37,10 @@ const PLACEHOLDERS: ComponentDeclarations = {
   Arrow: COMPONENT_DECLARATIONS.Arrow,
   // 小人按 1/2 大小：约 205×295 像素 → 2 × 3 格（尺寸由 #42 决定）
   Mascot: placeholder([2, 3]),
-  // 提示牌：「提示14」加一行标题
-  HintSign: placeholder([5, 2]),
+  HintSign: COMPONENT_DECLARATIONS.HintSign,
   // 岔路：一个路口加三条路
   Fork: placeholder([6, 4]),
-  Computer: placeholder([3, 3]),
+  Computer: COMPONENT_DECLARATIONS.Computer,
   // 时间线：一条横轴加几个节点
   Timeline: placeholder([10, 2]),
 };

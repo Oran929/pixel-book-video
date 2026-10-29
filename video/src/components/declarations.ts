@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { layoutGrid } from "../style/grid";
-import { BLOCK_COLORS, FONT_SIZE, MASCOTS, SIZE } from "../style/style";
+import { BLOCK_COLORS, FONT_SIZE, MASCOTS, MOTION, SIZE } from "../style/style";
 import { textWidth } from "../style/text-width";
 import { VIDEO } from "../video-config";
 import {
@@ -90,6 +90,128 @@ export type ArrowState = (typeof ARROW_STATES)[number];
 /** Arrow：从一个组件指向另一个组件；两端写在分镜的 `from`、`to` 上，没有参数 */
 export const ArrowProps = z.strictObject({});
 
+/** 提示牌占几格：一行标题牌（「提示14」）加一行大号标题 */
+export const HINT_CELLS = [5, 3] as const;
+
+/** 提示牌的字号：标题牌上的「提示14」用 `HINT_FONT.header`，提示标题用 `HINT_FONT.title` */
+export const HINT_FONT = { header: "subtitle", title: "large" } as const;
+
+/**
+ * 提示牌里放字的宽度（屏幕像素）：格子宽，减去两侧粗描边、右下的硬阴影和两侧内边距
+ * （和知识块同一个口径）
+ */
+export const hintTextRoom = (): number =>
+  HINT_CELLS[0] * layoutGrid(VIDEO.width, VIDEO.height).cellWidth -
+  2 * SIZE.strokeThick -
+  SIZE.shadowOffset -
+  2 * SIZE.blockPadding;
+
+/** HintSign：书里的提示框，标题牌上是「提示」和编号，下面是提示标题；入场默认「亮起」 */
+export const HintSignProps = z
+  .strictObject({
+    /** 标题牌上编号前的字，通常是「提示」。显示文字 */
+    label: displayText(z.string().min(1)),
+    /** 提示的编号，例如 "14"。显示文字：画面说明里写了「提示14」才能用 */
+    number: displayText(z.string().min(1)),
+    /** 提示标题，例如 "ETC"；只有一行。显示文字 */
+    title: displayText(z.string().min(1)),
+  })
+  .superRefine(({ label, number, title }, ctx) => {
+    const room = hintTextRoom();
+    const header =
+      textWidth(label, FONT_SIZE[HINT_FONT.header]) +
+      SIZE.blockPadding +
+      textWidth(number, FONT_SIZE[HINT_FONT.header]);
+    if (header > room) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["label"],
+        message: `标题牌「${label} ${number}」估算宽 ${header} 像素，提示牌最多放 ${room} 像素`,
+      });
+    }
+    const width = textWidth(title, FONT_SIZE[HINT_FONT.title]);
+    if (width > room) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["title"],
+        message: `标题「${title}」估算宽 ${width} 像素，提示牌最多放 ${room} 像素：缩短标题`,
+      });
+    }
+  });
+
+/** 电脑占几格：显示器加底座 */
+export const COMPUTER_CELLS = [4, 4] as const;
+
+/** 电脑屏幕上的字号和最多几行 */
+export const COMPUTER_FONT = "subtitle" as const;
+export const COMPUTER_MAX_LINES = 3;
+
+/**
+ * 电脑的各部分（相对组件左上角的屏幕像素）：显示器在上，脖子和底座居中在下，
+ * 右下留出硬阴影的偏移；屏幕是显示器去掉粗描边和边框
+ */
+export const computerLayout = () => {
+  const grid = layoutGrid(VIDEO.width, VIDEO.height);
+  const width = COMPUTER_CELLS[0] * grid.cellWidth - SIZE.shadowOffset;
+  const height = COMPUTER_CELLS[1] * grid.cellHeight - SIZE.shadowOffset;
+  const monitorHeight = height - SIZE.computerNeckHeight - SIZE.computerBaseHeight;
+  const inset = SIZE.strokeThick + SIZE.computerBezel;
+  return {
+    monitor: { x: 0, y: 0, width, height: monitorHeight },
+    screen: {
+      x: inset,
+      y: inset,
+      width: width - 2 * inset,
+      height: monitorHeight - 2 * inset,
+    },
+    neck: {
+      x: (width - SIZE.computerNeckWidth) / 2,
+      y: monitorHeight,
+      width: SIZE.computerNeckWidth,
+      height: SIZE.computerNeckHeight,
+    },
+    base: {
+      x: (width - SIZE.computerBaseWidth) / 2,
+      y: monitorHeight + SIZE.computerNeckHeight,
+      width: SIZE.computerBaseWidth,
+      height: SIZE.computerBaseHeight,
+    },
+  };
+};
+
+/** 屏幕上一行字能放多宽：屏幕宽减去两侧内边距，再让出崩溃后最后一行往右错开的距离 */
+export const computerLineRoom = (): number =>
+  computerLayout().screen.width -
+  2 * SIZE.blockPadding -
+  (COMPUTER_MAX_LINES - 1) * SIZE.computerSlip;
+
+/** 电脑的状态：正常、崩溃 */
+export const COMPUTER_STATES = ["normal", "crashed"] as const;
+export type ComputerState = (typeof COMPUTER_STATES)[number];
+
+/** Computer：一台老式电脑，屏幕上显示几行字；切到崩溃时抖动、闪屏，停在蓝屏 */
+export const ComputerProps = z.strictObject({
+  /** 屏幕上的字，一项一行，最多三行，可以不写字（空数组）。显示文字：逐行检查 */
+  screen: displayText(
+    z
+      .array(z.string().min(1))
+      .max(COMPUTER_MAX_LINES)
+      .superRefine((lines, ctx) => {
+        const room = computerLineRoom();
+        lines.forEach((line, i) => {
+          const width = textWidth(line, FONT_SIZE[COMPUTER_FONT]);
+          if (width > room) {
+            ctx.addIssue({
+              code: "custom",
+              path: [i],
+              message: `屏幕上的「${line}」估算宽 ${width} 像素，屏幕最多放 ${room} 像素：缩短或拆成两行`,
+            });
+          }
+        });
+      }),
+  ),
+});
+
 /** 组件名 → 声明；交给 `planEpisode` 核对组件名、参数、状态，并取默认动画 */
 export const COMPONENT_DECLARATIONS = {
   PixelBlock: declareComponent({
@@ -135,5 +257,30 @@ export const COMPONENT_DECLARATIONS = {
       exit: "leave",
       states: { normal: "blip", highlight: "blip" },
     },
+  }),
+  HintSign: declareComponent({
+    props: HintSignProps,
+    states: ["normal"],
+    cells: () => HINT_CELLS,
+    // 整块提示牌都是字，不让子组件嵌进来
+    labelArea: () => ({ at: [0, 0], cells: HINT_CELLS }),
+    // 亮起：闪两下再亮住；退场写 `light` 时倒着播，即熄灭
+    effects: { light: MOTION.hintLightSeconds },
+    enter: "light",
+    exit: "fade",
+    connector: false,
+    sounds: { enter: "ding", exit: "leave", states: { normal: null } },
+  }),
+  Computer: declareComponent({
+    props: ComputerProps,
+    states: COMPUTER_STATES,
+    cells: () => COMPUTER_CELLS,
+    // 上面三行格是屏幕和屏幕上的字，子组件只能嵌在底座那一行
+    labelArea: () => ({ at: [0, 0], cells: [COMPUTER_CELLS[0], COMPUTER_CELLS[1] - 1] }),
+    enter: "fade",
+    exit: "fade",
+    connector: false,
+    // 出现时弹一声，崩溃时爆一声，重启回正常时轻点一声
+    sounds: { enter: "pop", exit: "leave", states: { normal: "blip", crashed: "crash" } },
   }),
 } as const satisfies ComponentDeclarations;

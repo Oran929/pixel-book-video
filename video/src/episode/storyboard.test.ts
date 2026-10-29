@@ -184,7 +184,7 @@ describe("scheduleCues", () => {
         key: "s01-c02/dry",
         component: "Box",
         props: { label: "DRY" },
-        enter: { frame: 177, animation: "slide", sound: null },
+        enter: { frame: 177, animation: "slide", frames: 12, sound: null },
         exit: null,
         initialState: "normal",
         states: [],

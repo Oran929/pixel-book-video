@@ -18,7 +18,7 @@ import {
 // 组件各有自己的样张页（`Sample-<组件名>`，#35）。
 
 /** 样张画布：宽同成片，加高到放得下全部内容 */
-export const STYLE_SHEET = { width: 1920, height: 2320 } as const;
+export const STYLE_SHEET = { width: 1920, height: 2880 } as const;
 
 /** 描边与阴影示例方块的边长 */
 const SWATCH_BLOCK = GRID * 40;
@@ -82,6 +82,14 @@ export const StyleSheet: React.FC = () => (
     <Section title={`调色板（${Object.keys(PALETTE).length} 色）`}>
       <div style={{ display: "flex", flexWrap: "wrap", gap: SIZE.margin / 2 }}>
         {Object.entries(PALETTE).map(([name, hex]) => (
+          <Swatch key={name} name={name} hex={hex} />
+        ))}
+      </div>
+    </Section>
+
+    <Section title={`用途色（${Object.keys(COLOR).length} 种）：组件按用途取色，提示牌、电脑的颜色在这里（#41）`}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: SIZE.margin / 2 }}>
+        {Object.entries(COLOR).map(([name, hex]) => (
           <Swatch key={name} name={name} hex={hex} />
         ))}
       </div>

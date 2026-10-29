@@ -9,14 +9,38 @@ import { MOTION } from "../style/style";
 /**
  * 入场和退场的通用动画：`fade` 淡入淡出，`slide` 落下或升起，
  * `none` 瞬间出现或消失（不放音效），用来把同一个东西接到下一个画面。
- * 组件自己的特殊效果（比如提示牌的「亮起」）以后作为它的默认动画登记。
+ * 组件自己的特殊效果（比如提示牌的「亮起」）登记在声明的 `effects` 里，只有这个组件能用。
  */
 export const ANIMATIONS = ["fade", "slide", "none"] as const;
-export type Animation = (typeof ANIMATIONS)[number];
+export type GenericAnimation = (typeof ANIMATIONS)[number];
 
-/** 动画播多少帧；`none` 是 0 帧 */
-export const animationFrames = (animation: Animation, fps: number): number =>
-  animation === "none" ? 0 : Math.round(MOTION.animationSeconds * fps);
+/** 入场或退场的动画名：通用动画，或组件自己登记的特殊效果名 */
+export type Animation = string;
+
+/** 组件自己的特殊效果：效果名 → 播多少秒（从风格表 `MOTION` 取） */
+export type Effects = Readonly<Record<string, number>>;
+
+/** 组件能用的入场和退场动画：通用动画加它自己的特殊效果 */
+export const animationsOf = (declaration: { effects?: Effects }): string[] => [
+  ...ANIMATIONS,
+  ...Object.keys(declaration.effects ?? {}),
+];
+
+/**
+ * 动画播多少帧：`none` 是 0 帧，`fade`、`slide` 是通用时长，
+ * 特殊效果按组件声明 `effects` 里登记的秒数
+ */
+export const animationFrames = (
+  animation: Animation,
+  fps: number,
+  effects: Effects = {},
+): number => {
+  if (animation === "none") return 0;
+  const seconds = Object.hasOwn(effects, animation)
+    ? effects[animation]!
+    : MOTION.animationSeconds;
+  return Math.round(seconds * fps);
+};
 
 /** 占几格：[列数, 行数]（网格见 style/grid.ts） */
 export type Cells = GridPoint;
@@ -34,6 +58,7 @@ export type ComponentSounds<State extends string = string> = {
 export type ComponentDeclaration<
   Props extends z.ZodType = z.ZodType,
   State extends string = string,
+  Effect extends string = string,
 > = {
   /** 参数格式 */
   props: Props;
@@ -41,10 +66,15 @@ export type ComponentDeclaration<
   states: readonly [State, ...State[]];
   /** 按参数算出占几格 */
   cells(props: z.infer<Props>): Cells;
-  /** 分镜的入场触发不写 `animation` 时用的动画 */
-  enter: Animation;
-  /** 分镜的退场触发不写 `animation` 时用的动画 */
-  exit: Animation;
+  /**
+   * 组件自己的入场、退场特殊效果：效果名 → 播多少秒。分镜的 `animation` 可以写这些名字，
+   * 退场动画是否在画面结束前播完也按这里的时长算。不写表示只有通用动画。
+   */
+  effects?: Readonly<Record<Effect, number>>;
+  /** 分镜的入场触发不写 `animation` 时用的动画：通用动画或自己的特殊效果 */
+  enter: GenericAnimation | NoInfer<Effect>;
+  /** 分镜的退场触发不写 `animation` 时用的动画：通用动画或自己的特殊效果 */
+  exit: GenericAnimation | NoInfer<Effect>;
   /** 连线类组件（箭头）：不按格子摆放，按组件 id 指向两端 */
   connector: boolean;
   /** 默认音效；分镜的触发可以用 `sound` 关掉或替换 */
@@ -66,9 +96,10 @@ export type ComponentDeclarations = Readonly<Record<string, ComponentDeclaration
 export const declareComponent = <
   Props extends z.ZodType,
   const State extends string,
+  const Effect extends string = never,
 >(
-  declaration: ComponentDeclaration<Props, State>,
-): ComponentDeclaration<Props, State> => declaration;
+  declaration: ComponentDeclaration<Props, State, Effect>,
+): ComponentDeclaration<Props, State, Effect> => declaration;
 
 /**
  * 显示文字的登记表：登记在这里的参数格式，值会显示在画面上，

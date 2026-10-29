@@ -1000,3 +1000,226 @@ describe("planEpisode: a component nested in a corner of its parent", () => {
     );
   });
 });
+
+// 假的组件声明：Glow 有自己的特殊效果 flicker（1 秒 = 30 帧），默认入场用它
+const EFFECTS = {
+  ...DECLARATIONS,
+  Glow: declareComponent({
+    props: z.strictObject({}),
+    states: ["normal"],
+    cells: () => [1, 1],
+    effects: { flicker: 1 },
+    enter: "flicker",
+    exit: "fade",
+    connector: false,
+    sounds: { enter: "ding", exit: null, states: { normal: null } },
+  }),
+};
+const planGlow = (component: string, ...triggers: Trigger[]) =>
+  planEpisode(
+    MANIFEST,
+    {
+      scenes: [
+        {
+          scene: "s02-c01",
+          components: [{ id: "glow", component, props: {}, at: [0, 0] }],
+          triggers: triggers.map((trigger) => ({
+            target: "glow",
+            line: "s02-l01",
+            ...trigger,
+          })),
+        },
+      ],
+      music: "pixel-sprinter",
+      pauses: [],
+    },
+    EFFECTS,
+  );
+
+describe("planEpisode: a component's own enter and exit effects", () => {
+  it("enters with the component's own effect by default, sounding its enter sound", () => {
+    const [cue] = planGlow("Glow", { action: "enter", offset: 0 }).cues;
+
+    expect(cue!.enter).toEqual({ frame: 138, animation: "flicker", frames: 30, sound: "ding" });
+  });
+
+  it("times an exit with the effect by the effect's own length", () => {
+    // 退场在第 168 帧，flicker 30 帧，到第 198 帧
+    const [cue] = planGlow(
+      "Glow",
+      { action: "enter", offset: 0, animation: "fade" },
+      { action: "exit", offset: 1, animation: "flicker" },
+    ).cues;
+
+    expect(cue).toMatchObject({
+      enter: { animation: "fade", frames: 12 },
+      exit: { frame: 168, animation: "flicker", frames: 30 },
+      endFrame: 198,
+    });
+  });
+
+  it("rejects an effect exit that would be cut off by the scene end", () => {
+    // 退场在第 192 帧，flicker 到第 222 帧，晚于画面结束帧 213
+    expect(() =>
+      planGlow(
+        "Glow",
+        { action: "enter", offset: 0 },
+        { action: "exit", offset: 1.8, animation: "flicker" },
+      ),
+    ).toThrow(/组件 glow 的退场动画 flicker 到第 222 帧才播完，晚于画面 s02-c01 的结束帧 213/);
+  });
+
+  it("rejects another component's effect and lists the animations this one has", () => {
+    expect(() =>
+      planGlow("Lamp", { action: "enter", offset: 0, animation: "flicker" }),
+    ).toThrow(
+      /第 1 个画面 第 1 个触发 animation: 组件 glow（Lamp）没有动画 flicker，可用的动画：fade、slide、none/,
+    );
+  });
+
+  it("lists the component's own effects among the animations it accepts", () => {
+    expect(() =>
+      planGlow("Glow", { action: "enter", offset: 0, animation: "spin" }),
+    ).toThrow(/没有动画 spin，可用的动画：fade、slide、none、flicker/);
+  });
+});
+
+// 提示牌和电脑（#41）用组件注册表里真实的声明；画面说明抄自 ep01
+const EP01_LIKE = {
+  ...MANIFEST,
+  scenes: [
+    { id: "s01-c01", segment: "s01", description: "提示14 的标题牌亮起，旁边写着 ETC" },
+    {
+      id: "s02-c01",
+      segment: "s02",
+      description: "柯克船长对着电脑说出两条自相矛盾的知识，电脑崩溃",
+    },
+  ],
+};
+// s01-c01 从第 0 帧开始，到第 138 帧结束；s01-l01 从第 0 帧开始
+const planOne = (
+  scene: "s01-c01" | "s02-c01",
+  used: Record<string, unknown>,
+  triggers: Trigger[],
+) =>
+  planEpisode(EP01_LIKE, {
+    scenes: [
+      {
+        scene,
+        components: [{ id: "it", at: [1, 1], ...used }],
+        triggers: triggers.map((trigger) => ({
+          target: "it",
+          line: scene === "s01-c01" ? "s01-l01" : "s02-l01",
+          ...trigger,
+        })),
+      },
+    ],
+    music: "pixel-sprinter",
+    pauses: [],
+  });
+const hint = (props: Record<string, unknown>, triggers: Trigger[] = []) =>
+  planOne(
+    "s01-c01",
+    { component: "HintSign", props: { label: "提示", number: "14", title: "ETC", ...props } },
+    [{ action: "enter", offset: 0 }, ...triggers],
+  );
+
+describe("planEpisode: the hint sign", () => {
+  it("takes 5×3 cells and lights up as it enters, with a ding", () => {
+    const [cue] = hint({}).cues;
+
+    // 亮起 0.8 秒 = 24 帧
+    expect(cue).toMatchObject({
+      area: { at: [1, 1], cells: [5, 3] },
+      enter: { frame: 0, animation: "light", frames: 24, sound: "ding" },
+    });
+  });
+
+  it("can still enter with a generic animation instead of lighting up", () => {
+    expect(() =>
+      planOne(
+        "s01-c01",
+        { component: "HintSign", props: { label: "提示", number: "14", title: "ETC" } },
+        [{ action: "enter", offset: 0, animation: "slide" }],
+      ),
+    ).not.toThrow();
+  });
+
+  it("goes dark with the same effect when it exits with `light`", () => {
+    // 退场在第 30 帧，亮起倒着播 24 帧，到第 54 帧
+    const [cue] = hint({}, [{ action: "exit", offset: 1, animation: "light" }]).cues;
+    expect(cue).toMatchObject({ exit: { frame: 30, animation: "light" }, endFrame: 54 });
+  });
+
+  it.each([
+    [{ label: "Tip" }, /props label: .*「Tip」/],
+    [{ number: "15" }, /props number: .*「15」/],
+    [{ title: "DRY" }, /props title: .*「DRY」/],
+  ])("rejects display text %j that is not in the scene", (props, message) => {
+    expect(() => hint(props)).toThrow(message);
+  });
+
+  it("rejects a title too wide for the sign", () => {
+    expect(() => hint({ title: "提示14 的标题牌亮起" })).toThrow(
+      /props title: 标题「提示14 的标题牌亮起」估算宽 \d+ 像素，提示牌最多放 \d+ 像素/,
+    );
+  });
+
+  it("rejects an empty number", () => {
+    expect(() => hint({ number: "" })).toThrow(/props number/);
+  });
+});
+
+const computer = (props: Record<string, unknown>, triggers: Trigger[] = []) =>
+  planOne(
+    "s02-c01",
+    { component: "Computer", props: { screen: ["知识"], ...props } },
+    [{ action: "enter", offset: 0 }, ...triggers],
+  );
+
+describe("planEpisode: the computer", () => {
+  it("takes 4×4 cells, enters as normal and crashes with a crash sound", () => {
+    // s02-c01 从第 138 帧开始
+    const [cue] = computer({}, [{ action: "state", offset: 1, state: "crashed" }]).cues;
+
+    expect(cue).toMatchObject({
+      area: { at: [1, 1], cells: [4, 4] },
+      initialState: "normal",
+      enter: { frame: 138, sound: "pop" },
+      states: [{ frame: 168, state: "crashed", sound: "crash" }],
+    });
+  });
+
+  it("can be switched back to normal after crashing", () => {
+    const [cue] = computer({}, [
+      { action: "state", offset: 0.5, state: "crashed" },
+      { action: "state", offset: 1.5, state: "normal" },
+    ]).cues;
+
+    expect(cue!.states.map((s) => s.state)).toEqual(["crashed", "normal"]);
+  });
+
+  it("rejects a state the computer does not declare, and says where", () => {
+    expect(() => computer({}, [{ action: "state", offset: 1, state: "broken" }])).toThrow(
+      /第 1 个画面 第 2 个触发 state: 组件 it（Computer）没有状态 broken，声明过的状态：normal、crashed/,
+    );
+  });
+
+  it("shows up to three lines on its screen, or none", () => {
+    expect(() => computer({ screen: [] })).not.toThrow();
+    expect(() => computer({ screen: ["两条", "矛盾的知识", "电脑崩溃"] })).not.toThrow();
+    expect(() => computer({ screen: ["知识", "知识", "知识", "知识"] })).toThrow(
+      /props screen/,
+    );
+  });
+
+  it("rejects screen text that is not in the scene, naming the line", () => {
+    expect(() => computer({ screen: ["知识", "ERROR"] })).toThrow(/props screen \[1\]: .*「ERROR」/);
+  });
+
+  it("rejects a screen line too wide for the screen", () => {
+    expect(() => computer({ screen: ["柯克船长对着电脑说出两条"] })).toThrow(
+      /props screen \[0\]: 屏幕上的「柯克船长对着电脑说出两条」估算宽 \d+ 像素，屏幕最多放 \d+ 像素/,
+    );
+  });
+});

@@ -134,7 +134,11 @@
         {
           "id": "tip",
           "component": "HintSign",
-          "props": {},
+          "props": {
+            "label": "提示",
+            "number": "14",
+            "title": "ETC"
+          },
           "at": [
             1,
             1
@@ -674,7 +678,12 @@
         {
           "id": "computer",
           "component": "Computer",
-          "props": {},
+          "props": {
+            "screen": [
+              "两条",
+              "自相矛盾的知识"
+            ]
+          },
           "at": [
             7,
             1
@@ -1063,7 +1072,11 @@
         {
           "id": "tip",
           "component": "HintSign",
-          "props": {},
+          "props": {
+            "label": "提示",
+            "number": "15",
+            "title": "DRY"
+          },
           "at": [
             1,
             1
@@ -1130,7 +1143,11 @@
         {
           "id": "computer",
           "component": "Computer",
-          "props": {},
+          "props": {
+            "screen": [
+              "只改了一处"
+            ]
+          },
           "at": [
             7,
             1

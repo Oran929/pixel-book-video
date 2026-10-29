@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ANIMATIONS } from "./declaration";
+import { animationsOf } from "./declaration";
 import { COMPONENT_DECLARATIONS } from "./declarations";
 import { COMPONENT_SAMPLES, samplePlan } from "./samples";
 
@@ -47,11 +47,12 @@ describe("组件样张", () => {
       expect(missing).toEqual([]);
     });
 
-    it("演到每种入场和退场动画", () => {
+    it("演到每种入场和退场动画：通用动画和组件自己的特殊效果", () => {
+      const animations = animationsOf(COMPONENT_DECLARATIONS[name]).sort();
       const enters = new Set(cues().map((cue) => cue.enter.animation));
       const exits = new Set(cues().flatMap((cue) => (cue.exit ? [cue.exit.animation] : [])));
-      expect([...enters].sort()).toEqual([...ANIMATIONS].sort());
-      expect([...exits].sort()).toEqual([...ANIMATIONS].sort());
+      expect([...enters].sort()).toEqual(animations);
+      expect([...exits].sort()).toEqual(animations);
     });
   });
 });

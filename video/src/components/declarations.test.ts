@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
   ANIMATIONS,
+  animationsOf,
   type ComponentDeclaration,
   DISPLAY_TEXT,
   displayTextFields,
@@ -24,9 +25,16 @@ describe.each(
     expect(new Set(declared.states).size).toBe(declared.states.length);
   });
 
-  it("入场和退场的默认动画都是登记过的动画", () => {
-    expect(ANIMATIONS).toContain(declared.enter);
-    expect(ANIMATIONS).toContain(declared.exit);
+  it("入场和退场的默认动画是通用动画或自己登记的特殊效果", () => {
+    expect(animationsOf(declared)).toContain(declared.enter);
+    expect(animationsOf(declared)).toContain(declared.exit);
+  });
+
+  it("自己的特殊效果不和通用动画重名，时长是正的秒数", () => {
+    Object.entries(declared.effects ?? {}).forEach(([name, seconds]) => {
+      expect(ANIMATIONS).not.toContain(name);
+      expect(seconds).toBeGreaterThan(0);
+    });
   });
 
   it("每个显示文字参数都是字符串或字符串数组", () => {
@@ -84,6 +92,15 @@ describe("显示文字参数", () => {
   it("PixelBlock 的 label 是显示文字，Mascot 没有显示文字", () => {
     expect(displayTextFields(COMPONENT_DECLARATIONS.PixelBlock.props)).toEqual(["label"]);
     expect(displayTextFields(COMPONENT_DECLARATIONS.Mascot.props)).toEqual([]);
+  });
+
+  it("提示牌的「提示」、编号、标题和电脑屏幕上的字都是显示文字", () => {
+    expect(displayTextFields(COMPONENT_DECLARATIONS.HintSign.props)).toEqual([
+      "label",
+      "number",
+      "title",
+    ]);
+    expect(displayTextFields(COMPONENT_DECLARATIONS.Computer.props)).toEqual(["screen"]);
   });
 
   it("参数格式里有登记成显示文字、但不是字符串或字符串数组的参数时，一致性检查能发现", () => {

@@ -1,6 +1,8 @@
 import type { z } from "zod";
 import type { RenderProps } from "./stage";
 import { Arrow } from "./Arrow";
+import { Computer } from "./Computer";
+import { HintSign } from "./HintSign";
 import { Mascot } from "./Mascot";
 import { PixelBlock } from "./PixelBlock";
 import { COMPONENT_DECLARATIONS } from "./declarations";
@@ -16,6 +18,8 @@ const COMPONENTS: {
   PixelBlock,
   Mascot,
   Arrow,
+  HintSign,
+  Computer,
 };
 
 /**

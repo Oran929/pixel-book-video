@@ -275,6 +275,111 @@ export const COMPONENT_SAMPLES: Record<ComponentName, ComponentSample> = {
       },
     ],
   },
+  HintSign: {
+    title: "样张：提示牌 HintSign",
+    scenes: [
+      {
+        description: "提示14 的标题牌亮起：ETC，停一下，再熄灭",
+        lines: [
+          { text: "入场：默认亮起 light（ding）", seconds: 2 },
+          { text: "亮着：正常 normal", seconds: 1.5 },
+          { text: "退场：light 倒着播，熄灭（leave）", seconds: 2 },
+        ],
+        components: [
+          { id: "tip", component: "HintSign", props: { label: "提示", number: "14", title: "ETC" }, at: [3, 1] },
+        ],
+        triggers: [
+          { target: "tip", line: 1, offset: 0, action: "enter" },
+          { target: "tip", line: 3, offset: 0, action: "exit", animation: "light" },
+        ],
+      },
+      {
+        description: "三块提示牌：提示15 DRY、提示16 复用、提示17 正交性，依次 fade、slide、none 入场，再依次退场",
+        lines: [
+          { text: "入场：fade slide none", seconds: 2.5 },
+          { text: "退场：fade slide none", seconds: 2.5 },
+        ],
+        components: (
+          [
+            ["dry", "15", "DRY", [0, 0]],
+            ["reuse", "16", "复用", [6, 0]],
+            ["orthogonal", "17", "正交性", [3, 3]],
+          ] as const
+        ).map(([id, number, title, at]) => ({
+          id,
+          component: "HintSign",
+          props: { label: "提示", number, title },
+          at: [...at] as [number, number],
+        })),
+        triggers: (
+          [
+            ["dry", "fade"],
+            ["reuse", "slide"],
+            ["orthogonal", "none"],
+          ] as const
+        ).flatMap(([target, animation], i) =>
+          (["enter", "exit"] as const).map((action) => ({
+            target,
+            line: action === "enter" ? 4 : 5,
+            offset: i * 0.6,
+            action,
+            animation,
+          })),
+        ),
+      },
+    ],
+  },
+  Computer: {
+    title: "样张：电脑 Computer",
+    scenes: [
+      {
+        description: "电脑屏幕上写着两条矛盾的知识，电脑崩溃，再重启回正常，然后退场",
+        lines: [
+          { text: "入场：正常 normal，默认 fade（pop）", seconds: 2 },
+          { text: "切到崩溃 crashed（crash）", seconds: 2.5 },
+          { text: "切回正常 normal（blip）", seconds: 1.5 },
+          { text: "退场：默认 fade（leave）", seconds: 1.5 },
+        ],
+        components: [
+          { id: "computer", component: "Computer", props: { screen: ["两条", "矛盾的知识"] }, at: [4, 1] },
+        ],
+        triggers: [
+          { target: "computer", line: 1, offset: 0, action: "enter" },
+          { target: "computer", line: 2, offset: 0, action: "state", state: "crashed" },
+          { target: "computer", line: 3, offset: 0, action: "state", state: "normal" },
+          { target: "computer", line: 4, offset: 0, action: "exit" },
+        ],
+      },
+      {
+        description: "三台电脑 fade、slide、none 依次入场，再依次退场；最后一台屏幕上没有字",
+        lines: [
+          { text: "入场：fade slide none", seconds: 2.5 },
+          { text: "退场：fade slide none", seconds: 2.5 },
+        ],
+        components: (
+          [
+            ["fade", ["fade"], [0, 1]],
+            ["slide", ["slide"], [4, 1]],
+            ["none", [], [8, 1]],
+          ] as const
+        ).map(([id, screen, at]) => ({
+          id,
+          component: "Computer",
+          props: { screen: [...screen] },
+          at: [...at] as [number, number],
+        })),
+        triggers: (["fade", "slide", "none"] as const).flatMap((animation, i) =>
+          (["enter", "exit"] as const).map((action) => ({
+            target: animation,
+            line: action === "enter" ? 5 : 6,
+            offset: i * 0.6,
+            action,
+            animation,
+          })),
+        ),
+      },
+    ],
+  },
 };
 
 /** 样张的排期（和成片同一个 `planEpisode`） */

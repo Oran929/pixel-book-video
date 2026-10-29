@@ -25,16 +25,27 @@ const DECLARATIONS = {
     connector: false,
     sounds: { enter: null, exit: null, states: { off: null, on: null, broken: null } },
   }),
+  // 自己的特殊效果 flicker 播 1 秒 = 30 帧
+  Glow: declareComponent({
+    props: z.strictObject({}),
+    states: ["normal"],
+    cells: () => [1, 1],
+    effects: { flicker: 1 },
+    enter: "flicker",
+    exit: "flicker",
+    connector: false,
+    sounds: { enter: null, exit: null, states: { normal: null } },
+  }),
 };
 
-const lamp = (triggers: Record<string, unknown>[]) => {
+const lamp = (triggers: Record<string, unknown>[], component = "Lamp") => {
   const { cues } = planEpisode(
     MANIFEST,
     {
       scenes: [
         {
           scene: "s01-c01",
-          components: [{ id: "lamp", component: "Lamp", props: {}, at: [0, 0] }],
+          components: [{ id: "lamp", component, props: {}, at: [0, 0] }],
           triggers: triggers.map((t) => ({ target: "lamp", line: "s01-l01", ...t })),
         },
       ],
@@ -65,12 +76,29 @@ describe("stageAt", () => {
     [66, { state: "broken", stateFrames: 21, enter: 1, exit: 0.5 }],
     [71, { state: "broken", stateFrames: 26, enter: 1, exit: 11 / 12 }],
   ])("at frame %i", (frame, stage) => {
-    expect(stageAt(cue, frame)).toEqual(stage);
+    expect(stageAt(cue, frame)).toEqual({
+      ...stage,
+      enterAnimation: "fade",
+      exitAnimation: "slide",
+    });
   });
 
   it("has finished entering on the entrance frame when the animation is none", () => {
     const instant = lamp([{ action: "enter", offset: 0, animation: "none" }]);
 
     expect(stageAt(instant, 0)).toMatchObject({ enter: 1, exit: 0 });
+  });
+
+  it("times a component's own effect by its declared length", () => {
+    const glow = lamp(
+      [
+        { action: "enter", offset: 0 },
+        { action: "exit", offset: 2 },
+      ],
+      "Glow",
+    );
+
+    expect(stageAt(glow, 15)).toMatchObject({ enter: 0.5, enterAnimation: "flicker" });
+    expect(stageAt(glow, 75)).toMatchObject({ exit: 0.5, exitAnimation: "flicker" });
   });
 });

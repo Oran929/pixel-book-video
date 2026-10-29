@@ -15,7 +15,8 @@ import { stageAt } from "./stage";
 const GRID = layoutGrid(VIDEO.width, VIDEO.height);
 const ease = Easing.out(Easing.cubic);
 
-// 在场程度 0 → 1 对应的样子：淡入淡出，或从上方落下、向上升起（位移取整到像素网格）
+// 在场程度 0 → 1 对应的样子：淡入淡出，或从上方落下、向上升起（位移取整到像素网格）；
+// `none` 和组件自己的特殊效果（声明的 `effects`）不套样式，特殊效果由组件按舞台信息自己画
 const look = (animation: Animation, shown: number): React.CSSProperties => {
   if (animation === "fade") return { opacity: shown };
   if (animation === "slide") {

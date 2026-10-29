@@ -82,6 +82,24 @@ export const COLOR = {
   highlight: PALETTE.yellow,
   /** 知识块「已改」状态的描边和阴影 */
   changed: PALETTE.red,
+  /** 提示牌亮着时的底色（标题牌是 `accent`，上面的字是 `onAccent`，标题是 `ink`） */
+  hintBoard: PALETTE.cream,
+  /** 提示牌没亮时（亮起之前、熄灭之后）的底色和字色 */
+  hintUnlit: PALETTE.slate,
+  hintUnlitText: PALETTE.stone,
+  /** 提示牌亮起那一下外面闪的一圈光 */
+  hintGlow: PALETTE.yellow,
+  /** 电脑的外壳（显示器和底座），描边和阴影是 `ink` */
+  computerCase: PALETTE.sand,
+  /** 电脑正常时的屏幕底色和屏幕上的字（连同光标） */
+  computerScreen: PALETTE.ink,
+  computerText: PALETTE.green,
+  /** 电脑崩溃后的屏幕底色和字：蓝屏 */
+  computerCrashScreen: PALETTE.blue,
+  computerCrashText: PALETTE.paper,
+  /** 电脑刚崩溃时屏幕在这两色之间闪，同时冒出横条花屏 */
+  computerFlash: PALETTE.red,
+  computerFlashAlt: PALETTE.cream,
 } as const;
 
 /**
@@ -123,6 +141,24 @@ export const SIZE = {
   /** 箭头的箭头头：从尖到底边的长度、底边的半宽 */
   arrowHeadLength: cells(10),
   arrowHeadHalfWidth: cells(8),
+  /** 提示牌亮起时外面那圈光的宽度 */
+  hintGlow: cells(4),
+  /** 电脑显示器的边框：外框粗描边到屏幕之间 */
+  computerBezel: cells(8),
+  /** 电脑显示器下面的脖子和底座 */
+  computerNeckWidth: cells(24),
+  computerNeckHeight: cells(12),
+  computerBaseWidth: cells(72),
+  computerBaseHeight: cells(8),
+  /** 屏幕上光标方块的宽和高 */
+  computerCursorWidth: cells(6),
+  computerCursorHeight: cells(10),
+  /** 电脑崩溃时花屏横条的高 */
+  computerGlitchBar: cells(8),
+  /** 电脑崩溃时左右抖动的幅度 */
+  computerShake: cells(4),
+  /** 崩溃后屏幕上每行字比上一行多往右下错开多少 */
+  computerSlip: cells(4),
 } as const;
 
 /** 描边规则：实心、不模糊，宽度取 `SIZE.stroke` / `SIZE.strokeThick` */
@@ -162,6 +198,14 @@ export const snapToGrid = (value: number) => Math.round(value / GRID) * GRID;
 export const MOTION = {
   /** 组件入场或退场的通用动画（淡入淡出、落下升起）播多少秒；`none` 不播 */
   animationSeconds: 0.4,
+  /** 提示牌的「亮起」播多少秒：闪两下再亮住，外面闪一圈光（退场时倒着播，即熄灭） */
+  hintLightSeconds: 0.8,
+  /** 电脑切到崩溃时抖动、闪屏、花屏播多少秒，之后停在蓝屏 */
+  computerCrashSeconds: 0.8,
+  /** 抖动和闪屏每隔多少秒换一下方向或颜色 */
+  computerFlickerSeconds: 0.067,
+  /** 屏幕上的光标亮、灭各多少秒 */
+  cursorBlinkSeconds: 0.5,
 } as const;
 
 /**

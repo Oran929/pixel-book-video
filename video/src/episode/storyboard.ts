@@ -1,8 +1,8 @@
 import { z } from "zod";
 import {
   type Animation,
-  ANIMATIONS,
   animationFrames,
+  animationsOf,
   type Cells,
   type ComponentDeclarations,
   displayTextFields,
@@ -35,14 +35,14 @@ const TriggerShape = z.discriminatedUnion("action", [
   z.strictObject({
     ...Placement,
     action: z.literal("enter"),
-    /** 不写就用组件声明的默认入场动画 */
-    animation: z.enum(ANIMATIONS).optional(),
+    /** 通用动画或这个组件自己的特殊效果；不写就用组件声明的默认入场动画 */
+    animation: z.string().optional(),
   }),
   z.strictObject({
     ...Placement,
     action: z.literal("exit"),
-    /** 不写就用组件声明的默认退场动画 */
-    animation: z.enum(ANIMATIONS).optional(),
+    /** 通用动画或这个组件自己的特殊效果；不写就用组件声明的默认退场动画 */
+    animation: z.string().optional(),
   }),
   z.strictObject({
     ...Placement,
@@ -221,6 +221,16 @@ const storyboardSchema = (
           );
         }
         const used = scene.components.find((c) => c.id === trigger.target);
+        const declared = used && declarationOf(components, used.component);
+        if (trigger.action !== "state" && trigger.animation !== undefined && declared) {
+          const animations = animationsOf(declared);
+          if (!animations.includes(trigger.animation)) {
+            issue(
+              at("triggers", j, "animation"),
+              `组件 ${used.id}（${used.component}）没有动画 ${trigger.animation}，可用的动画：${animations.join("、")}`,
+            );
+          }
+        }
         if (!used) {
           issue(at("triggers", j, "target"), `本画面没有组件 ${trigger.target}`);
         } else if (trigger.action === "enter") {
@@ -234,7 +244,7 @@ const storyboardSchema = (
           }
           exited.add(used.id);
         } else {
-          const states = declarationOf(components, used.component)?.states;
+          const states = declared?.states;
           if (states && !states.includes(trigger.state)) {
             issue(
               at("triggers", j, "state"),
@@ -329,16 +339,22 @@ export const pauseOverrides = (storyboard: Storyboard): PauseOverrides =>
 /** 网格上的一块：左上角所在的格 `at`，占几格 `cells` */
 export type Area = { at: Cells; cells: Cells };
 
+/** 入场或退场：在第几帧、用什么动画、动画播几帧、放什么音效 */
+export type CueAction = { frame: number; animation: Animation; frames: number; sound: Sound };
+
 /** 一个组件在本画面里的排期 */
 export type Cue = {
   /** `<画面 ID>/<组件 id>`，在整期里唯一 */
   key: string;
   component: string;
   props: Record<string, unknown>;
-  /** `sound`：这个动作要放的音效，null 表示不放（见 `soundCues`） */
-  enter: { frame: number; animation: Animation; sound: Sound };
+  /**
+   * `frames`：动画播多少帧（特殊效果按组件声明的时长）；
+   * `sound`：这个动作要放的音效，null 表示不放（见 `soundCues`）
+   */
+  enter: CueAction;
   /** 没有退场时为 null：显示到画面结束 */
-  exit: { frame: number; animation: Animation; sound: Sound } | null;
+  exit: CueAction | null;
   /** 入场时的状态：组件声明的第一个状态（入场时不响它的音效） */
   initialState: string;
   /** 各次切换状态，按帧排序 */
@@ -431,7 +447,7 @@ export const scheduleCues = (
           ? (exit.trigger.animation ?? declared.exit)
           : declared.exit;
       const exitEnd = exit
-        ? exit.frame + animationFrames(exitAnimation, timeline.fps)
+        ? exit.frame + animationFrames(exitAnimation, timeline.fps, declared.effects)
         : span.endFrame;
       if (exit && exitEnd > span.endFrame) {
         throw new Error(
@@ -462,12 +478,14 @@ export const scheduleCues = (
         enter: {
           frame: enter.frame,
           animation: enterAnimation,
+          frames: animationFrames(enterAnimation, timeline.fps, declared.effects),
           sound: soundOf(enter, declared.sounds.enter, enterAnimation),
         },
         exit: exit
           ? {
               frame: exit.frame,
               animation: exitAnimation,
+              frames: animationFrames(exitAnimation, timeline.fps, declared.effects),
               sound: soundOf(exit, declared.sounds.exit, exitAnimation),
             }
           : null,
