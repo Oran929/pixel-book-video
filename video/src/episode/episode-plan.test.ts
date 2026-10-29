@@ -1402,3 +1402,90 @@ describe("planEpisode: the timeline", () => {
     ).toThrow(/压住了.*的标签/);
   });
 });
+
+// 小人（#42）：用户选了 1/2 最近邻缩小（A），一个小人占 2×3 格；头顶冒符号是状态，可以排成一群
+const mascot = (props: Record<string, unknown>, triggers: Trigger[] = [], at = [1, 1]) =>
+  planEpisode(EP01_ROADS, {
+    scenes: [
+      {
+        scene: "s01-c01",
+        components: [{ id: "it", component: "Mascot", props, at }],
+        triggers: [{ action: "enter", offset: 0 }, ...triggers].map((trigger) => ({
+          target: "it",
+          line: "s01-l01",
+          ...trigger,
+        })),
+      },
+    ],
+    music: "pixel-sprinter",
+    pauses: [],
+  });
+
+describe("planEpisode: the mascot", () => {
+  it("shown at half size, one mascot takes 2×3 cells and pops in", () => {
+    const [cue] = mascot({ character: "reader" }).cues;
+    expect(cue).toMatchObject({
+      area: { at: [1, 1], cells: [2, 3] },
+      initialState: "normal",
+      enter: { frame: 0, sound: "pop" },
+    });
+  });
+
+  it("pops a question mark or an exclamation mark over its head as a state, with a sound", () => {
+    const [cue] = mascot({ character: "reader" }, [
+      { action: "state", offset: 0.5, state: "question" },
+      { action: "state", offset: 1, state: "exclaim" },
+      { action: "state", offset: 1.5, state: "normal" },
+    ]).cues;
+    expect(cue!.states).toEqual([
+      { frame: 15, state: "question", sound: "blip" },
+      { frame: 30, state: "exclaim", sound: "ding" },
+      { frame: 45, state: "normal", sound: null },
+    ]);
+  });
+
+  it("rejects a symbol it does not declare, listing the ones it has", () => {
+    expect(() =>
+      mascot({ character: "reader" }, [{ action: "state", offset: 1, state: "heart" }]),
+    ).toThrow(/组件 it（Mascot）没有状态 heart，声明过的状态：normal、question、exclaim/);
+  });
+
+  it.each([
+    // 一排：每人两列
+    [{ count: 3 }, [6, 3]],
+    [{ count: 3, formation: "row" }, [6, 3]],
+    // 一排 6 个正好占满网格的宽
+    [{ count: 6 }, [12, 3]],
+    // 一群：每人隔一列，后排高一行
+    [{ count: 5, formation: "crowd" }, [6, 4]],
+    // 一个人的一群就是一个小人
+    [{ count: 1, formation: "crowd" }, [2, 3]],
+  ])("a group %j takes %j cells", (group, cells) => {
+    const [cue] = mascot({ character: "reader", ...group }, [], [0, 0]).cues;
+    expect(cue!.area).toEqual({ at: [0, 0], cells });
+  });
+
+  it("gives each mascot in a group its own character, repeating the list when it runs out", () => {
+    expect(() =>
+      mascot({ character: ["dragon", "whale", "gothic"], count: 5, formation: "crowd" }),
+    ).not.toThrow();
+  });
+
+  it.each([
+    [{ count: 7 }, [0, 0], /从 \[0, 0\] 起占 14×3 格，超出 12×6 网格的右边/],
+    [{ count: 3 }, [7, 0], /从 \[7, 0\] 起占 6×3 格，超出 12×6 网格的右边/],
+    [{ count: 2, formation: "crowd" }, [0, 3], /从 \[0, 3\] 起占 3×4 格，超出 12×6 网格的下边/],
+  ])("rejects a group %j at %j that goes past the grid", (group, at, message) => {
+    expect(() => mascot({ character: "reader", ...group }, [], at)).toThrow(message);
+  });
+
+  it.each([
+    [{ count: 0 }, /props count/],
+    [{ count: 1.5 }, /props count/],
+    [{ formation: "circle" }, /props formation/],
+    [{ character: [] }, /props character/],
+    [{ character: "robot" }, /props character/],
+  ])("rejects %j", (bad, message) => {
+    expect(() => mascot({ character: "reader", ...bad })).toThrow(message);
+  });
+});

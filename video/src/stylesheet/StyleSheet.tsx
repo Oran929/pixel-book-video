@@ -87,7 +87,7 @@ export const StyleSheet: React.FC = () => (
       </div>
     </Section>
 
-    <Section title={`用途色（${Object.keys(COLOR).length} 种）：组件按用途取色，提示牌、电脑（#41）、岔路、时间线（#43）的颜色在这里`}>
+    <Section title={`用途色（${Object.keys(COLOR).length} 种）：组件按用途取色，提示牌、电脑（#41）、岔路、时间线（#43）、小人头顶的符号（#42）的颜色在这里`}>
       <div style={{ display: "flex", flexWrap: "wrap", gap: SIZE.margin / 2 }}>
         {Object.entries(COLOR).map(([name, hex]) => (
           <Swatch key={name} name={name} hex={hex} />

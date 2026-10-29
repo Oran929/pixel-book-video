@@ -201,6 +201,51 @@ export const COMPONENT_SAMPLES: Record<ComponentName, ComponentSample> = {
           })),
         ),
       },
+      {
+        description:
+          "一个小人冒问号、换成感叹号、符号消失；三个并排的小人一起冒问号；五个挤成一群的小人一起冒感叹号",
+        lines: [
+          { text: "一个小人：默认 fade 入场（pop）", seconds: 1.5 },
+          { text: "头顶冒问号 question（blip）", seconds: 2 },
+          { text: "换成感叹号 exclaim（ding）", seconds: 2 },
+          { text: "切回正常 normal：符号淡出（不放音效）", seconds: 1.5 },
+          { text: "三人一排 row，五人一群 crowd 入场", seconds: 1.5 },
+          { text: "一排一起冒问号，一群一起冒感叹号", seconds: 2.5 },
+          { text: "退场：默认 fade（leave）", seconds: 1.5 },
+        ],
+        components: [
+          { id: "one", component: "Mascot", props: { character: "reader" }, at: [5, 0] },
+          {
+            id: "row",
+            component: "Mascot",
+            props: { character: ["dragon", "reader", "whale"], count: 3 },
+            at: [0, 3],
+          },
+          {
+            id: "crowd",
+            component: "Mascot",
+            props: {
+              character: ["dragon", "reader", "whale", "gothic"],
+              count: 5,
+              formation: "crowd",
+            },
+            at: [6, 2],
+          },
+        ],
+        triggers: [
+          { target: "one", line: 3, offset: 0, action: "enter" },
+          { target: "one", line: 4, offset: 0, action: "state", state: "question" },
+          { target: "one", line: 5, offset: 0, action: "state", state: "exclaim" },
+          { target: "one", line: 6, offset: 0, action: "state", state: "normal" },
+          { target: "one", line: 6, offset: 1, action: "exit" },
+          { target: "row", line: 7, offset: 0, action: "enter" },
+          { target: "crowd", line: 7, offset: 0.4, action: "enter" },
+          { target: "row", line: 8, offset: 0, action: "state", state: "question" },
+          { target: "crowd", line: 8, offset: 0.6, action: "state", state: "exclaim" },
+          { target: "row", line: 9, offset: 0, action: "exit" },
+          { target: "crowd", line: 9, offset: 0, action: "exit" },
+        ],
+      },
     ],
   },
   Arrow: {

@@ -1,18 +1,12 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { z } from "zod";
-import {
-  type ComponentDeclarations,
-  declareComponent,
-} from "../components/declaration";
-import { COMPONENT_DECLARATIONS } from "../components/declarations";
 import { planEpisode } from "./episode-plan";
 import { OUTRO_SEGMENT } from "./manifest";
 
 // ep01 摆放试验（#34）：在动画之前，先看 ch02 ep01 的 17 个画面能不能放进 12×6 网格。
 // 合成清单抄自 books/pragmatic-programmer/ch02/ep01/episode.json（gitignore），去掉了音频路径；
-// 分镜是占位摆放，组件需求按 #13 评论里的清单；箭头和嵌套（#40）、提示牌和电脑（#41）、岔路和时间线（#43）用组件注册表里真实的声明。知识块用组件注册表里真实的声明（`size` 决定格数，
-// 标签按字体度量检查），其余组件还没做，用下面只占格子的占位声明。
+// 分镜是占位摆放，组件需求按 #13 评论里的清单。7 个组件都做完了（小人 #42 是最后一个），
+// 现在全部用组件注册表里真实的声明：格数按参数算，标签按字体度量检查，状态按声明核对。
 const read = (name: string) =>
   JSON.parse(
     readFileSync(new URL(`fixtures/${name}`, import.meta.url), "utf8"),
@@ -20,31 +14,8 @@ const read = (name: string) =>
 const MANIFEST = read("ep01-episode.json");
 const PLACEMENT = read("ep01-placement.storyboard.json");
 
-const placeholder = (cells: readonly [number, number]) =>
-  declareComponent({
-    props: z.strictObject({}),
-    states: ["normal"],
-    cells: () => cells,
-    enter: "fade",
-    exit: "fade",
-    connector: false,
-    sounds: { enter: null, exit: null, states: { normal: null } },
-  });
-
-// 占位尺寸（列数, 行数），每格 148×124 像素
-const PLACEHOLDERS: ComponentDeclarations = {
-  PixelBlock: COMPONENT_DECLARATIONS.PixelBlock,
-  Arrow: COMPONENT_DECLARATIONS.Arrow,
-  // 小人按 1/2 大小：约 205×295 像素 → 2 × 3 格（尺寸由 #42 决定）
-  Mascot: placeholder([2, 3]),
-  HintSign: COMPONENT_DECLARATIONS.HintSign,
-  Fork: COMPONENT_DECLARATIONS.Fork,
-  Computer: COMPONENT_DECLARATIONS.Computer,
-  Timeline: COMPONENT_DECLARATIONS.Timeline,
-};
-
 describe("ep01 摆放试验", () => {
-  const plan = planEpisode(MANIFEST, PLACEMENT, PLACEHOLDERS);
+  const plan = planEpisode(MANIFEST, PLACEMENT);
 
   it("17 个画面（片尾除外）都摆了组件，越界和重叠检查全部通过", () => {
     const scenes = plan.manifest.scenes
@@ -91,5 +62,12 @@ describe("ep01 摆放试验", () => {
       at: [3, 2],
       cells: [6, 2],
     });
+  });
+
+  it("小人用真实声明：s01-c01 一群 5 个挤成前后两排，s02-c02 三个并排，头顶一起冒问号", () => {
+    const cue = (key: string) => plan.cues.find((c) => c.key === key)!;
+    expect(cue("s01-c01/gurus").area).toEqual({ at: [3, 2], cells: [6, 4] });
+    expect(cue("s02-c02/coders").area).toEqual({ at: [3, 1], cells: [6, 3] });
+    expect(cue("s02-c02/coders").states.map((s) => s.state)).toEqual(["question"]);
   });
 });

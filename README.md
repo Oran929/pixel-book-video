@@ -515,7 +515,25 @@ uv run pixelbook terms ../books/sample/ch01/ep01/script.yaml   # 每个新术语
 
 颜色（`COLOR.fork*`、`COLOR.timeline*`）、尺寸（`SIZE.fork*`、`SIZE.timeline*`）在风格表里，风格样张的「用途色」一节能看到。样张：`Sample-Fork`（四条带字的路逐条标出、逐条放路障、撤掉、退场；两条、三条不带字的路三种入场和退场动画），`Sample-Timeline`（六个节点逐个点亮、全部熄灭、一口气点亮、退场；三条两节点的时间线三种入场和退场动画）。
 
-`video/src/episode/ep01-placement.test.ts` 用 ch02 ep01 的合成清单（`fixtures/ep01-episode.json`，去掉了音频路径）和一份占位分镜，把 17 个画面各摆了一遍，作为摆放的参考：s01-c03 三个方块各有一个箭头指向 ETC；s05-c04 的「复制粘贴源码」先单独出现，旁白说「只是很小的一部分」时用 `none` 瞬间换成大方块「知识和意图」左上角的子组件（子组件不能早于父组件入场）；s05-c05 代码在左，箭头指向右上的文档和右下的数据库 Schema；s02-c01 岔路标出第 2 条路，s03-c02 岔路放上路障又撤掉，s04-c04 时间线「起点、开发过程、发布」点亮到第 3 个。
+#### 小人
+
+**小人**（`Mascot`，spec #16 用户故事 37，修订 D1）是 Q 版频道小人，一个或一群，分镜里需要"人物做什么"时才用：
+
+```json
+{ "id": "host", "component": "Mascot", "props": { "character": "reader" }, "at": [0, 1] }
+{ "id": "gurus", "component": "Mascot", "props": { "character": ["dragon", "whale", "gothic", "reader"], "count": 5, "formation": "crowd" }, "at": [3, 2] }
+```
+
+- **参数**：`character` 是 Q 版角色（按外观起名：`dragon`、`reader`、`whale`、`gothic`，见风格表 `MASCOTS`），一群人时可以写一串，从左往右一人一个，不够时从头循环；`count` 几个人（≥ 1，不写是 1）；`formation` 排法，`row`（不写时）或 `crowd`。没有显示文字。
+- **尺寸**（#42 人工关口，用户选了 1/2 缩小）：图片按原图的 1/2（风格表 `MASCOT_SCALE`、`mascotSize`，四舍五入到整数像素）、最近邻插值显示，约 187–220 × 280–296 像素。**一个小人占 2 列 × 3 行**（`mascotCells()`：最宽、最高的角色按显示尺寸向上取整到整格，高度还要放下头顶的符号），在自己那块格子里底边对齐、水平居中。
+- **一群占几格**：`row` 每人隔一块格子的宽，占 `2 × 人数` 列 × 3 行（一排最多 6 人占满 12 列）；`crowd` 每人只隔一列、左右挤着有一点遮挡，从 0 数的单数位站后排、比前排高一行、被前排挡住，占 `人数 + 1` 列 × 4 行（只有一个人时和 `row` 一样，2 × 3）。超出网格照常报越界。
+- **状态**：`normal`（初始，头顶没东西）、`question`（头顶冒问号）、`exclaim`（头顶冒感叹号）。一群人一起冒同一个符号。符号从下面升上来、淡入（一个通用动画的时长），之后每 0.5 秒（`MOTION.mascotSymbolBobSeconds`）上下浮动一格像素；切回 `normal` 时原地淡出。符号是风格表 `MASCOT_SYMBOLS` 里的 5×7 点阵（每点 `SIZE.mascotSymbolDot`，外面一圈 `ink` 描边），不是字体里的「？」「！」（组件不渲染参数以外的固定文字）；颜色 `COLOR.mascotQuestion`（黄）、`COLOR.mascotExclaim`（红）。符号画在小人自己的格子里，不压到上面的组件（`mascot-look.test.ts` 检查）。
+- 默认入场、退场都是 `fade`。默认音效：入场 `pop`、退场 `leave`，冒问号 `blip`，冒感叹号 `ding`，切回 `normal` 不放音效。
+- 图片不是对齐网格的像素画，1/2 后「像素」大小不一，1 像素宽的描边有些地方断续（用户看过样帧认可）。图片是从 `character/Q.png` 裁出的透明底 PNG（`video/public/character/`，裁图脚本 `character/crop_q.py`）。
+
+样张：`Sample-Mascot`（四个角色四种入场和退场动画；一个小人冒问号、换感叹号、切回；三人一排一起冒问号，五人一群一起冒感叹号）。
+
+`video/src/episode/ep01-placement.test.ts` 用 ch02 ep01 的合成清单（`fixtures/ep01-episode.json`，去掉了音频路径）和一份占位分镜，把 17 个画面各摆了一遍，作为摆放的参考，7 个组件都用组件注册表里真实的声明：s01-c01 五个小人挤成一群（`crowd`），上面一排四个知识块；s02-c02 三个小人一排（`row`），旁白说「刻意问自己」时一起冒问号，下面一排三个知识块；s01-c03 三个方块各有一个箭头指向 ETC；s05-c04 的「复制粘贴源码」先单独出现，旁白说「只是很小的一部分」时用 `none` 瞬间换成大方块「知识和意图」左上角的子组件（子组件不能早于父组件入场）；s05-c05 代码在左，箭头指向右上的文档和右下的数据库 Schema；s02-c01 岔路标出第 2 条路，s03-c02 岔路放上路障又撤掉，s04-c04 时间线「起点、开发过程、发布」点亮到第 3 个。
 
 #### 显示文字
 
@@ -537,7 +555,7 @@ uv run pixelbook terms ../books/sample/ch01/ep01/script.yaml   # 每个新术语
 - **文件**：音效放在 `video/public/sfx/`，每个音效两份文件：`<ID>.wav`（16 位单声道 PCM，44.1 kHz）和生成它的 jsfxr 参数 `<ID>.sfxr.json`，都提交（`.gitignore` 全局忽略 `*.wav`，对这个目录开了例外）。不能放在 `video/public/episode/` 下：配音每次都会删掉那个目录。
 - **生成**：`cd video && npm run sfx` 用 jsfxr（devDependency，固定 1.4.1）的 `sfxr.toWave` 在 Node 里把登记表里每个音效的参数生成成 wav，并打印时长和削波的采样数。只在本机运行，CI 不重新生成。参数是**展开后的完整参数**（波形、包络、频率、音量 `sound_vol`、采样率和采样位数 `sample_size: 16` 都写明），不是预设名：jsfxr 的预设每次随机。新加音效：在登记表里加一项，写好同名的 `.sfxr.json`，再运行 `npm run sfx`。
 - **重新生成不保证逐字节相同**：噪声波形（`wave_type: 3`，现在是 `crash`）生成时用了随机数，重新生成只能做到听感一致；其余波形是确定的。
-- **组件声明的默认音效**：`sounds: { enter, exit, states }`，每个动作、每个状态各写一个音效 ID，或写 `null` 表示不用音效；`states` 必须为每个状态都写一项（少写类型检查会报错）。组件入场时处在初始状态，**只响入场音效**，不响初始状态的音效；之后切回初始状态时才响它。知识块：入场 `drop`、退场 `leave`，切到 `normal`、`highlight` 时 `blip`，切到 `changed` 时 `buzz`。小人：入场 `pop`、退场 `leave`，没有状态音效。箭头、提示牌、电脑、岔路、时间线见各自的小节。
+- **组件声明的默认音效**：`sounds: { enter, exit, states }`，每个动作、每个状态各写一个音效 ID，或写 `null` 表示不用音效；`states` 必须为每个状态都写一项（少写类型检查会报错）。组件入场时处在初始状态，**只响入场音效**，不响初始状态的音效；之后切回初始状态时才响它。知识块：入场 `drop`、退场 `leave`，切到 `normal`、`highlight` 时 `blip`，切到 `changed` 时 `buzz`。小人、箭头、提示牌、电脑、岔路、时间线见各自的小节。
 - **规则**：触发上的 `sound` 替换的是这个触发的动作的音效。引用登记表里没有的音效 ID 时报错（报出第几个画面、第几个触发）。动画是 `none` 的入场和退场不放音效，在这样的触发上写音效 ID 也报错（写 `null` 可以）。同一帧的同一个音效只放一次（比如三个知识块同时落下，只响一声 `drop`，不会叠得更响）；同一帧的不同音效都放。
 - **播放**：`planEpisode` 输出音效列表 `sounds`（帧、音效 ID，按帧排序），Episode 和样张页在对应的帧播放（`video/src/sound/SoundCues.tsx`）。时间轴导出命令也把它写进 `timeline.json` 的 `sounds`。
 - **音量**：旁白、音效、配乐的音量常量在 `video/src/style/volume.ts` 的 `VOLUME_DB`，用 dB 写（相对旁白），换算成 Remotion 要的 0–1 线性值 `VOLUME`（以旁白为 1）。现在音效 -12 dB、配乐 -20 dB，到人工关口 3 再调。音效文件本身的峰值在 -6 到 -8 dBFS（`npm run test` 检查每个音效文件是 16 位单声道、有声音、峰值低于 -1 dBFS）。
@@ -588,7 +606,7 @@ uv run pixelbook mix ../books/sample/ch01/ep01/timeline.json   # 拼到 out/mix/
 - 风格表在 `video/src/style/style.ts`：16 色调色板 `PALETTE` 和按用途取色的 `COLOR`、像素网格 `GRID`（4px，画面上一个"像素"）、字号 `FONT_SIZE` 与行高、尺寸 `SIZE`（都是网格的整数倍）、描边 `border`、硬阴影 `hardShadow`、描边字 `outlinedText`。组件（`src/components/`，包括子目录里的常驻组件）里的颜色和尺寸只能引用这些常量，`npm run test` 递归扫描这个目录，检查源码里有没有写死的颜色值和数字（0、1 除外）。
 - 字体：Fusion Pixel 12px 比例宽度简体（OFL 1.1，来源和许可在 `video/public/fonts/`）。字形画在 12×12 格上，字号只能是 12 的整数倍（现在用 24 / 48 / 96），否则会模糊；测试检查这一点。字体由 `src/style/font.ts` 在第一帧之前加载。
 - 画面左上角常驻这一期的主题：旁白稿顶层的 `title`（等于大纲里这一期的 `topic`），经合成清单 `episode.json` 的 `title` 传进成片，由常驻组件 `src/components/resident/EpisodeTitle.tsx` 显示（橙字深色描边）。代码里没有写死的频道名。
-- 频道小人不常驻画面，是一个通用组件 `Mascot`：分镜里需要"人物做什么"时才用，参数只有 `character`（Q 版角色，按外观起名：`dragon`、`reader`、`whale`、`gothic`，见 `style.ts` 的 `MASCOTS`），位置用分镜的 `at`，例如 `{ "id": "host", "component": "Mascot", "props": { "character": "reader" }, "at": [0, 1] }`。暂按原尺寸占 3 列 × 5 行，在格子里底边对齐、水平居中（尺寸由 #42 决定）；只有一个状态 `normal`。小人是从 `character/Q.png` 裁出的透明底 PNG（`video/public/character/`，裁图脚本 `character/crop_q.py`），按原尺寸、最近邻插值显示；暂时没有动效。
+- 频道小人不常驻画面，是一个通用组件 `Mascot`（见「分镜 › 小人」）：分镜里需要"人物做什么"时才用。小人图不是对齐网格的像素画，只能按原尺寸、整数倍或 1/2 显示，最近邻插值；现在统一按 1/2（`MASCOT_SCALE`，#42）。
 - 字幕只在显示时去掉分句标点 `，。、；`：句中的换成一个空格，句末（和句首）的直接去掉，紧挨在右引号、右书名号、右括号前的也直接去掉（`他说：“好的。”` 显示为 `他说：“好的”`）；`：“”‘’《》（）——？！` 保留（`video/src/components/resident/subtitle-text.ts`）。旁白脚本、配音、语音识别核对、合成清单和缺字检查都用原句。
 - 中间帧格式是 PNG（`video/remotion.config.ts`），JPEG 会让像素边缘出现杂色。
 

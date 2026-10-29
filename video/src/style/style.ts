@@ -118,6 +118,9 @@ export const COLOR = {
   /** 时间线节点下面的字：没点亮、点亮 */
   timelineLabel: PALETTE.stone,
   timelineLabelLit: PALETTE.ink,
+  /** 小人头顶的问号、感叹号（描边是 `ink`） */
+  mascotQuestion: PALETTE.yellow,
+  mascotExclaim: PALETTE.red,
 } as const;
 
 /**
@@ -192,6 +195,14 @@ export const SIZE = {
   /** 时间线横轴的粗细、节点方块的边长 */
   timelineAxis: cells(4),
   timelineNode: cells(16),
+  /** 小人头顶符号（`MASCOT_SYMBOLS`）的一个点多大，外面一圈 `ink` 描边多宽 */
+  mascotSymbolDot: cells(2),
+  mascotSymbolOutline: cells(1),
+  /** 符号底边离小人图片上沿多高 */
+  mascotSymbolGap: cells(1),
+  /** 符号冒出来时从多低的地方升上来；冒出来以后上下浮动的幅度 */
+  mascotSymbolRise: cells(4),
+  mascotSymbolBob: cells(1),
 } as const;
 
 /** 描边规则：实心、不模糊，宽度取 `SIZE.stroke` / `SIZE.strokeThick` */
@@ -239,11 +250,13 @@ export const MOTION = {
   computerFlickerSeconds: 0.067,
   /** 屏幕上的光标亮、灭各多少秒 */
   cursorBlinkSeconds: 0.5,
+  /** 小人头顶的符号冒出来以后，每隔多少秒上下换一次位置 */
+  mascotSymbolBobSeconds: 0.5,
 } as const;
 
 /**
  * 频道小人（Mascot 组件可选的 Q 版角色）：从 AI 生成的 Q 版设定图裁出，
- * 不是对齐网格的像素画，只能按原尺寸（或整数倍）、最近邻插值显示。
+ * 不是对齐网格的像素画，只能按原尺寸、整数倍或 1/2（`MASCOT_SCALE`）、最近邻插值显示。
  * `width`/`height` 是图片原始尺寸。
  */
 export const MASCOTS = {
@@ -251,4 +264,44 @@ export const MASCOTS = {
   reader: { file: "character/q-2-reader.png", width: 374, height: 560 },
   whale: { file: "character/q-3-whale.png", width: 440, height: 592 },
   gothic: { file: "character/q-4-gothic.png", width: 440, height: 589 },
+} as const;
+
+export type MascotName = keyof typeof MASCOTS;
+
+/**
+ * 小人显示成原图的几倍：1/2，最近邻缩小（#42 人工关口，用户选了 A）。原尺寸一个小人要占
+ * 3 列 × 5 行，表现不了「一群」；1/2 后 1 像素的描边有些地方会断续，用户看过样帧认可。
+ */
+export const MASCOT_SCALE = 1 / 2;
+
+/** 小人在画面上的显示尺寸（屏幕像素）：原图 × `MASCOT_SCALE`，四舍五入到整数像素 */
+export const mascotSize = (character: MascotName) => ({
+  width: Math.round(MASCOTS[character].width * MASCOT_SCALE),
+  height: Math.round(MASCOTS[character].height * MASCOT_SCALE),
+});
+
+/**
+ * 小人头顶的符号（Mascot 的 `question`、`exclaim` 状态）：点阵，`#` 是一个点，`.` 是空。
+ * 每个点画成 `SIZE.mascotSymbolDot` 见方，外面描一圈 `SIZE.mascotSymbolOutline` 宽的 `ink`。
+ * 画成点阵而不是用字体里的「？」「！」：组件不渲染参数以外的固定文字（修订 D4）。
+ */
+export const MASCOT_SYMBOLS = {
+  question: [
+    ".###.",
+    "#...#",
+    "....#",
+    "...#.",
+    "..#..",
+    ".....",
+    "..#..",
+  ],
+  exclaim: [
+    "..#..",
+    "..#..",
+    "..#..",
+    "..#..",
+    "..#..",
+    ".....",
+    "..#..",
+  ],
 } as const;
