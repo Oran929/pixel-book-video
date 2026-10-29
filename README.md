@@ -22,6 +22,8 @@ character/           频道形象设定图原图（Q.png、M.png）和裁图脚�
 make install
 ```
 
+配乐的曲子文件不进 Git，新机器上 `make install` 之后照 `video/public/music/README.md` 补齐（见「配乐」）。
+
 `mlx-audio`（配音和语音识别复核）只在 macOS 上安装；在别的系统上 `make install` 不装它，`make check` 照常能跑，但配音和复核用不了。
 
 ## 配音模型
@@ -267,40 +269,114 @@ lines:                           # 每个旁白句一条，按旁白稿顺序
 
 ### 完整步骤
 
-1. 写旁白稿 `script.yaml`（和可选的分镜 `storyboard.json`，见下文"分镜"）。
-2. 一键出片：
+一期从原书到成片的制作清单，下一期照着做（spec #16 用户故事 65）。`<书>` 是 `books/` 下的书目录名，`<期目录>` 是 `books/<书>/chNN/epNN`；下面的命令都从仓库根目录出发。每个人工关口都是停下等用户审，用户说通过才提交、才往下走。
 
-   ```sh
-   cd tools
-   uv run pixelbook render ../books/sample/ch01/ep01/script.yaml   # 默认写到 out/sample-ch01-ep01.mp4
-   ```
+| 步 | 做什么 | 写出什么（期目录以外的写明位置） | 提交 |
+| --- | --- | --- | --- |
+| 0 | 一本书做一次：书配置、原书、转换 | `books/<书>/book.yaml`、`source.epub`、`chapters/chNN.md` | 只提交 `book.yaml` |
+| 1 | `/outline <书> <章>` | `books/<书>/chNN/outline.yaml` | 关口 1 通过后 |
+| 2 | 人工关口 1：审大纲 | — | — |
+| 3 | `/script <期目录>`（含 `/factcheck`） | `script.yaml`（`status: draft`）、`factcheck.yaml` | 关口 2 定稿后 |
+| 4 | 人工关口 2：审稿、定稿 | `script.yaml` 改成 `final`，大纲里这一期的 `minutes` 改成估算 | 旁白稿、`factcheck.yaml`、大纲一起 |
+| 5 | `pixelbook render` 出字幕版试听 | `episode.json`、`report.json`、`timeline.json`、`segments.txt`；`out/<书>-<章>-<期>.mp4` | 都不提交 |
+| 6 | `/storyboard <期目录>` | `storyboard.json`（含 `music`）、用了 CC-BY 曲子时 `credits.txt`；重新出的 MP4 | 关口 3 通过后提交分镜 |
+| 7 | 人工关口 3：看成片 | — | — |
+| 8 | 发布前准备 | 标题、简介、分段设置 | — |
 
-   依次运行四步，任何一步失败就停下，打印"第几步「哪一步」失败：原因"并以退出码 1 结束：
+**0. 一本书做一次**
 
-   | 步 | 做什么 | 常见的失败 |
-   | --- | --- | --- |
-   | 1 配音 | 同 `pixelbook voice`：定稿状态守卫、新术语检查、音色锁定守卫、缺字检查、逐句配音与复核，复制到 `video/public/episode/` | 旁白稿是 `draft`、新术语、音色和锁定不一致、缺字、配置文件写错 |
-   | 2 时间轴 | 同 `npm run timeline`：校验分镜（含组件触发帧是否落在画面里），写出 `timeline.json` 和 `segments.txt` | 分镜不合格 |
-   | 3 渲染 | `remotion render Episode`（只渲染成片，不渲染风格样张） | Remotion 报错（附上输出的最后几行） |
-   | 4 核对时长 | 用 ffprobe 数 MP4 **视频流**的帧数，和 `timeline.json` 的总帧数比，相差超过一帧就算失败 | — |
+- 做什么：写书配置 `books/<书>/book.yaml`（书名、作者、出版社，可选音色覆盖，见「书的音色与锁定」）；把原书放成 `books/<书>/source.epub`；转换：`cd tools && uv run pixelbook convert ../books/<书>`（见「原书转换」）。
+- 本机准备（换机器时也要做一次）：`make install`；音色已选好（`voice.yaml`，见「配音模型」）；**配乐文件在本机**：`video/public/music/` 里有登记表的 8 个 `.ogg`，缺了照 `video/public/music/README.md` 补齐（曲子不进 Git，见「配乐」）。
+- 完成：`books/<书>/chapters/` 里有每章的 `chNN.md`；`ls video/public/music/*.ogg` 列出 8 首。
+- 出了问题：`convert` 报规则覆盖不到的元素时，先在 `tools/src/pixelbook/convert.py` 里补规则再转，不要手改转换结果。
 
-   全部通过后打印汇总报告：MP4 路径、帧数、总时长（含片头片尾，另外分开写片头、正文和片尾）和 4:00–6:00 的判断、打点时间表位置、复核未通过的句子（需要试听）、靠拼音通过的句子（只列出备查）。**复核未通过和总时长超出范围不算失败**，只列在汇总里。
+**1. 大纲 `/outline <书> <章>`**
 
-   `--out <路径>` 改输出位置；`--revoice` 同 `voice --revoice`（音色和书的锁定音色不一致、确认整本书换音色时用）；`--draft` 同 `voice --draft`（旁白稿还是 `status: draft` 时放行）。
+- 输入：`chapters/chNN.md` 和 `pixelbook units` 的单元表。输出：`books/<书>/chNN/outline.yaml`，覆盖整章，拆成几期、每期的主题、段和带出处的观点（格式见「大纲」）。
+- 完成：`cd tools && uv run pixelbook outline ../books/<书>/chNN/outline.yaml` 退出码 0，照搬警告都看过；skill 停在关口 1。
+- 出了问题：转换结果不存在回到第 0 步。
 
-3. 看汇总报告：试听复核未通过的句子，读错了就删缓存再跑一遍；看 MP4。改了分镜只要再跑一遍 `render`，配音全部命中缓存，不会重新生成。
+**2. 人工关口 1：审大纲**
+
+- 用户看 `/outline` 的汇报（拆期理由、每期的段和分钟数、要拍板的取舍）。有意见就让 `/outline` 改；意见是规则问题时先改 skill。
+- 完成：用户说通过，提交 `outline.yaml`。一章的大纲审一次，之后各期都从第 3 步开始。
+
+**3. 旁白稿 `/script <期目录>`（含 `/factcheck`）**
+
+- 输入：审过的大纲里这一期的段和观点、它们引用的原文段落。输出：`<期目录>/script.yaml`（`status: draft`）、`/factcheck` 写出的 `<期目录>/factcheck.yaml`，以及给不支持、部分支持的句子写好的建议改法（临时副本里，不改正式稿）。格式和机械规则见「旁白稿与检查」「语义核对」。
+- 完成：`cd tools && uv run pixelbook check ../<期目录>/script.yaml` 退出码 0；`factcheck.yaml` 写出、每句都有判定；skill 停在关口 2。
+- 出了问题：大纲里没有这一期，或大纲检查不过，回到第 1 步（大纲要先过关口 1）。
+
+**4. 人工关口 2：审稿、定稿**
+
+- 用户看 `/script` 的汇报（置顶是不支持的句子），逐句决定改法。改了正式稿之后跑 `check`，再 `/factcheck <期目录>`（用户授权的改动记录时加 `--user-edited`），回到这一步。
+- 定稿：`cd tools && uv run pixelbook sync-minutes ../<期目录>/script.yaml`（把各段估算写回大纲的 `minutes`），`script.yaml` 改成 `status: final`，再跑 `pixelbook check` 和 `pixelbook outline`，都通过。
+- 完成：`script.yaml`、`factcheck.yaml`、`outline.yaml` 一起提交。
+- 出了问题：要改大纲的拆期或观点时回到第 1 步，改完重新过关口 1。
+
+**5. 字幕版试听 `pixelbook render`**
+
+- 命令：`cd tools && uv run pixelbook render ../<期目录>/script.yaml`（还没有 `storyboard.json`，所以只有字幕、主题和片头片尾，没有组件和配乐；做什么见下面的「一键出片」）。
+- 输出：期目录里的合成清单 `episode.json`、检查报告 `report.json`、`timeline.json`、打点时间表 `segments.txt`（第一行 `00:00 片头`），MP4 `out/<书>-<章>-<期>.mp4`；每句配音缓存在 `books/<书>/cache/tts/`。
+- 完成：退出码 0；汇总里的总时长（片头、正文、片尾）在 4:00–6:00 之内；复核未通过的句子都试听过，没有读错。
+- 出了问题：新术语先 `pixelbook terms` 试听、登记读音表（见「读音表与新术语」）再跑；句子读错了删掉这句的缓存重跑，或者改读音表、给句子写 `speech`；改了旁白稿（包括 `speech`）就回到第 4 步重新核对、定稿；总时长超出范围回到第 4 步改稿。
+
+**6. 分镜 `/storyboard <期目录>`**
+
+- 先确认配乐文件在本机（第 0 步），缺了第 5 步的渲染会报错并指向 `video/public/music/README.md`。
+- 输入：定稿的 `script.yaml` 里的画面说明和旁白句，README「分镜」「组件目录」。skill 先配音写出 `episode.json`（命中缓存），跑选曲命令 `cd video && npm run music:pick -- ../<期目录>`（把 `music` 写进 `storyboard.json`，之后不再改），再写分镜，跑 `npm run timeline -- ../<期目录>` 直到通过，最后 `pixelbook render` 出片、看样帧。
+- 输出：`<期目录>/storyboard.json`（每个画面至少一个组件）；重新写出的 `timeline.json`、`segments.txt`、`out/<书>-<章>-<期>.mp4`；用了 CC-BY 曲子时期目录里的 `credits.txt`（CC0 曲子没有）；交给用户的「表现不了」清单。
+- 完成：`npm run timeline` 和 `render` 退出码 0；每个画面的样帧看过，没有遮挡和穿过；skill 停在关口 3。
+- 出了问题：`script.yaml` 不是 `final` 或检查不过，回到第 4 步；分镜检查不过，skill 自己改分镜；画面说明要的东西现有组件表现不了，列进清单交给用户（加组件是另开的票）。
+
+**7. 人工关口 3：看成片**
+
+- 用户看 MP4、「表现不了」清单、配乐（曲子、许可、避开了哪一期的哪首）和每个画面用的组件。意见只改分镜（或用户同意的组件改动），改完 `/storyboard` 从它的第 5 步重跑；音量在 `video/src/style/volume.ts` 的 `VOLUME_DB` 调。
+- 完成：用户说通过，提交 `storyboard.json`。
+- 出了问题：要改旁白（句子、画面说明）时回到第 4 步，定稿后再从第 6 步跑。
+
+**8. 发布前准备**
+
+- 成片：`out/<书>-<章>-<期>.mp4`（第 7 步通过的那一版）。
+- 简介：写明原书的书名、作者、出版社，照 `books/<书>/book.yaml` 抄。期目录里有 `credits.txt`（用了 CC-BY 配乐）时，把它那一行原样贴进简介；没有就不用贴。
+- 分段：`<期目录>/segments.txt` 原样贴到视频平台的分段设置（第一行是 `00:00 片头`，片尾不列）。
+- 完成：MP4、简介、分段三样都在手里。
+
+#### 一键出片 `pixelbook render`
+
+```sh
+cd tools
+uv run pixelbook render ../<期目录>/script.yaml   # 默认写到 out/<书>-<章>-<期>.mp4
+```
+
+依次运行四步，任何一步失败就停下，打印"第几步「哪一步」失败：原因"并以退出码 1 结束：
+
+| 步 | 做什么 | 常见的失败 |
+| --- | --- | --- |
+| 1 配音 | 同 `pixelbook voice`：定稿状态守卫、新术语检查、音色锁定守卫、缺字检查、逐句配音与复核，复制到 `video/public/episode/` | 旁白稿是 `draft`、新术语、音色和锁定不一致、缺字、配置文件写错 |
+| 2 时间轴 | 同 `npm run timeline`：校验分镜（含组件触发帧是否落在画面里），写出 `timeline.json`、`segments.txt`，用了 CC-BY 配乐时写出 `credits.txt` | 分镜不合格 |
+| 3 渲染 | 先确认分镜选的配乐文件在 `video/public/music/` 里，再 `remotion render Episode`（只渲染成片，不渲染风格样张） | 配乐文件不在本机（报错指向 `video/public/music/README.md`）、Remotion 报错（附上输出的最后几行） |
+| 4 核对时长 | 用 ffprobe 数 MP4 **视频流**的帧数，和 `timeline.json` 的总帧数比，相差超过一帧就算失败 | — |
+
+全部通过后打印汇总报告：MP4 路径、帧数、总时长（含片头片尾，另外分开写片头、正文和片尾）和 4:00–6:00 的判断、打点时间表位置、复核未通过的句子（需要试听）、靠拼音通过的句子（只列出备查）。**复核未通过和总时长超出范围不算失败**，只列在汇总里。
+
+`--out <路径>` 改输出位置；`--revoice` 同 `voice --revoice`（音色和书的锁定音色不一致、确认整本书换音色时用）；`--draft` 同 `voice --draft`（旁白稿还是 `status: draft` 时放行）。
+
+改了分镜只要再跑一遍 `render`，配音全部命中缓存，不会重新生成。
 
 分步运行（排查某一步时用）：
 
 ```sh
 cd tools
-uv run pixelbook voice ../books/sample/ch01/ep01/script.yaml   # 逐句配音，生成合成清单
+uv run pixelbook voice ../<期目录>/script.yaml   # 逐句配音，生成合成清单
 cd ../video
-npm run timeline -- ../books/sample/ch01/ep01                   # 时间轴、打点时间表、总时长
-npm run render -- ../out/sample-ch01-ep01.mp4                  # 渲染 MP4
+npm run timeline -- ../<期目录>                   # 时间轴、打点时间表、总时长
+npm run render -- ../out/<书>-<章>-<期>.mp4       # 渲染 MP4
 ```
 
-`voice` 先看定稿状态（`status: draft` 时拒绝，加 `--draft` 放行），再按读音表检查新术语（见下），没有新术语才用这本书的音色（见下文“书的音色与锁定”）逐句配音，写出期目录里的合成清单 `episode.json`（每个画面带上原样抄自旁白稿的画面说明 `description`，供组件上的字做检查），再清空 `video/public/episode/`，把每句 wav 和合成清单复制进去。Remotion 只读 `video/public/episode/episode.json`。合成清单缺画面说明（#32 之前配音写出的）时 Remotion 和 `npm run timeline` 拒绝读取，重新运行 `pixelbook voice` 即可，配音全部命中缓存，不会重新生成。
+`voice` 先看定稿状态（`status: draft` 时拒绝，加 `--draft` 放行），再按读音表检查新术语（见下），没有新术语才用这本书的音色（见下文“书的音色与锁定”）逐句配音，写出期目录里的合成清单 `episode.json`（每个画面带上原样抄自旁白稿的画面说明 `description`，供组件上的字做检查），再清空 `video/public/episode/`，把每句 wav、合成清单和分镜（有的话）复制进去。Remotion 只读 `video/public/episode/` 里的这两份。合成清单缺画面说明（#32 之前配音写出的）时 Remotion 和 `npm run timeline` 拒绝读取，重新运行 `pixelbook voice` 即可，配音全部命中缓存，不会重新生成。
+
+每句配音缓存在 `books/<书>/cache/tts/<指纹>.wav`（不提交），指纹由朗读文本和音色指纹算出；音色指纹包括模型、参考音频的**文件内容**、参考文本、生成参数和引擎自身的设置（如参考音频补的静音），不包括随机种子。所以再次运行时只有改过的句子会重新生成，改了音色设置或换了参考音频的内容就全部重新生成。每个 wav 旁边的 `<指纹>.json` 记录生成信息。缓存可以随时删掉，删了就整期重新生成。
 
 ### 片头和片尾
 
@@ -334,8 +410,6 @@ npm run render -- ../out/sample-ch01-ep01.mp4                  # 渲染 MP4
   3. 在 `outro/outros.ts` 登记 `<新ID>: { title, frames: timing.total, audio: "outro/<新ID>.wav" }`，在 `outro/outro-components.ts` 登记它的组件。
   4. 把 `project-config.ts` 的 `outro` 改成 `<新ID>`（不要片尾就写 `null`）。旧的不用了可以一起删掉：目录、音轨、两处登记和测试里的那一行。
   5. `make check`，再在 Studio 里看 `Outro-<新ID>` 和整期的 `Episode`，`make smoke` 跑一次。
-
-每句配音缓存在 `books/<书>/cache/tts/<指纹>.wav`（不提交），指纹由朗读文本和音色指纹算出；音色指纹包括模型、参考音频的**文件内容**、参考文本、生成参数和引擎自身的设置（如参考音频补的静音），不包括随机种子。所以再次运行时只有改过的句子会重新生成，改了音色设置或换了参考音频的内容就全部重新生成。每个 wav 旁边的 `<指纹>.json` 记录生成信息。缓存可以随时删掉，删了就整期重新生成。
 
 ### 语音识别复核
 
