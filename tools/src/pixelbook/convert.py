@@ -51,6 +51,8 @@ PARAGRAPH_LINE = re.compile(r"^(ch\d{2}-¶\d{3}) (.*)$")
 UNIT_LINE = re.compile(r"^## (\d+)　(.*)$")
 # 提示框标题 `### 提示15　DRY——不要重复自己`
 TIP_LINE = re.compile(r"^### (提示\d+　.*)$")
+# 小标题 `#### ETC 是一种价值观念，不是一条规则`
+SUBHEADING_LINE = re.compile(r"^#### (.*)$")
 # 章末脚注以它的编号开头，如 `[18]译注：……`；正文里的标记也写成 `[18]`
 FOOTNOTE_LINE = re.compile(r"^\[(\d+)\]")
 QUOTE_CLASSES = {
@@ -115,6 +117,16 @@ class Paragraph:
     # 提示框只有标题，不是编号段落，引用不到；核对材料和照搬检查经由相邻的段落用它
     tip_before: str | None = None
     tip_after: str | None = None
+    # 紧挨在这一段前面、后面的 `####` 小标题（去掉脚注标记），没有时为 None。用法和提示框标题
+    # 相同；同一侧紧挨着的只有一个标题，所以同一侧的提示框和小标题不会同时有
+    heading_before: str | None = None
+    heading_after: str | None = None
+
+    @property
+    def headings(self) -> list[str]:
+        """紧挨着这一段的提示框标题和小标题（提示框只取 `提示N` 后面的部分），照用不算照搬。"""
+        tips = [t.split("　", 1)[-1] for t in (self.tip_before, self.tip_after) if t]
+        return tips + [h for h in (self.heading_before, self.heading_after) if h]
 
     @property
     def is_image(self) -> bool:
@@ -137,6 +149,19 @@ class Chapter:
     paragraphs: dict[str, Paragraph] = field(default_factory=dict)
     # 单元号 → 单元，按原文顺序
     units: dict[int, Unit] = field(default_factory=dict)
+    # 所有标题（章、单元、提示框、小标题）的文字，去掉 `#` 和脚注标记，按原文顺序
+    headings: list[str] = field(default_factory=list)
+
+    @property
+    def text(self) -> str:
+        """全章的原文文字：标题和编号段落，图片段只留图题（占位符里的文件名不是原文），一行一条。"""
+        rows = list(self.headings)
+        for paragraph in self.paragraphs.values():
+            text = paragraph.text
+            if paragraph.is_image:
+                text = text.split("]", 1)[-1]
+            rows.append(text)
+        return "\n".join(rows)
 
 
 def read_chapter(path: Path) -> Chapter:
@@ -145,8 +170,9 @@ def read_chapter(path: Path) -> Chapter:
     unit: Unit | None = None
     marks = _Marks()
     in_notes = False
-    # 提示框：等着挂到下一段上的标题，和紧挨在提示框前面的那一段（中间隔着别的标题就不算）
+    # 提示框和小标题：等着挂到下一段上的标题，和紧挨在标题前面的那一段（中间隔着别的标题就不算）
     tip: str | None = None
+    heading: str | None = None
     previous: str | None = None
     for line in path.read_text().splitlines():
         if match := UNIT_LINE.match(line):
@@ -158,12 +184,20 @@ def read_chapter(path: Path) -> Chapter:
             unit = None
         if line.startswith("#") or line == RULE:
             marks.scan(line, None)
-            tip = None
+            if line.startswith("#"):
+                chapter.headings.append(_unmarked(line.lstrip("#")))
+            tip = heading = None
             if match := TIP_LINE.match(line):
-                tip = re.sub(r"\[\d+\]", "", match[1]).strip()
+                tip = _unmarked(match[1])
                 if previous:
                     chapter.paragraphs[previous] = replace(
                         chapter.paragraphs[previous], tip_after=tip
+                    )
+            elif match := SUBHEADING_LINE.match(line):
+                heading = _unmarked(match[1])
+                if previous:
+                    chapter.paragraphs[previous] = replace(
+                        chapter.paragraphs[previous], heading_after=heading
                     )
             previous = None
         elif match := PARAGRAPH_LINE.match(line):
@@ -177,11 +211,17 @@ def read_chapter(path: Path) -> Chapter:
                 unit.number if unit else None,
                 marked_in=marks.found.get(int(note[1])) if note else None,
                 tip_before=tip,
+                heading_before=heading,
             )
-            tip, previous = None, id
+            tip, heading, previous = None, None, id
             if unit:
                 unit.paragraphs.append(id)
     return chapter
+
+
+def _unmarked(title: str) -> str:
+    """去掉标题里的脚注标记 `[N]`。"""
+    return re.sub(r"\[\d+\]", "", title).strip()
 
 
 class _Marks:

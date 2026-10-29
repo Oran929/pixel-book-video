@@ -6,12 +6,13 @@
 新规则写成同样的函数加进 `RULES`。报错影响退出码，警告只列出。
 """
 
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
 from pixelbook.convert import Chapter, read_chapter
-from pixelbook.copied import copied, copied_message
+from pixelbook.copied import bare, copied, copied_message
 from pixelbook.episode_path import FACTCHECK_NAME, EpisodePath
 from pixelbook.factcheck import FactcheckError, load_factcheck
 from pixelbook.outline import (
@@ -31,6 +32,16 @@ WARNING = "警告"
 CHARS_PER_MINUTE = 250
 # 不属于某一句的问题（如估算时长）记在这个位置下
 WHOLE_SCRIPT = "旁白稿"
+# 画面说明里能机械提取的词语：拉丁字母词（DRY、Bug、C++），引号或书名号里的词语，`提示N`
+LATIN_TERM = re.compile(r"[A-Za-z][A-Za-z0-9+#]*")
+QUOTED_TERM = re.compile(
+    r"「([^」]+)」|“([^”]+)”|\"([^\"]+)\"|『([^』]+)』|《([^》]+)》"
+)
+TIP_TERM = re.compile(r"提示\d+")
+# 一段的估算时长和大纲给它的 `minutes` 相差超过这个比例（且至少 `SEGMENT_SLACK_SECONDS`
+# 秒）时警告：0.5 分钟的短段只差几句就会超出 25%，所以设一个下限
+SEGMENT_SLACK = 0.25
+SEGMENT_SLACK_SECONDS = 15
 
 
 @dataclass(frozen=True)
@@ -38,6 +49,57 @@ class Finding:
     level: str  # ERROR 或 WARNING
     where: str  # 旁白句 ID（`points` 的问题用画面 ID），或 WHOLE_SCRIPT
     message: str
+
+
+@dataclass(frozen=True)
+class SegmentTiming:
+    id: str
+    title: str
+    chars: int
+    seconds: int
+    # 大纲给这一段的时长（秒）和 `minutes`；段和大纲对不上时为 None
+    planned: int | None
+    minutes: float | None
+
+
+@dataclass(frozen=True)
+class Timing:
+    """按 `CHARS_PER_MINUTE` 估算的时长：全稿和每一段，每段对照大纲的 `minutes`。"""
+
+    chars: int
+    seconds: int
+    segments: list[SegmentTiming]
+
+
+def _seconds(chars: int) -> int:
+    return round(chars * 60 / CHARS_PER_MINUTE)
+
+
+def estimate(script: Script, outline: Episode | None) -> Timing:
+    """字数口径和字幕相同：只数 `text`、去掉空白。段和大纲一一对应（标题依次相同）时才对照。"""
+    planned = None
+    if outline and [s.title for s in script.segments] == [
+        s.title for s in outline.segments
+    ]:
+        planned = [s.minutes for s in outline.segments]
+    segments = []
+    for n, segment in enumerate(script.segments):
+        chars = sum(
+            text_length(line.text) for scene in segment.scenes for line in scene.lines
+        )
+        minutes = planned[n] if planned else None
+        segments.append(
+            SegmentTiming(
+                segment.id,
+                segment.title,
+                chars,
+                _seconds(chars),
+                round(minutes * 60) if minutes is not None else None,
+                minutes,
+            )
+        )
+    chars = sum(s.chars for s in segments)
+    return Timing(chars, _seconds(chars), segments)
 
 
 @dataclass(frozen=True)
@@ -58,6 +120,8 @@ class Context:
 class Report:
     errors: list[Finding]
     warnings: list[Finding]
+    # 旁白稿格式不对时没有估算
+    timing: Timing | None = None
 
     @property
     def passed(self) -> bool:
@@ -98,8 +162,8 @@ def cite_has_text(context: Context) -> list[Finding]:
 
 def estimated_duration(context: Context) -> list[Finding]:
     """按 250 字/分钟估算的时长要在 4:00–6:00 内（含两端，按秒取整）。"""
-    chars = sum(text_length(line.text) for line in context.script.lines)
-    seconds = round(chars * 60 / CHARS_PER_MINUTE)
+    timing = estimate(context.script, context.outline)
+    chars, seconds = timing.chars, timing.seconds
     low, high = SECONDS
     if low <= seconds <= high:
         return []
@@ -111,6 +175,28 @@ def estimated_duration(context: Context) -> list[Finding]:
             f"应该在 {clock(low)}–{clock(high)} 内",
         )
     ]
+
+
+def segment_near_outline(context: Context) -> list[Finding]:
+    """一段的估算时长和大纲的 `minutes` 相差太多时警告：字数没有按大纲分配。"""
+    findings = []
+    for segment in estimate(context.script, context.outline).segments:
+        if segment.planned is None:
+            continue
+        slack = max(segment.planned * SEGMENT_SLACK, SEGMENT_SLACK_SECONDS)
+        gap = segment.seconds - segment.planned
+        if abs(gap) > slack:
+            findings.append(
+                Finding(
+                    WARNING,
+                    segment.id,
+                    f"估算 {clock(segment.seconds)}（{segment.chars} 字），"
+                    f"大纲 {clock(segment.planned)}，{'多' if gap > 0 else '少'}了 "
+                    f"{abs(gap)} 秒，超过大纲时长的 {SEGMENT_SLACK:.0%}"
+                    f"（至少 {SEGMENT_SLACK_SECONDS} 秒）",
+                )
+            )
+    return findings
 
 
 def title_is_topic(context: Context) -> list[Finding]:
@@ -214,6 +300,48 @@ def not_copied(context: Context) -> list[Finding]:
     ]
 
 
+def description_terms(context: Context) -> list[Finding]:
+    """画面说明里能机械提取的词语要在本章原文（标题和段落）里出现过，没有时警告。
+
+    只查拉丁字母词（整词、不分大小写）、引号和书名号里的词语（两边去掉空白和标点后比较）和
+    `提示N`；其他中文概念、名字、物件提取不出来，留给人审。
+    """
+    corpus = context.chapter.text
+    flat = bare(corpus)
+    findings = []
+    for segment in context.script.segments:
+        for scene in segment.scenes:
+            for term in _missing_terms(scene.description, corpus, flat):
+                findings.append(
+                    Finding(
+                        WARNING,
+                        scene.id,
+                        f"画面说明里的「{term}」在 {context.source} 里没有出现",
+                    )
+                )
+    return findings
+
+
+def _missing_terms(description: str, corpus: str, flat: str) -> list[str]:
+    missing: list[str] = []
+    quoted = [
+        next(g for g in m.groups() if g) for m in QUOTED_TERM.finditer(description)
+    ]
+    for term in quoted:
+        if bare(term) and bare(term) not in flat:
+            missing.append(term)
+    # 引号里的拉丁字母词已经整体查过了
+    rest = QUOTED_TERM.sub(" ", description)
+    for term in LATIN_TERM.findall(rest):
+        pattern = rf"(?<![A-Za-z0-9]){re.escape(term)}(?![A-Za-z0-9])"
+        if not re.search(pattern, corpus, re.IGNORECASE):
+            missing.append(term)
+    for term in TIP_TERM.findall(rest):
+        if not re.search(rf"{term}(?!\d)", corpus):
+            missing.append(term)
+    return list(dict.fromkeys(missing))
+
+
 def factcheck_matches(context: Context) -> list[Finding]:
     """`factcheck.yaml` 存在时，格式要对，并且和旁白稿逐句对应：每句一条判定，不多不少，
     每句的字幕和出处与核对时相同（核对之后改过的句子要重新核对）。
@@ -261,11 +389,13 @@ RULES: list[Rule] = [
     cite_exists,
     cite_has_text,
     estimated_duration,
+    segment_near_outline,
     title_is_topic,
     segments_follow_outline,
     points_covered,
     cite_in_scope,
     not_copied,
+    description_terms,
     factcheck_matches,
 ]
 
@@ -293,6 +423,7 @@ def check_script(path: Path, rules: list[Rule] = RULES) -> Report:
     return Report(
         errors=[f for f in findings if f.level == ERROR],
         warnings=[f for f in findings if f.level == WARNING],
+        timing=estimate(script, outline),
     )
 
 
@@ -311,13 +442,37 @@ def _outline_episode(episode: EpisodePath) -> tuple[Episode | None, str | None]:
 
 
 def format_report(path: Path, report: Report) -> str:
-    """报错和警告分成两块，每条以旁白句 ID 开头。"""
+    """估算时长（全稿和每一段），然后报错和警告分成两块，每条以旁白句 ID 开头。"""
     blocks = [
+        *_timing(report.timing),
         _block(ERROR, report.errors),
         _block(WARNING, report.warnings),
         f"{path}: 旁白稿检查{'通过' if report.passed else '没有通过'}",
     ]
     return "\n".join(blocks)
+
+
+def _timing(timing: Timing | None) -> list[str]:
+    if timing is None:
+        return []
+    low, high = SECONDS
+    rows = [
+        (
+            f"估算时长：{clock(timing.seconds)}（{timing.chars} 字，"
+            f"按 {CHARS_PER_MINUTE} 字/分钟，应该在 {clock(low)}–{clock(high)} 内）"
+        )
+    ]
+    for segment in timing.segments:
+        plan = (
+            f"大纲 {clock(segment.planned)}（{segment.minutes:g} 分钟）"
+            if segment.planned is not None
+            else "大纲：段对不上，不对照"
+        )
+        rows.append(
+            f"  {segment.id} {segment.title}：{segment.chars} 字，"
+            f"估算 {clock(segment.seconds)}，{plan}"
+        )
+    return rows
 
 
 def _block(title: str, findings: list[Finding]) -> str:

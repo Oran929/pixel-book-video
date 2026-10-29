@@ -10,7 +10,7 @@ from pixelbook.audition import AuditionError, choose_voice, run_audition
 from pixelbook.check import check_script, format_report
 from pixelbook.convert import CHAPTERS_DIR, ConvertError, convert_book
 from pixelbook.episode_path import EpisodePath, EpisodePathError
-from pixelbook.judge import JudgeError, packet, record
+from pixelbook.judge import JudgeError, prompt, record
 from pixelbook.mix import MixError, mix_timeline
 from pixelbook.outline import OutlineError, check_outline, format_warnings
 from pixelbook.pipeline import (
@@ -230,11 +230,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     check.add_argument("script", type=Path, help="books/<书>/<章>/<期>/script.yaml")
 
-    factcheck_packet = commands.add_parser(
-        "factcheck-packet",
-        help="打印给语义核对裁判的材料：每个旁白句和它引用的原文段落（旁白稿要先通过检查）",
+    factcheck_prompt = commands.add_parser(
+        "factcheck-prompt",
+        help="打印给语义核对裁判的完整 prompt：说明、引用的原文段落、旁白句和校验码（旁白稿要先通过检查）",
     )
-    factcheck_packet.add_argument("episode", type=Path, help="books/<书>/<章>/<期>/")
+    factcheck_prompt.add_argument("episode", type=Path, help="books/<书>/<章>/<期>/")
 
     factcheck_record = commands.add_parser(
         "factcheck-record",
@@ -242,7 +242,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     factcheck_record.add_argument("episode", type=Path, help="books/<书>/<章>/<期>/")
     factcheck_record.add_argument(
-        "answer", type=Path, help="裁判返回的 YAML（只有 lines：id、verdict、reason）"
+        "answer",
+        type=Path,
+        help="裁判返回的 YAML（packet：校验码；lines：id、verdict、reason）",
     )
 
     args = parser.parse_args(argv)
@@ -271,8 +273,8 @@ def main(argv: list[str] | None = None) -> int:
             report = check_script(script)
             print(format_report(script, report))
             return 0 if report.passed else 1
-        elif args.command == "factcheck-packet":
-            print(packet(EpisodePath(args.episode.resolve())), end="")
+        elif args.command == "factcheck-prompt":
+            print(prompt(EpisodePath(args.episode.resolve())), end="")
         elif args.command == "factcheck-record":
             print(record(EpisodePath(args.episode.resolve()), args.answer.resolve()))
         elif args.command == "render":

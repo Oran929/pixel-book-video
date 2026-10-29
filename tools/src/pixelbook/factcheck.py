@@ -3,7 +3,7 @@
 由 `pixelbook factcheck-record` 写出：第几轮核对 `round`，以及每个旁白句一条判定（`id`、
 核对时的字幕 `text` 和出处 `cite`、`verdict`、`reason`）。`text`、`cite` 用来发现
 核对之后又改过的句子。裁判 subagent 的回答是同样的 `lines`，只是没有 `text`、`cite`，
-用 `load_answer` 读。这里只读格式，不比较旁白稿；对照旁白稿的检查在 `check` 和 `judge` 里。
+另外在顶层抄回 prompt 的校验码 `packet`，用 `load_answer` 读。这里只读格式，不比较旁白稿；对照旁白稿的检查在 `check` 和 `judge` 里。
 """
 
 from dataclasses import dataclass
@@ -53,9 +53,13 @@ def load_factcheck(path: Path) -> Factcheck:
     return Factcheck(round_, _lines(data, RECORDED_FIELDS))
 
 
-def load_answer(path: Path) -> list[Verdict]:
-    """裁判的回答：`lines` 里每条只有 `id`、`verdict`、`reason`。"""
-    return _lines(_mapping(_yaml(path), "裁判的回答", ["lines"]), ANSWER_FIELDS)
+def load_answer(path: Path) -> tuple[str, list[Verdict]]:
+    """裁判的回答：校验码 `packet`，和 `lines`（每条只有 `id`、`verdict`、`reason`）。"""
+    data = _mapping(_yaml(path), "裁判的回答", ["packet", "lines"])
+    token = data["packet"]
+    if not isinstance(token, str) or not token.strip():
+        raise _fail("裁判的回答", "packet", "必须是 prompt 最后一行的校验码")
+    return token.strip(), _lines(data, ANSWER_FIELDS)
 
 
 def _lines(data: dict, fields: list[str]) -> list[Verdict]:

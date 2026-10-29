@@ -6,6 +6,8 @@
 每个用例从 `script()`、`outline()`、`factcheck()` 出发改一处再写出。
 """
 
+import re
+
 import pytest
 import yaml
 
@@ -624,76 +626,110 @@ def test_segment_titles_that_differ_from_the_outline_are_an_error(check):
     )
 
 
-def test_the_packet_gives_each_line_with_only_its_cited_paragraphs(pixelbook, episode):
-    code, out = pixelbook(["factcheck-packet", str(episode)], script())
+def _prompt(pixelbook, episode, data, outline=None, factcheck=None):
+    return pixelbook(["factcheck-prompt", str(episode)], data, outline, factcheck)
 
-    # 没有主题、段标题、画面说明和观点，只有旁白句和原文
+
+def _token(prompt: str) -> str:
+    return re.search(r"校验码：(\S+)\s*$", prompt)[1]
+
+
+def test_the_prompt_lists_each_cited_paragraph_once_and_lines_refer_to_ids(
+    pixelbook, episode
+):
+    code, out = _prompt(pixelbook, episode, script())
+
     assert code == 0
-    assert out.count("## ") == 60
-    assert "第一单元" not in out
-    assert "开场" not in out
-    assert "一个方块" not in out
-    assert "p01" not in out
-    assert out.startswith(
-        f"## s01-l01\n\n旁白：{LINE_TEXT}\n\n原文：\n\nch01-¶001 第一段正文。\n\n"
-        f"## s01-l02\n\n旁白：{LINE_TEXT}\n\n原文：\n\n"
-        "ch01-¶002 > 一段引文。\nch01-¶004 [图 images/00001.jpeg]\n\n"
+    # 说明在前：裁判只按每句出处列出的段落判断，回答先抄回校验码
+    assert out.startswith("你是一份中文讲解视频旁白的事实核对员。")
+    assert "packet: <校验码>" in out
+    # 没有主题、段标题、画面说明和观点
+    for hidden in ("第一单元", "开场", "一个方块", "p01"):
+        assert hidden not in out
+    # 原文段落按原文顺序各列一次；中间没引用的段落用「……」隔开
+    sources = out.split("--- 原文段落 ---\n\n")[1].split("\n\n--- 旁白句 ---")[0]
+    assert sources == (
+        "ch01-¶001 第一段正文。\n"
+        "ch01-¶002 > 一段引文。\n"
+        "……\n"
+        "ch01-¶004 [图 images/00001.jpeg]"
     )
+    # 旁白句只写出处编号，不重复原文
+    lines = out.split("--- 旁白句 ---\n\n")[1].split("\n\n--- 校验码 ---")[0]
+    assert lines.startswith(
+        f"s01-l01（出处：ch01-¶001）\n旁白：{LINE_TEXT}\n\n"
+        f"s01-l02（出处：ch01-¶002、ch01-¶004）\n旁白：{LINE_TEXT}\n\n"
+    )
+    assert lines.count("旁白：") == 60
+    assert re.search(r"\n--- 校验码 ---\n\n校验码：fc-[0-9a-f]{12}\n$", out)
 
 
-def test_the_packet_shows_the_tip_box_next_to_a_cited_paragraph(pixelbook, episode):
-    # 提示框标题不是编号段落，引用不到；引用它紧挨着的段落时，材料里带上它
+def test_the_prompt_shows_tip_boxes_and_subheadings_next_to_cited_paragraphs(
+    pixelbook, episode
+):
+    # 提示框标题和小标题都不是编号段落，引用不到；引用紧挨着它们的段落时，材料里带上它们
     chapter = episode.parent.parent / "chapters" / "ch01.md"
     chapter.write_text(
         CHAPTER.replace(
             "ch01-¶003 第三段", "### 提示0　一条在前面的提示\n\nch01-¶003 第三段"
-        )
+        ).replace("ch01-¶002 >", "#### 一个小标题[1]\n\nch01-¶002 >")
     )
     data = outline()
     data["episodes"][0]["units"] = [1, 2]
     lines = script()
     _line(lines, 1)["cite"] = ["ch01-¶002", "ch01-¶003"]
-    _line(lines, 3)["cite"] = ["ch01-¶006"]
+    _line(lines, 3)["cite"] = ["ch01-¶006", "ch01-¶003"]
 
-    code, out = pixelbook(["factcheck-packet", str(episode)], lines, data)
+    code, out = _prompt(pixelbook, episode, lines, data)
 
     assert code == 0, out
-    # ¶002 和 ¶003 共用一个提示框，只列一次，按原文顺序放在两段之间
-    assert (
-        "原文：\n\nch01-¶002 > 一段引文。\n提示框：提示0　一条在前面的提示\n"
-        "ch01-¶003 第三段" in out
-    )
-    assert (
-        "## s01-l03\n\n旁白：一二三四五六七八九十一二三四五六七八九十\n\n原文：\n\n"
-        "提示框：提示1　程序员要为自己的职业生涯负责\nch01-¶006 另一个单元的正文[1]。\n\n"
-        in out
+    # ¶002 和 ¶003 共用一个提示框，只列一次；¶003 只列一次，虽然两句都引用它
+    sources = out.split("--- 原文段落 ---\n\n")[1].split("\n\n--- 旁白句 ---")[0]
+    assert sources == (
+        "ch01-¶001 第一段正文。\n"
+        "小标题：一个小标题\n"
+        "ch01-¶002 > 一段引文。\n"
+        "提示框：提示0　一条在前面的提示\n"
+        "ch01-¶003 第三段：程序员要对自己的职业生涯负责，不害怕承认无知或错误。\n"
+        "ch01-¶004 [图 images/00001.jpeg]\n"
+        "……\n"
+        "提示框：提示1　程序员要为自己的职业生涯负责\n"
+        "ch01-¶006 另一个单元的正文[1]。"
     )
 
 
-def test_the_packet_is_refused_while_the_script_has_errors(pixelbook, episode):
+def test_the_prompt_is_refused_while_the_script_has_errors(pixelbook, episode):
     data = script()
     _line(data, 3)["cite"] = "ch01-¶099"
 
-    code, out = pixelbook(["factcheck-packet", str(episode)], data)
+    code, out = _prompt(pixelbook, episode, data)
 
     assert code == 1
     assert "s01-l03：`cite` 里的 ch01-¶099 在 ch01.md 里不存在" in out
     assert "旁白：" not in out
 
 
-def test_the_packet_ignores_a_factcheck_from_an_earlier_version(pixelbook, episode):
+def test_the_prompt_ignores_a_factcheck_from_an_earlier_version(pixelbook, episode):
     data = script()
     report = factcheck(data)
     _line(data, 1)["text"] = "改过的字幕"
 
-    code, out = pixelbook(["factcheck-packet", str(episode)], data, factcheck=report)
+    code, out = _prompt(pixelbook, episode, data, factcheck=report)
 
     assert code == 0
-    assert out.startswith("## s01-l01\n\n旁白：改过的字幕\n")
+    assert "s01-l01（出处：ch01-¶001）\n旁白：改过的字幕\n" in out
+
+
+def test_the_token_changes_with_the_script(pixelbook, episode):
+    data = script()
+    first = _token(_prompt(pixelbook, episode, data)[1])
+    _line(data, 1)["text"] = "改过的字幕"
+
+    assert _token(_prompt(pixelbook, episode, data)[1]) != first
 
 
 def verdicts(data: dict) -> dict:
-    """裁判对 `data` 的回答：每句一条，全部支持。"""
+    """裁判对 `data` 的回答：每句一条，全部支持（校验码由 `record` 补上）。"""
     return {
         "lines": [
             {"id": line["id"], "verdict": "supported", "reason": "原文这样说"}
@@ -704,15 +740,55 @@ def verdicts(data: dict) -> dict:
 
 @pytest.fixture
 def record(pixelbook, episode, tmp_path):
-    """写出旁白稿和裁判的回答，运行 `pixelbook factcheck-record`。"""
+    """先为旁白稿生成给裁判的 prompt，再写出裁判的回答，运行 `pixelbook factcheck-record`。
 
-    def run(data: dict, answer: dict, factcheck: dict | None = None):
+    回答里没有 `packet` 时补上 prompt 的校验码，就像裁判照做了一样；`sign=False` 时不补。
+    """
+
+    def run(data: dict, answer: dict, factcheck: dict | None = None, sign: bool = True):
+        if sign and "packet" not in answer:
+            token = _token(_prompt(pixelbook, episode, data, factcheck=factcheck)[1])
+            answer = {"packet": token, **answer}
         answer_path = tmp_path / "verdicts.yaml"
         _dump(answer_path, answer)
         argv = ["factcheck-record", str(episode), str(answer_path)]
         return pixelbook(argv, data, factcheck=factcheck)
 
     return run
+
+
+def test_an_answer_with_a_wrong_token_is_refused(record, episode):
+    data = script()
+
+    code, out = record(data, {"packet": "fc-0123456789ab", **verdicts(data)})
+
+    assert code == 1
+    assert "回答里的校验码 fc-0123456789ab 和当前旁白稿生成的 prompt 的校验码" in out
+    assert not (episode / "factcheck.yaml").exists()
+
+
+def test_an_answer_without_a_token_is_refused(record, episode):
+    data = script()
+
+    code, out = record(data, verdicts(data), sign=False)
+
+    assert code == 1
+    assert "`packet` 缺失" in out
+    assert not (episode / "factcheck.yaml").exists()
+
+
+def test_an_answer_to_a_prompt_from_before_an_edit_is_refused(
+    pixelbook, record, episode
+):
+    data = script()
+    stale = _token(_prompt(pixelbook, episode, data)[1])
+    _line(data, 1)["text"] = "出题之后改过的字幕"
+
+    code, out = record(data, {"packet": stale, **verdicts(data)})
+
+    assert code == 1
+    assert "校验码" in out
+    assert not (episode / "factcheck.yaml").exists()
 
 
 def test_recording_the_first_round_writes_a_factcheck_that_passes_check(
@@ -819,3 +895,151 @@ def test_the_summary_says_when_the_rounds_are_used_up(record):
 
     assert code == 0
     assert "已核对 3 轮，轮次用完" in out
+
+
+def test_check_always_prints_the_estimate_and_each_segment_against_the_outline(check):
+    # 60 句 × 20 字 = 1200 字，4:48；大纲给这一段 5 分钟
+    code, out = check(script())
+
+    assert code == 0
+    assert "估算时长：4:48（1200 字，按 250 字/分钟，应该在 4:00–6:00 内）" in out
+    assert "  s01 开场：1200 字，估算 4:48，大纲 5:00（5 分钟）" in out
+    assert out.index("估算时长") < out.index("报错")
+
+
+def _two_segments(first: int, second: int) -> tuple[dict, dict]:
+    """两段的旁白稿（各 `first`、`second` 句，每句 20 字）和各给 2.5 分钟的大纲。"""
+    data = script(first + second)
+    lines = data["segments"][0]["scenes"][0]["lines"]
+    data["segments"].append(
+        {
+            "id": "s02",
+            "title": "收尾",
+            "scenes": [
+                {"id": "s02-c01", "description": "一个方块", "lines": lines[first:]}
+            ],
+        }
+    )
+    del lines[first:]
+    for n, line in enumerate(data["segments"][1]["scenes"][0]["lines"], start=1):
+        line["id"] = f"s02-l{n:02d}"
+    plan = outline()
+    plan["episodes"][0]["segments"] = [
+        {"title": "开场", "minutes": 2.5},
+        {"title": "收尾", "minutes": 2.5},
+    ]
+    return data, plan
+
+
+@pytest.mark.parametrize(
+    ("first", "second", "warned"),
+    [
+        # 2.5 分钟 = 150 秒，25% 是 37.5 秒：每句 20 字 4.8 秒
+        (31, 31, []),  # 148.8 秒，各差 1 秒
+        (39, 23, ["s02"]),  # 187 秒（多 37 秒，不到 37.5）与 110 秒（少 40 秒）
+        (40, 22, ["s01", "s02"]),  # 192 秒、106 秒
+    ],
+    ids=["close", "s02 short", "both off"],
+)
+def test_a_segment_far_from_its_outline_minutes_is_a_warning(
+    check, first, second, warned
+):
+    data, plan = _two_segments(first, second)
+
+    code, out = check(data, plan)
+
+    assert code == 0, out
+    for segment in ("s01", "s02"):
+        flagged = f"  {segment}：估算" in out.split("警告")[1]
+        assert flagged == (segment in warned), out
+
+
+@pytest.mark.parametrize(
+    "where",
+    ["ch01-¶003 第三段", "ch01-¶004 [图"],
+    ids=["heading before the paragraph", "heading after the paragraph"],
+)
+def test_quoting_the_subheading_next_to_a_cited_paragraph_is_not_copying(
+    check, episode, where
+):
+    # 和提示框标题一样，紧挨着这一段的 `####` 小标题可以照用
+    chapter = episode.parent.parent / "chapters" / "ch01.md"
+    chapter.write_text(
+        CHAPTER.replace(where, f"#### 程序员要对自己的职业生涯负责\n\n{where}")
+    )
+    data = script()
+    _line(data, 3)["text"] = "小标题说程序员要对自己的职业生涯负责"
+    _line(data, 3)["cite"] = "ch01-¶003"
+
+    code, out = check(data)
+
+    assert code == 0, out
+    assert "警告：无" in out
+
+
+def test_a_subheading_not_next_to_the_cited_paragraph_does_not_excuse_copying(
+    check, episode
+):
+    chapter = episode.parent.parent / "chapters" / "ch01.md"
+    chapter.write_text(
+        CHAPTER.replace(
+            "ch01-¶002 >", "#### 程序员要对自己的职业生涯负责\n\nch01-¶002 >"
+        )
+    )
+    data = script()
+    _line(data, 3)["text"] = "小标题说程序员要对自己的职业生涯负责"
+    _line(data, 3)["cite"] = "ch01-¶003"
+
+    assert "s01-l03：和 ch01-¶003 有 14 个字连续相同" in check(data)[1]
+
+
+def _described(description: str) -> dict:
+    data = script()
+    data["segments"][0]["scenes"][0]["description"] = description
+    return data
+
+
+@pytest.mark.parametrize(
+    "description",
+    [
+        "一个写着 DRY 的方块",
+        "一个写着 dry 的方块",  # 拉丁字母不分大小写
+        "“职业生涯负责”几个字",  # 引号里的词语，去掉空白和标点后比较
+        "「程序员要为自己的职业生涯负责」的牌子",  # 标题里的也算
+        "提示1 的牌子亮起",
+        "一个方块落下",  # 没有能机械提取的词语
+    ],
+)
+def test_description_terms_found_in_the_chapter_pass(check, episode, description):
+    chapter = episode.parent.parent / "chapters" / "ch01.md"
+    chapter.write_text(CHAPTER.replace("第一段正文。", "第一段正文，讲 DRY 原则。"))
+
+    code, out = check(_described(description))
+
+    assert code == 0, out
+    assert "警告：无" in out
+
+
+@pytest.mark.parametrize(
+    ("description", "term"),
+    [
+        ("一个 Bug 方块", "Bug"),
+        ("一张 jpeg 图", "jpeg"),  # 图片占位符里的文件名不算原文
+        ("「不存在的说法」的牌子", "不存在的说法"),
+        ("“职业 生涯 负责人”", "职业 生涯 负责人"),
+        ("提示9 的牌子", "提示9"),
+        ("一个 DRYER 方块", "DRYER"),  # 按整词比较
+    ],
+)
+def test_a_description_term_not_in_the_chapter_is_a_warning(
+    check, episode, description, term
+):
+    chapter = episode.parent.parent / "chapters" / "ch01.md"
+    chapter.write_text(CHAPTER.replace("第一段正文。", "第一段正文，讲 DRY 原则。"))
+
+    code, out = check(_described(description))
+
+    assert code == 0
+    assert (
+        f"s01-c01：画面说明里的「{term}」在 ch01.md 里没有出现" in out.split("警告")[1]
+    )
