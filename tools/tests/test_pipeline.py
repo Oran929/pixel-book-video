@@ -7,7 +7,7 @@ from dataclasses import replace
 
 import pytest
 import yaml
-from conftest import OUTRO, SCRIPT, VOICE
+from conftest import OUTRO, SCRIPT, VOICE, fake_asr_verifier
 
 from pixelbook import REPO_ROOT
 from pixelbook.asr import FakeAsrEngine
@@ -21,11 +21,6 @@ from pixelbook.pronunciation import load_pronunciation
 from pixelbook.script import ScriptError
 from pixelbook.tts import FakeTtsEngine
 from pixelbook.verification import Verifier
-
-
-def fake_asr_verifier(asr=None, max_retries=2):
-    """复核：默认用原样"听见"朗读文本的假识别引擎，阈值 0.1，重试 2 次。"""
-    return Verifier(asr or FakeAsrEngine(), max_diff_rate=0.1, max_retries=max_retries)
 
 
 def test_manifest_lists_segments_scenes_and_lines_in_order(tmp_path, script_path):
@@ -1110,6 +1105,28 @@ def test_cache_written_before_the_pinyin_step_is_reused_and_reported(
     assert failure["id"] == "s01-l02"
     assert failure["diff_rate"] == 1 / 8
     assert failure["pinyin_diff_rate"] is None
+
+
+def test_passed_cache_written_before_the_pinyin_step_is_reused_and_not_reported(
+    tmp_path, script_path
+):
+    public = tmp_path / "public"
+    voice_episode(script_path, FakeTtsEngine(), VOICE, public, {}, verifier=strict())
+    # 改回两步复核之前的格式：每一版只有识别结果和字符差异率
+    cache = script_path.parents[2] / "cache" / "tts"
+    for path in cache.glob("*.json"):
+        record = json.loads(path.read_text())
+        record["verification"]["attempts"] = [
+            {"heard": a["heard"], "diff_rate": a["diff_rate"]}
+            for a in record["verification"]["attempts"]
+        ]
+        path.write_text(json.dumps(record, ensure_ascii=False))
+
+    engine = FakeTtsEngine()
+    voice_episode(script_path, engine, VOICE, public, {}, verifier=strict())
+
+    assert engine.texts == []
+    assert _report(script_path) == {"asr_failures": [], "asr_pinyin_passes": []}
 
 
 # --- 缺字检查（票 09）：字幕文本里每个字在像素字体里都要有字形 ---

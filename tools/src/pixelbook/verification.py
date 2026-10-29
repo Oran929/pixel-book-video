@@ -12,6 +12,7 @@ import unicodedata
 import warnings
 from collections.abc import Sequence
 from dataclasses import dataclass
+from enum import StrEnum
 from functools import cache
 from pathlib import Path
 from typing import Any
@@ -22,7 +23,16 @@ import yaml
 from pypinyin import Style, lazy_pinyin
 
 from pixelbook.asr import AsrEngine
-from pixelbook.mlx_asr import ASR_MODELS
+
+# `verification.yaml` 里 `asr` 可选的名字 → （模型，传给识别引擎的语言）。
+# 归配置这一侧所有，适配器 `mlx_asr` 从这里取，核心模块不依赖具体引擎（票 #30）。
+# Whisper 要用带 HuggingFace processor（分词器）的 `-asr-fp16` 版本：
+# mlx-community/whisper-large-v3-turbo 只有权重，mlx-audio 载入后识别会报
+# "Processor not found"。
+ASR_MODELS: dict[str, tuple[str, str]] = {
+    "whisper": ("mlx-community/whisper-large-v3-turbo-asr-fp16", "zh"),
+    "qwen3-asr": ("Qwen/Qwen3-ASR-1.7B", "Chinese"),
+}
 
 
 @cache
@@ -81,6 +91,92 @@ def _edit_distance(a: Sequence[str], b: Sequence[str]) -> int:
     return previous[-1]
 
 
+class PassedBy(StrEnum):
+    """一版配音靠哪一步复核通过：比字，或者比拼音。"""
+
+    CHARS = "chars"
+    PINYIN = "pinyin"
+
+
+@dataclass(frozen=True)
+class Attempt:
+    """一版配音的复核结果：识别结果、字符差异率、拼音差异率、靠哪一步通过。
+
+    字符对比通过时不算拼音（`pinyin_diff_rate` 为 None）；两步都不通过时
+    `passed_by` 为 None。
+    """
+
+    heard: str
+    diff_rate: float
+    pinyin_diff_rate: float | None
+    passed_by: PassedBy | None
+
+    def to_record(self) -> dict[str, Any]:
+        return {
+            "heard": self.heard,
+            "diff_rate": self.diff_rate,
+            "pinyin_diff_rate": self.pinyin_diff_rate,
+            "passed_by": None if self.passed_by is None else self.passed_by.value,
+        }
+
+
+@dataclass(frozen=True)
+class Verification:
+    """一句配音的复核结果：每次生成的 `attempts`、选中的 `chosen`、
+    当时的阈值和识别引擎设置。存进配音缓存的 `<指纹>.json`。"""
+
+    passed: bool
+    chosen: int
+    attempts: list[Attempt]
+    max_diff_rate: float
+    asr: dict[str, Any]
+
+    @property
+    def chosen_attempt(self) -> Attempt:
+        return self.attempts[self.chosen]
+
+    def to_record(self) -> dict[str, Any]:
+        return {
+            "passed": self.passed,
+            "chosen": self.chosen,
+            "attempts": [attempt.to_record() for attempt in self.attempts],
+            "max_diff_rate": self.max_diff_rate,
+            "asr": self.asr,
+        }
+
+    @classmethod
+    def from_record(cls, record: dict[str, Any]) -> "Verification":
+        """从缓存里读回复核结果。兼容旧缓存的分支都在这里。
+
+        票 07 改成两步复核之前写的缓存，`attempts` 里没有 `pinyin_diff_rate`
+        和 `passed_by`：那时只比过字，所以整句通过就是选中的那一版靠字符通过，
+        其余各版都没通过。
+        """
+        attempts = []
+        for i, a in enumerate(record["attempts"]):
+            if "passed_by" in a:
+                passed_by = None if a["passed_by"] is None else PassedBy(a["passed_by"])
+            else:
+                # 旧缓存：通过的只能是选中的那一版
+                passed = record["passed"] and i == record["chosen"]
+                passed_by = PassedBy.CHARS if passed else None
+            attempts.append(
+                Attempt(
+                    heard=a["heard"],
+                    diff_rate=a["diff_rate"],
+                    pinyin_diff_rate=a.get("pinyin_diff_rate"),
+                    passed_by=passed_by,
+                )
+            )
+        return cls(
+            passed=record["passed"],
+            chosen=record["chosen"],
+            attempts=attempts,
+            max_diff_rate=record["max_diff_rate"],
+            asr=record["asr"],
+        )
+
+
 @dataclass(frozen=True)
 class Verifier:
     """复核设置：识别引擎、差异率阈值（超过就不通过）、不通过时最多重试几次。"""
@@ -89,26 +185,17 @@ class Verifier:
     max_diff_rate: float
     max_retries: int
 
-    def check(self, spoken: str, heard: str) -> dict[str, Any]:
-        """一版配音的复核结果：识别结果、字符差异率、拼音差异率、靠哪一步通过。
-
-        字符对比通过时不算拼音（`pinyin_diff_rate` 为 None）；`passed_by` 是
-        `"chars"`、`"pinyin"`，两步都不通过时为 None。
-        """
+    def check(self, spoken: str, heard: str) -> Attempt:
+        """一版配音的复核结果：先比字，不通过再比拼音。"""
         rate = difference_rate(spoken, heard)
         pinyin_rate, passed_by = None, None
         if rate <= self.max_diff_rate:
-            passed_by = "chars"
+            passed_by = PassedBy.CHARS
         else:
             pinyin_rate = pinyin_difference_rate(spoken, heard)
             if pinyin_rate <= self.max_diff_rate:
-                passed_by = "pinyin"
-        return {
-            "heard": heard,
-            "diff_rate": rate,
-            "pinyin_diff_rate": pinyin_rate,
-            "passed_by": passed_by,
-        }
+                passed_by = PassedBy.PINYIN
+        return Attempt(heard, rate, pinyin_rate, passed_by)
 
 
 @dataclass(frozen=True)

@@ -6,6 +6,7 @@
 import hashlib
 import json
 import shutil
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
@@ -17,7 +18,7 @@ from pixelbook.pronunciation import find_new_terms, spoken_text
 from pixelbook.script import DRAFT, load_script
 from pixelbook.tts import TtsEngine
 from pixelbook.tts_cache import TtsCache
-from pixelbook.verification import Verifier
+from pixelbook.verification import PassedBy, Verifier
 from pixelbook.voice import Voice
 from pixelbook.voice_lock import LOCK_NAME, lock_mismatch, lock_record, write_lock
 
@@ -34,6 +35,23 @@ SUBTITLE_FONT = "fonts/fusion-pixel-12px-proportional-zh_hans.otf.woff2"
 
 class PipelineError(Exception):
     pass
+
+
+@dataclass(frozen=True)
+class AsrReportEntry:
+    """检查报告里的一句：复核没通过（`asr_failures`），或靠拼音通过（`asr_pinyin_passes`）。
+
+    `cache` 是这句配音的缓存文件，相对书的目录；想重新生成就删掉它。
+    """
+
+    id: str
+    text: str
+    spoken: str
+    heard: str
+    diff_rate: float
+    # 两步复核之前缓存的句子没有算过拼音
+    pinyin_diff_rate: float | None
+    cache: str
 
 
 def voice_episode(
@@ -104,7 +122,9 @@ def voice_episode(
                 missing_glyphs_message(script_path, glyphs["missing_glyphs"], font)
             )
 
-    segments, scenes, lines, failures, pinyin_passes = [], [], [], [], []
+    segments, scenes, lines = [], [], []
+    failures: list[AsrReportEntry] = []
+    pinyin_passes: list[AsrReportEntry] = []
     wavs: dict[str, Path] = {}
     for segment in script.segments:
         segments.append({"id": segment.id, "title": segment.title})
@@ -114,23 +134,21 @@ def voice_episode(
                 spoken = spoken_text(line, pronunciation)
                 cached = cache.line(spoken)
                 wav = cached.wav
-                verification = cached.verification
-                chosen = verification["attempts"][verification["chosen"]]
-                # 两步复核之前的缓存只比过字：通过的就是靠字符通过的
-                passed_by = chosen.get(
-                    "passed_by", "chars" if verification["passed"] else None
-                )
-                if passed_by != "chars":
-                    entry = {
-                        "id": line.id,
-                        "text": line.text,
-                        "spoken": spoken,
-                        "heard": chosen["heard"],
-                        "diff_rate": chosen["diff_rate"],
-                        "pinyin_diff_rate": chosen.get("pinyin_diff_rate"),
-                        "cache": wav.relative_to(book_dir).as_posix(),
-                    }
-                    (pinyin_passes if passed_by == "pinyin" else failures).append(entry)
+                chosen = cached.verification.chosen_attempt
+                if chosen.passed_by != PassedBy.CHARS:
+                    entry = AsrReportEntry(
+                        id=line.id,
+                        text=line.text,
+                        spoken=spoken,
+                        heard=chosen.heard,
+                        diff_rate=chosen.diff_rate,
+                        pinyin_diff_rate=chosen.pinyin_diff_rate,
+                        cache=wav.relative_to(book_dir).as_posix(),
+                    )
+                    if chosen.passed_by == PassedBy.PINYIN:
+                        pinyin_passes.append(entry)
+                    else:
+                        failures.append(entry)
                 # 文件名带内容哈希：内容变了，Studio 就不会播放浏览器缓存里的旧音频
                 digest = hashlib.sha256(wav.read_bytes()).hexdigest()[:8]
                 audio = f"{STAGE_DIR}/{line.id}-{digest}.wav"
@@ -158,7 +176,11 @@ def voice_episode(
 
     _write_report(
         episode.dir,
-        {"asr_failures": failures, "asr_pinyin_passes": pinyin_passes, **glyphs},
+        {
+            "asr_failures": [asdict(entry) for entry in failures],
+            "asr_pinyin_passes": [asdict(entry) for entry in pinyin_passes],
+            **glyphs,
+        },
     )
 
     stage = public_dir / STAGE_DIR

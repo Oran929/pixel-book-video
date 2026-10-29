@@ -3,11 +3,10 @@
 from dataclasses import replace
 
 import pytest
+from conftest import fake_asr_verifier
 
-from pixelbook.asr import FakeAsrEngine
 from pixelbook.pipeline import PipelineError, voice_episode
 from pixelbook.tts import FakeTtsEngine
-from pixelbook.verification import Verifier
 from pixelbook.voice import Voice, VoiceConfigError, save_voice_config
 from pixelbook.voice_lock import resolve_book_voice
 
@@ -77,11 +76,6 @@ segments:
             text: 今天读一本书
             cite: ch01-¶001
 """
-
-
-def fake_asr_verifier(asr=None, max_retries=2):
-    """复核：默认用原样"听见"朗读文本的假识别引擎，阈值 0.1，重试 2 次。"""
-    return Verifier(asr or FakeAsrEngine(), max_diff_rate=0.1, max_retries=max_retries)
 
 
 def _voice(repo, **options):

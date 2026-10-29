@@ -6,14 +6,7 @@
 from pathlib import Path
 from typing import Any
 
-# 配置里的名字 → （模型，传给 `generate` 的语言）
-# Whisper 要用带 HuggingFace processor（分词器）的 `-asr-fp16` 版本：
-# mlx-community/whisper-large-v3-turbo 只有权重，mlx-audio 载入后识别会报
-# "Processor not found"。
-ASR_MODELS: dict[str, tuple[str, str]] = {
-    "whisper": ("mlx-community/whisper-large-v3-turbo-asr-fp16", "zh"),
-    "qwen3-asr": ("Qwen/Qwen3-ASR-1.7B", "Chinese"),
-}
+from pixelbook.verification import ASR_MODELS
 
 
 class MlxAsrEngine:

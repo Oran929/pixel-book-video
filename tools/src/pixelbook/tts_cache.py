@@ -18,7 +18,7 @@ from typing import Any
 
 from pixelbook import REPO_ROOT
 from pixelbook.tts import SynthesisStats, TtsEngine
-from pixelbook.verification import Verifier
+from pixelbook.verification import Attempt, Verification, Verifier
 from pixelbook.voice import Voice
 
 # 每次生成都可能不同、但不改变"这是哪一句、用什么音色"的参数，不进指纹。
@@ -66,10 +66,7 @@ def normalized_voice(voice: Voice) -> dict[str, Any]:
 @dataclass(frozen=True)
 class CachedLine:
     wav: Path
-    # 复核结果：`passed`、每次生成的 `attempts`（识别结果、字符差异率、拼音差异率、
-    # 靠哪一步通过）、选中的 `chosen`。票 07 改成两步复核之前写的缓存，`attempts`
-    # 里没有 `pinyin_diff_rate` 和 `passed_by`
-    verification: dict[str, Any]
+    verification: Verification
 
 
 class TtsCache:
@@ -98,12 +95,12 @@ class TtsCache:
             record = json.loads(info.read_text())
             # 票 07 之前写的缓存没有复核结果，当作没有缓存
             if "verification" in record:
-                return CachedLine(wav, record["verification"])
+                return CachedLine(wav, Verification.from_record(record["verification"]))
         self.directory.mkdir(parents=True, exist_ok=True)
 
         takes: list[Path] = []
         stats: list[SynthesisStats] = []
-        attempts: list[dict[str, Any]] = []
+        attempts: list[Attempt] = []
         try:
             for attempt in range(1 + self.verifier.max_retries):
                 takes.append(_temp_path(wav))
@@ -111,29 +108,29 @@ class TtsCache:
                 stats.append(self.engine.synthesize(text, voice, takes[-1]))
                 heard = self.verifier.asr.transcribe(takes[-1])
                 attempts.append(self.verifier.check(text, heard))
-                if attempts[-1]["passed_by"]:
+                if attempts[-1].passed_by:
                     break
             chosen = len(attempts) - 1
-            if not attempts[chosen]["passed_by"]:
+            if not attempts[chosen].passed_by:
                 # 都不通过（每版都算了拼音）：选拼音差异率最低的一版，再比字符差异率
                 chosen = min(
                     range(len(attempts)),
                     key=lambda i: (
-                        attempts[i]["pinyin_diff_rate"],
-                        attempts[i]["diff_rate"],
+                        attempts[i].pinyin_diff_rate,
+                        attempts[i].diff_rate,
                     ),
                 )
             takes[chosen].replace(wav)
         finally:
             for tmp in takes:
                 tmp.unlink(missing_ok=True)
-        verification = {
-            "passed": attempts[chosen]["passed_by"] is not None,
-            "chosen": chosen,
-            "attempts": attempts,
-            "max_diff_rate": self.verifier.max_diff_rate,
-            "asr": self.verifier.asr.settings,
-        }
+        verification = Verification(
+            passed=attempts[chosen].passed_by is not None,
+            chosen=chosen,
+            attempts=attempts,
+            max_diff_rate=self.verifier.max_diff_rate,
+            asr=self.verifier.asr.settings,
+        )
 
         record = {
             "text": text,
@@ -144,7 +141,7 @@ class TtsCache:
             "total_elapsed_seconds": sum(s.elapsed_seconds for s in stats),
             "peak_memory_bytes": max(s.peak_memory_bytes for s in stats),
             "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
-            "verification": verification,
+            "verification": verification.to_record(),
         }
         with _staged(info) as tmp:
             tmp.write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n")
