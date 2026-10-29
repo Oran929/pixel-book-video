@@ -12,7 +12,7 @@ import yaml
 from pixelbook import cli
 
 # 单元 1：¶001–¶003 是文字段（¶002 是引文），¶004、¶005 是图片段（¶005 带图题）；
-# 单元 2：¶006；章末脚注 ¶007 不属于任何单元
+# 单元 2：¶006；章末脚注 ¶007 不属于任何单元（它的标记在 ¶006 里）
 CHAPTER = """\
 # 第1章　示例
 
@@ -30,7 +30,7 @@ ch01-¶005 [图 images/00002.jpeg] 图表 1——一张带图题的图
 
 ## 2　第二单元
 
-ch01-¶006 另一个单元的正文。
+ch01-¶006 另一个单元的正文[1]。
 
 ---
 
@@ -412,6 +412,15 @@ def test_a_cite_outside_the_episode_units_is_only_a_warning(
         in _warnings(out)
     )
     assert "旁白稿检查通过" in out
+
+
+def test_a_footnote_marked_inside_the_episode_is_not_a_warning(check):
+    data = outline()
+    data["episodes"][0]["units"] = [1, 2]
+    lines = script()
+    _line(lines, 3)["cite"] = ["ch01-¶006", "ch01-¶007"]
+
+    assert "警告：无" in check(lines, data)[1]
 
 
 def test_a_cite_inside_a_listed_range_or_unit_is_not_a_warning(check):

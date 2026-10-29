@@ -49,6 +49,8 @@ PARAGRAPH_ID = re.compile(r"^ch\d{2}-¶\d{3}$")
 PARAGRAPH_LINE = re.compile(r"^(ch\d{2}-¶\d{3}) (.*)$")
 # 单元标题 `## 9　DRY——邪恶的重复`（单元号和名字之间是全角空格）
 UNIT_LINE = re.compile(r"^## (\d+)　(.*)$")
+# 章末脚注以它的编号开头，如 `[18]译注：……`；正文里的标记也写成 `[18]`
+FOOTNOTE_LINE = re.compile(r"^\[(\d+)\]")
 QUOTE_CLASSES = {
     "content_reference",
     "content_reference_left",
@@ -105,6 +107,8 @@ class Paragraph:
     text: str
     # 所在单元的单元号；章首导语和章末脚注不属于任何单元
     unit: int | None
+    # 章末脚注：它的标记 `[N]` 所在的段落；标记在标题里时，是标题后面的第一个编号段落
+    marked_in: str | None = None
 
     @property
     def is_image(self) -> bool:
@@ -130,21 +134,60 @@ class Chapter:
 
 
 def read_chapter(path: Path) -> Chapter:
-    """读 `pixelbook convert` 写出的 `chNN.md`：编号段落和单元。"""
+    """读 `pixelbook convert` 写出的 `chNN.md`：编号段落和单元，以及脚注标记在哪一段。"""
     chapter = Chapter()
     unit: Unit | None = None
+    marks = _Marks()
+    in_notes = False
     for line in path.read_text().splitlines():
         if match := UNIT_LINE.match(line):
             unit = Unit(int(match[1]), match[2], [])
             chapter.units[unit.number] = unit
-        elif line.startswith("## ") or line == RULE:
+        elif line == RULE:
+            unit, in_notes = None, True
+        elif line.startswith("## "):
             unit = None
+        if line.startswith("#"):
+            marks.scan(line, None)
         elif match := PARAGRAPH_LINE.match(line):
-            number = unit.number if unit else None
-            chapter.paragraphs[match[1]] = Paragraph(match[1], match[2], number)
+            id, text = match[1], match[2]
+            note = FOOTNOTE_LINE.match(text) if in_notes else None
+            if not in_notes:
+                marks.scan(text, id)
+            chapter.paragraphs[id] = Paragraph(
+                id,
+                text,
+                unit.number if unit else None,
+                marked_in=marks.found.get(int(note[1])) if note else None,
+            )
             if unit:
-                unit.paragraphs.append(match[1])
+                unit.paragraphs.append(id)
     return chapter
+
+
+class _Marks:
+    """正文里的脚注标记 `[1]`、`[2]`……按编号顺序出现；一个一个往后找，免得把代码里的
+    `a[1]` 之类当成标记。标题里的标记先挂起，记到标题后面的第一个编号段落上。"""
+
+    def __init__(self):
+        self.found: dict[int, str] = {}
+        self.pending: list[int] = []
+
+    def scan(self, text: str, paragraph: str | None) -> None:
+        if paragraph is not None:
+            self.found |= dict.fromkeys(self.pending, paragraph)
+            self.pending = []
+        position = 0
+        while (position := text.find(f"[{self._next}]", position)) >= 0:
+            if paragraph is None:
+                self.pending.append(self._next)
+            else:
+                self.found[self._next] = paragraph
+            position += 1
+
+    @property
+    def _next(self) -> int:
+        return len(self.found) + len(self.pending) + 1
 
 
 def parse_cite(value: Any) -> list[str] | None:

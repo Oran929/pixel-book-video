@@ -17,6 +17,7 @@ from typing import Any
 import yaml
 
 from pixelbook.convert import PARAGRAPH_ID, Chapter, parse_cite, read_chapter
+from pixelbook.copied import copied, copied_message
 from pixelbook.episode_path import ChapterPath
 
 # 期 ID：`ep01` 起，两位数补零
@@ -170,8 +171,11 @@ def load_outline(path: Path) -> Outline:
     )
 
 
-def check_outline(path: Path) -> Outline:
-    """读大纲并对照该章的转换结果检查；有问题时报错，列出全部问题。"""
+def check_outline(path: Path) -> tuple[Outline, list[str]]:
+    """读大纲并对照该章的转换结果检查，返回大纲和警告；有报错时抛出异常，列出全部报错和警告。
+
+    警告（疑似照搬原文）不影响通过：术语、专有名词、提示框标题有时只能照用，由人判断。
+    """
     chapter_path = ChapterPath.from_outline(path)
     outline = load_outline(path)
     if not chapter_path.converted.is_file():
@@ -180,6 +184,7 @@ def check_outline(path: Path) -> Outline:
             "先跑 `pixelbook convert <书目录>`"
         )
     problems = []
+    warnings = []
     if outline.chapter != chapter_path.number:
         problems.append(
             f"大纲：`chapter` 是 {outline.chapter}，"
@@ -196,23 +201,43 @@ def check_outline(path: Path) -> Outline:
         episodes.setdefault(episode.id, where)
         problems += _check_segments(episode, where)
         problems += _check_units(episode, where, chapter, source)
+        scope = episode_scope(episode, chapter)
         for m, point in enumerate(episode.points, start=1):
+            label = f"{where}第 {m} 条观点（{point.id}）：`cite`"
             if missing := [i for i in point.cite if i not in chapter.paragraphs]:
                 problems.append(
-                    f"{where}第 {m} 条观点（{point.id}）：`cite` 里的"
-                    f" {'、'.join(missing)} 在 {source} 里不存在"
+                    f"{label} 里的 {'、'.join(missing)} 在 {source} 里不存在"
                 )
+            elif all(chapter.paragraphs[i].is_image for i in point.cite):
+                problems.append(f"{label} 只引用了图片段，至少要有一个文字段")
+            if outside := outside_scope(point.cite, scope, chapter):
+                problems.append(
+                    f"{label} 里的 {'、'.join(outside)} 不在本期覆盖的单元或段落范围里"
+                )
+            warnings += [
+                f"{where}第 {m} 条观点（{point.id}）：{copied_message(cited, piece)}"
+                for cited in point.cite
+                if cited in chapter.paragraphs
+                and (piece := copied(point.text, chapter.paragraphs[cited]))
+            ]
             if point.id in points:
                 problems.append(
                     f"{where}：`points` 里的观点 ID {point.id} 和{points[point.id]}重复"
                 )
             points.setdefault(point.id, where)
+    problems += _check_coverage(outline, chapter)
     if problems:
         listed = "\n".join(f"  {problem}" for problem in problems)
         raise OutlineError(
             f"{path}: 大纲检查没有通过（{len(problems)} 处）：\n{listed}"
+            + (f"\n{format_warnings(warnings)}" if warnings else "")
         )
-    return outline
+    return outline, warnings
+
+
+def format_warnings(warnings: list[str]) -> str:
+    listed = "\n".join(f"  {warning}" for warning in warnings)
+    return f"警告（{len(warnings)} 条）：\n{listed}"
 
 
 def _check_segments(episode: Episode, where: str) -> list[str]:
@@ -260,6 +285,86 @@ def _check_units(
                 f"{label} {covered.start}–{covered.end}：`from` 应该在 `to` 前面"
             )
     return problems
+
+
+def covered_paragraphs(covered: UnitRange, chapter: Chapter) -> list[str] | None:
+    """`units` 里一项覆盖的段落编号，按原文顺序；单元不存在或范围不对时为 None。"""
+    unit = chapter.units.get(covered.unit)
+    if unit is None:
+        return None
+    paragraphs = unit.paragraphs
+    if covered.start is None:
+        return paragraphs
+    if covered.start not in paragraphs or covered.end not in paragraphs:
+        return None
+    start, end = paragraphs.index(covered.start), paragraphs.index(covered.end)
+    return paragraphs[start : end + 1] if start <= end else None
+
+
+def episode_scope(episode: Episode, chapter: Chapter) -> set[str]:
+    """本期覆盖的段落编号。单元不存在、范围不对的项跳过（由 `_check_units` 报）。"""
+    return {
+        paragraph
+        for covered in episode.units
+        for paragraph in covered_paragraphs(covered, chapter) or []
+    }
+
+
+def outside_scope(cite: list[str], scope: set[str], chapter: Chapter) -> list[str]:
+    """出处里不在本期范围 `scope` 里的编号。章末脚注看它的标记所在的段落；
+    不存在的编号不算（另外报）。"""
+    paragraphs = chapter.paragraphs
+    return [
+        i
+        for i in cite
+        if i in paragraphs and (paragraphs[i].marked_in or i) not in scope
+    ]
+
+
+def _check_coverage(outline: Outline, chapter: Chapter) -> list[str]:
+    """每个单元的每个编号段落恰好属于一期，各期按原文顺序排列。
+
+    章首导语和章末脚注不属于任何单元，不要求覆盖。`units` 本身有问题（单元不存在、
+    范围不对）时由 `_check_units` 报，这里不再检查，免得同一处问题报两遍。
+    """
+    owners: dict[str, list[str]] = {}
+    order = []
+    for episode in outline.episodes:
+        for covered in episode.units:
+            paragraphs = covered_paragraphs(covered, chapter)
+            if paragraphs is None:
+                return []
+            for paragraph in paragraphs:
+                owners.setdefault(paragraph, []).append(episode.id)
+            order += paragraphs
+    problems = []
+    for unit in chapter.units.values():
+        for run, ids in _runs(unit.paragraphs, lambda p: tuple(owners.get(p, ()))):
+            if not ids:
+                problems.append(f"大纲：单元 {unit.number} 的 {run} 不属于任何一期")
+            elif len(ids) > 1:
+                problems.append(
+                    f"大纲：单元 {unit.number} 的 {run} 同时属于 {' 和 '.join(ids)}"
+                )
+    expected = [p for unit in chapter.units.values() for p in unit.paragraphs]
+    if not problems and order != expected:
+        problems.append("大纲：各期（和每期 `units` 里各项）没有按原文顺序排列")
+    return problems
+
+
+def _runs(paragraphs: list[str], key) -> list[tuple[str, Any]]:
+    """把连续的、`key` 相同的段落合成一段范围：(「首–尾」或单个编号, key)。"""
+    runs: list[tuple[list[str], Any]] = []
+    for paragraph in paragraphs:
+        value = key(paragraph)
+        if runs and runs[-1][1] == value:
+            runs[-1][0].append(paragraph)
+        else:
+            runs.append(([paragraph], value))
+    return [
+        (ids[0] if len(ids) == 1 else f"{ids[0]}–{ids[-1]}", value)
+        for ids, value in runs
+    ]
 
 
 def _span(paragraphs: list[str]) -> str:

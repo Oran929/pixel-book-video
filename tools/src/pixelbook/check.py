@@ -6,23 +6,29 @@
 新规则写成同样的函数加进 `RULES`。报错影响退出码，警告只列出。
 """
 
-import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
 from pixelbook.convert import Chapter, read_chapter
+from pixelbook.copied import copied, copied_message
 from pixelbook.episode_path import FACTCHECK_NAME, EpisodePath
 from pixelbook.factcheck import FactcheckError, load_factcheck
-from pixelbook.outline import SECONDS, Episode, OutlineError, clock, load_outline
+from pixelbook.outline import (
+    SECONDS,
+    Episode,
+    OutlineError,
+    clock,
+    episode_scope,
+    load_outline,
+    outside_scope,
+)
 from pixelbook.script import Script, ScriptError, load_script, text_length
 
 ERROR = "报错"
 WARNING = "警告"
 # 估算时长的语速：字数口径和字幕计数相同（去掉空白后的字符数，只数字幕 `text`）
 CHARS_PER_MINUTE = 250
-# 旁白句和它引用的段落有这么多字连续相同（去掉空白和标点后）时，警告照搬原文
-COPIED_CHARS = 12
 # 不属于某一句的问题（如估算时长）记在这个位置下
 WHOLE_SCRIPT = "旁白稿"
 
@@ -179,12 +185,11 @@ def cite_in_scope(context: Context) -> list[Finding]:
     """出处落在本期 `units` 或段落范围之外时警告：偶尔引用别处可以，审稿时要看得到。"""
     if context.outline is None:
         return []
-    scope = _scope(context.outline, context.chapter)
-    paragraphs = context.chapter.paragraphs
+    scope = episode_scope(context.outline, context.chapter)
     findings = []
     for line in context.script.lines:
-        # 编号不存在的由 `cite_exists` 报
-        if outside := [i for i in line.cite if i in paragraphs and i not in scope]:
+        # 编号不存在的由 `cite_exists` 报；章末脚注看它的标记在不在本期范围里
+        if outside := outside_scope(line.cite, scope, context.chapter):
             findings.append(
                 Finding(
                     WARNING,
@@ -196,29 +201,17 @@ def cite_in_scope(context: Context) -> list[Finding]:
 
 
 def not_copied(context: Context) -> list[Finding]:
-    """旁白句和它引用的任一段落有 12 个字以上连续相同时警告：尽量不用原文措辞。
+    """旁白句和它引用的任一段落有 `COPIED_CHARS` 个字以上连续相同时警告：尽量不用原文措辞。
 
     只比较字幕 `text` 和文字段，两边都先去掉空白和标点。
     """
     paragraphs = context.chapter.paragraphs
-    findings = []
-    for line in context.script.lines:
-        text = _bare(line.text)
-        for cited in line.cite:
-            paragraph = paragraphs.get(cited)
-            if paragraph is None or paragraph.is_image:
-                continue
-            copied = _longest_common(text, _bare(paragraph.text))
-            if len(copied) >= COPIED_CHARS:
-                findings.append(
-                    Finding(
-                        WARNING,
-                        line.id,
-                        f"和 {cited} 有 {len(copied)} 个字连续相同（{copied}），"
-                        "疑似照搬原文",
-                    )
-                )
-    return findings
+    return [
+        Finding(WARNING, line.id, copied_message(cited, piece))
+        for line in context.script.lines
+        for cited in line.cite
+        if cited in paragraphs and (piece := copied(line.text, paragraphs[cited]))
+    ]
 
 
 def factcheck_matches(context: Context) -> list[Finding]:
@@ -315,38 +308,6 @@ def _outline_episode(episode: EpisodePath) -> tuple[Episode | None, str | None]:
         if item.id == episode.dir.name:
             return item, None
     return None, f"大纲 {episode.outline} 里没有 {episode.dir.name} 这一期"
-
-
-def _bare(text: str) -> str:
-    """去掉空白和标点（Unicode 类别 P*）。"""
-    return "".join(
-        c for c in text if not c.isspace() and unicodedata.category(c)[0] != "P"
-    )
-
-
-def _longest_common(short: str, long: str) -> str:
-    """`short` 里同时出现在 `long` 里的最长连续片段。旁白句不超过 20 字，直接枚举。"""
-    for size in range(len(short), 0, -1):
-        for start in range(len(short) - size + 1):
-            if (piece := short[start : start + size]) in long:
-                return piece
-    return ""
-
-
-def _scope(outline: Episode, chapter: Chapter) -> set[str]:
-    """本期覆盖的段落编号。大纲本身的问题（单元不存在、范围不对）由 `pixelbook outline` 报，
-    这里跳过。"""
-    scope: set[str] = set()
-    for covered in outline.units:
-        unit = chapter.units.get(covered.unit)
-        if unit is None:
-            continue
-        paragraphs = unit.paragraphs
-        if covered.start in paragraphs and covered.end in paragraphs:
-            start = paragraphs.index(covered.start)
-            paragraphs = paragraphs[start : paragraphs.index(covered.end) + 1]
-        scope.update(paragraphs)
-    return scope
 
 
 def format_report(path: Path, report: Report) -> str:

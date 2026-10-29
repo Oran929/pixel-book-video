@@ -12,7 +12,7 @@ from pixelbook.convert import CHAPTERS_DIR, ConvertError, convert_book
 from pixelbook.episode_path import EpisodePath, EpisodePathError
 from pixelbook.judge import JudgeError, packet, record
 from pixelbook.mix import MixError, mix_timeline
-from pixelbook.outline import OutlineError, check_outline
+from pixelbook.outline import OutlineError, check_outline, format_warnings
 from pixelbook.pipeline import (
     MANIFEST_NAME,
     REPORT_NAME,
@@ -261,7 +261,9 @@ def main(argv: list[str] | None = None) -> int:
             names = "、".join(path.stem for path in written)
             print(f"{len(written)} 章（{names}），写到 {book / CHAPTERS_DIR}")
         elif args.command == "outline":
-            checked = check_outline(args.outline.resolve())
+            checked, warnings = check_outline(args.outline.resolve())
+            if warnings:
+                print(format_warnings(warnings))
             ids = "、".join(episode.id for episode in checked.episodes)
             print(f"大纲检查通过：{len(checked.episodes)} 期（{ids}）")
         elif args.command == "check":

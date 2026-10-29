@@ -1,4 +1,4 @@
-"""大纲检查：`pixelbook outline <大纲>`（票 #7）。
+"""大纲检查：`pixelbook outline <大纲>`（票 #7、#10）。
 
 转换结果用夹具手写成 `books/demo/chapters/ch01.md`，格式和 `pixelbook convert` 的输出相同；
 大纲是 `books/demo/ch01/outline.yaml`，每个用例从 `outline()` 出发改一处再写出。
@@ -10,7 +10,7 @@ import yaml
 from pixelbook import cli
 
 # 两个单元：单元 1 是 ¶002–¶005（含引文和图片），单元 2 是 ¶006–¶009；
-# ¶001 是章首导语，¶010 是章末脚注，都不属于任何单元
+# ¶001 是章首导语，¶010 是章末脚注（标记在 ¶005 里），都不属于任何单元
 CHAPTER = """\
 # 第1章　示例
 
@@ -28,7 +28,7 @@ ch01-¶004 [图 images/00001.jpeg]
 
 #### 小标题
 
-ch01-¶005 第一单元最后一段。
+ch01-¶005 第一单元最后一段[1]。
 
 ## 2　第二单元
 
@@ -47,7 +47,7 @@ ch01-¶010 [1]一条脚注。
 
 
 def outline():
-    """一份能通过检查的大纲：ep01 覆盖单元 1，ep02 覆盖单元 2 的前半部分。"""
+    """一份能通过检查的大纲：ep01 覆盖单元 1，ep02、ep03 各覆盖单元 2 的一半。"""
     return {
         "chapter": 1,
         "episodes": [
@@ -83,6 +83,20 @@ def outline():
                 ],
                 "points": [
                     {"id": "p03", "text": "第三个观点", "cite": "ch01-¶006"},
+                ],
+            },
+            {
+                "id": "ep03",
+                "topic": "第二单元（下）",
+                "units": [{"unit": 2, "from": "ch01-¶008", "to": "ch01-¶009"}],
+                "segments": [
+                    {"title": "一", "minutes": 2},
+                    {"title": "二", "minutes": 1},
+                    {"title": "三", "minutes": 1},
+                    {"title": "四", "minutes": 1},
+                ],
+                "points": [
+                    {"id": "p04", "text": "第四个观点", "cite": "ch01-¶008"},
                 ],
             },
         ],
@@ -288,3 +302,133 @@ def test_the_chapter_must_be_converted_first(check, book):
     code, out = check(outline())
     assert code == 1
     assert "pixelbook convert" in out
+
+
+def test_intro_and_footnotes_need_not_be_covered(check):
+    # 基准大纲没有覆盖 ¶001（章首导语）和 ¶010（章末脚注），照样通过
+    code, out = check(outline())
+    assert code == 0, out
+
+
+def test_every_unit_paragraph_must_belong_to_an_episode(check):
+    data = outline()
+    # 单元 2 的 ¶008–¶009 没人覆盖；单元 1 也不覆盖（¶002–¶005）
+    data["episodes"].pop()
+    _ep(data, 1)["units"] = [2]
+    _ep(data, 2)["units"] = [{"unit": 2, "from": "ch01-¶006", "to": "ch01-¶007"}]
+    code, out = check(data)
+    assert code == 1
+    assert "ch01-¶002–ch01-¶005 不属于任何一期" in out
+    assert "ch01-¶006–ch01-¶007 同时属于 ep01 和 ep02" in out
+
+
+def test_a_gap_inside_a_unit_is_reported_as_a_range(check):
+    data = outline()
+    _ep(data, 3)["units"] = [{"unit": 2, "from": "ch01-¶009", "to": "ch01-¶009"}]
+    code, out = check(data)
+    assert code == 1
+    assert "单元 2 的 ch01-¶008 不属于任何一期" in out
+
+
+def test_episodes_must_follow_the_original_order(check):
+    data = outline()
+    data["episodes"][1], data["episodes"][2] = data["episodes"][2], data["episodes"][1]
+    code, out = check(data)
+    assert code == 1
+    assert "原文顺序" in out
+
+
+@pytest.mark.parametrize(
+    "cite",
+    [
+        "ch01-¶008",  # ep03 的段落
+        "ch01-¶001",  # 章首导语不属于任何一期
+        ["ch01-¶006", "ch01-¶009"],
+    ],
+)
+def test_a_cite_outside_the_episode_scope_is_an_error(check, cite):
+    data = outline()
+    _ep(data, 2)["points"][0]["cite"] = cite
+    code, out = check(data)
+    assert code == 1
+    assert "第 2 期（ep02）第 1 条观点（p03）" in out
+    assert "不在本期覆盖的单元或段落范围里" in out
+
+
+def test_a_footnote_may_be_cited_where_its_mark_is_in_scope(check):
+    data = outline()
+    # ¶010 的标记 [1] 在 ¶005 里，¶005 属于 ep01
+    _ep(data, 1)["points"][0]["cite"] = ["ch01-¶005", "ch01-¶010"]
+    assert check(data)[0] == 0
+    _ep(data, 2)["points"][0]["cite"] = ["ch01-¶006", "ch01-¶010"]
+    code, out = check(data)
+    assert code == 1
+    assert "（p03）" in out
+    assert "ch01-¶010" in out
+
+
+def test_a_footnote_marked_in_a_heading_belongs_where_the_heading_is(check, book):
+    # 标题里的标记算在标题后面的第一个编号段落（¶006，属于 ep02）
+    chapter = CHAPTER.replace("## 2　第二单元", "## 2　第二单元[2]")
+    (book / "chapters" / "ch01.md").write_text(
+        chapter + "\nch01-¶011 [2]另一条脚注。\n"
+    )
+    data = outline()
+    _ep(data, 2)["points"][0]["cite"] = ["ch01-¶006", "ch01-¶011"]
+    assert check(data)[0] == 0
+    _ep(data, 1)["points"][0]["cite"] = ["ch01-¶002", "ch01-¶011"]
+    assert check(data)[0] == 1
+
+
+def test_citing_only_image_paragraphs_is_an_error(check):
+    data = outline()
+    _ep(data, 1)["points"][1]["cite"] = "ch01-¶004"
+    code, out = check(data)
+    assert code == 1
+    assert "（p02）" in out
+    assert "只引用了图片段" in out
+
+
+LONG = "程序员要对自己的职业生涯负责，不害怕承认无知或错误。"
+
+
+@pytest.fixture
+def long_paragraph(book):
+    """把 ¶006 换成一段长正文。"""
+    chapter = CHAPTER.replace("第二单元第一段。", LONG)
+    (book / "chapters" / "ch01.md").write_text(chapter)
+
+
+@pytest.mark.parametrize(
+    "text", ["对自己的职业生涯负责，不害", "他说：对自己的“职业生涯”负责 不害"]
+)
+def test_twelve_characters_copied_from_a_cited_paragraph_is_a_warning(
+    check, long_paragraph, text
+):
+    data = outline()
+    _ep(data, 2)["points"][0]["text"] = text
+    code, out = check(data)
+    assert code == 0, out
+    assert (
+        "警告（1 条）：\n  第 2 期（ep02）第 1 条观点（p03）：和 ch01-¶006 有 12 个字"
+        "连续相同（对自己的职业生涯负责不害），疑似照搬原文" in out
+    )
+    assert "大纲检查通过" in out
+
+
+def test_eleven_characters_copied_is_not_a_warning(check, long_paragraph):
+    data = outline()
+    _ep(data, 2)["points"][0]["text"] = "对自己的职业生涯负责，不"
+    code, out = check(data)
+    assert code == 0
+    assert "警告" not in out
+
+
+def test_warnings_are_listed_after_errors_when_the_check_fails(check, long_paragraph):
+    data = outline()
+    _ep(data, 2)["points"][0]["text"] = "要对自己的职业生涯负责，不害"
+    _ep(data, 1)["points"][0]["cite"] = "ch01-¶099"
+    code, out = check(data)
+    assert code == 1
+    assert "ch01-¶099" in out
+    assert "疑似照搬原文" in out
