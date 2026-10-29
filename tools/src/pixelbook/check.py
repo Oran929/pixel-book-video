@@ -392,7 +392,7 @@ def _missing_terms(description: str, corpus: str, flat: str) -> list[str]:
 
 def factcheck_matches(context: Context) -> list[Finding]:
     """`factcheck.yaml` 存在时，格式要对，并且和旁白稿逐句对应：每句一条判定，不多不少，
-    每句的字幕和出处与核对时相同（核对之后改过的句子要重新核对）。
+    每句的字幕、朗读和出处与核对时相同（核对之后改过的句子要重新核对）。
 
     格式错误只报第一处，不再对照。核对结果不存在时不检查（还没跑 `/factcheck`）。
     """
@@ -412,12 +412,16 @@ def factcheck_matches(context: Context) -> list[Finding]:
             findings.append(
                 Finding(ERROR, line.id, f"`{FACTCHECK_NAME}` 里没有这一句的判定")
             )
-        elif (verdict.text, verdict.cite) != (line.text, line.cite):
+        elif (verdict.text, verdict.cite, verdict.speech) != (
+            line.text,
+            line.cite,
+            line.speech,
+        ):
             findings.append(
                 Finding(
                     ERROR,
                     line.id,
-                    f"字幕或出处和 `{FACTCHECK_NAME}` 里核对过的不同，"
+                    f"字幕、朗读或出处和 `{FACTCHECK_NAME}` 里核对过的不同，"
                     "核对之后改过这一句",
                 )
             )

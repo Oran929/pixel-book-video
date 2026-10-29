@@ -1,7 +1,7 @@
 """语义核对结果 `factcheck.yaml` 的读取（格式见 README「语义核对」，ADR-0008）。
 
 由 `pixelbook factcheck-record` 写出：第几轮核对 `round`，以及每个旁白句一条判定（`id`、
-核对时的字幕 `text` 和出处 `cite`、`verdict`、`reason`）。`text`、`cite` 用来发现
+核对时的字幕 `text` 和出处 `cite`、旁白句有 `speech` 时还有它、`verdict`、`reason`）。`text`、`cite`、`speech` 用来发现
 核对之后又改过的句子。裁判 subagent 的回答是同样的 `lines`，只是没有 `text`、`cite`，
 另外在顶层抄回 prompt 的校验码 `packet`，用 `load_answer` 读。这里只读格式，不比较旁白稿；对照旁白稿的检查在 `check` 和 `judge` 里。
 """
@@ -25,13 +25,14 @@ RECORDED_FIELDS = ["id", "text", "cite", "verdict", "reason"]
 
 @dataclass(frozen=True)
 class Verdict:
-    """一个旁白句的判定和一句理由；记进 `factcheck.yaml` 的还有核对时的字幕和出处。"""
+    """一个旁白句的判定和一句理由；记进 `factcheck.yaml` 的还有核对时的字幕、出处和 `speech`。"""
 
     id: str
     verdict: str
     reason: str
     text: str = ""
     cite: list[str] | None = None
+    speech: str | None = None
 
 
 @dataclass(frozen=True)
@@ -70,21 +71,22 @@ def _lines(data: dict, fields: list[str]) -> list[Verdict]:
     verdicts = []
     for n, item in enumerate(lines, start=1):
         where = f"第 {n} 条"
-        item = _mapping(item, where, fields)
+        item = _mapping(item, where, fields, ["speech"] if "text" in fields else [])
         line_id = _string(item, "id", where)
         where = f"{where}（{line_id}）"
         if line_id in seen:
             raise _fail(where, "id", "重复，每句只能有一条判定")
         seen.add(line_id)
-        text, cite = "", None
+        text, cite, speech = "", None, None
         if "text" in fields:
             text = _string(item, "text", where)
+            speech = _string(item, "speech", where) if "speech" in item else None
             if (cite := parse_cite(item["cite"])) is None:
                 raise _fail(where, "cite", "必须是一个段落编号或编号列表，不支持范围")
         if item["verdict"] not in VERDICTS:
             raise _fail(where, "verdict", f"必须是 {' / '.join(VERDICTS)} 之一")
         reason = _string(item, "reason", where)
-        verdicts.append(Verdict(line_id, item["verdict"], reason, text, cite))
+        verdicts.append(Verdict(line_id, item["verdict"], reason, text, cite, speech))
     return verdicts
 
 
@@ -99,11 +101,11 @@ def _fail(where: str, field: str, problem: str) -> FactcheckError:
     return FactcheckError(f"{where}：`{field}` {problem}")
 
 
-def _mapping(data: Any, where: str, fields: list[str]) -> dict:
+def _mapping(data: Any, where: str, fields: list[str], optional=()) -> dict:
     if not isinstance(data, dict):
         raise FactcheckError(f"{where}：应该是一个映射（键: 值）")
     for key in data:
-        if key not in fields:
+        if key not in (*fields, *optional):
             raise _fail(where, key, "不是认识的字段")
     for key in fields:
         if key not in data:

@@ -104,6 +104,7 @@ def factcheck(data: dict) -> dict:
                 "id": line["id"],
                 "text": line["text"],
                 "cite": line["cite"],
+                **({"speech": line["speech"]} if "speech" in line else {}),
                 "verdict": "supported",
                 "reason": "原文这样说",
             }
@@ -645,7 +646,11 @@ def test_a_complete_factcheck_passes_whatever_the_verdicts(check):
 
 @pytest.mark.parametrize(
     ("field", "value"),
-    [("text", "核对之后改过的字幕"), ("cite", ["ch01-¶001", "ch01-¶003"])],
+    [
+        ("text", "核对之后改过的字幕"),
+        ("cite", ["ch01-¶001", "ch01-¶003"]),
+        ("speech", "核对之后加的朗读"),
+    ],
 )
 def test_a_line_changed_after_the_factcheck_is_an_error(check, field, value):
     data = script()
@@ -656,9 +661,29 @@ def test_a_line_changed_after_the_factcheck_is_an_error(check, field, value):
 
     assert code == 1
     assert (
-        "s01-l04：字幕或出处和 `factcheck.yaml` 里核对过的不同，核对之后改过这一句"
+        "s01-l04：字幕、朗读或出处和 `factcheck.yaml` 里核对过的不同，核对之后改过这一句"
         in _errors(out)
     )
+
+
+def test_a_speech_changed_after_the_factcheck_is_an_error(check):
+    # 配音念的是 `speech`：核对之后改了它，和改字幕一样要重新核对
+    data = script()
+    _line(data, 4)["speech"] = "核对时的朗读"
+    report = factcheck(data)
+    _line(data, 4)["speech"] = "核对之后改过的朗读"
+
+    code, out = check(data, factcheck=report)
+
+    assert code == 1
+    assert "s01-l04：字幕、朗读或出处" in _errors(out)
+
+
+def test_a_factcheck_recording_the_speech_passes(check):
+    data = script()
+    _line(data, 4)["speech"] = "核对时的朗读"
+
+    assert check(data, factcheck=factcheck(data))[0] == 0
 
 
 def test_segment_titles_that_differ_from_the_outline_are_an_error(check):
@@ -746,6 +771,25 @@ def test_the_prompt_shows_tip_boxes_and_subheadings_next_to_cited_paragraphs(
         "提示框：提示1　程序员要为自己的职业生涯负责\n"
         "ch01-¶006 另一个单元的正文[1]。"
     )
+
+
+def test_the_prompt_shows_what_is_actually_spoken_when_a_line_has_speech(
+    pixelbook, episode
+):
+    # 配音念的是 `speech`：裁判要看到它，才能判断念出来的内容有没有依据
+    data = script()
+    _line(data, 2)["speech"] = "念出来的另一种说法"
+
+    code, out = _prompt(pixelbook, episode, data)
+
+    assert code == 0, out
+    assert (
+        f"s01-l02（出处：ch01-¶002、ch01-¶004）\n旁白：{LINE_TEXT}\n"
+        "朗读：念出来的另一种说法\n\n"
+    ) in out
+    # 没有 `speech` 的句子只有字幕一行
+    assert f"s01-l01（出处：ch01-¶001）\n旁白：{LINE_TEXT}\n\n" in out
+    assert out.count("朗读：念出来") == 1
 
 
 def test_the_fixed_outro_is_not_in_the_factcheck_prompt(pixelbook, episode):
@@ -875,6 +919,19 @@ def test_recording_the_first_round_writes_a_factcheck_that_passes_check(
     assert check(data)[0] == 0
 
 
+def test_recording_keeps_the_speech_of_lines_that_have_one(record, check, episode):
+    data = script()
+    _line(data, 2)["speech"] = "念出来的说法"
+
+    code, out = record(data, verdicts(data))
+
+    assert code == 0, out
+    written = yaml.safe_load((episode / "factcheck.yaml").read_text())["lines"]
+    assert written[1]["speech"] == "念出来的说法"
+    assert "speech" not in written[0]
+    assert check(data)[0] == 0
+
+
 def test_recording_again_counts_the_next_round(record, episode):
     data = script()
     earlier = factcheck(data)
@@ -993,6 +1050,21 @@ def test_splitting_lines_after_a_round_is_recorded_with_the_change_list(
     assert "改写" not in out
 
 
+def test_splitting_a_line_with_speech_must_split_the_speech_too(record):
+    # 拆句时 `speech` 跟着拆：几句念的内容依次接起来等于原句念的
+    data = _distinct(script())
+    _line(data, 1)["speech"] = "原来念的前半句后半句"
+    earlier = factcheck(data)
+    _split_first_line(data)
+    _line(data, 1)["speech"] = "原来念的前半句"
+    _line(data, 2)["speech"] = "后半句"
+
+    code, out = record(data, verdicts(data), factcheck=earlier)
+
+    assert code == 0, out
+    assert "  拆分：s01-l01 → s01-l01、s01-l02" in out
+
+
 def test_an_unchanged_script_lists_no_changes(record):
     data = script()
 
@@ -1024,16 +1096,38 @@ def _split_with_new_words(data: dict) -> None:
     _line(data, 2)["text"] += "多"
 
 
+def _respeak_third(data: dict) -> None:
+    _line(data, 3)["speech"] = "改成这样念"
+
+
+def _split_adding_speech(data: dict) -> None:
+    _split_first_line(data)
+    _line(data, 2)["speech"] = "另念一种"
+
+
 @pytest.mark.parametrize(
     ("change", "listed"),
     [
-        (_reword_third, f"  改写：s01-l03「03{LINE_TEXT[2:]}」→「换了说法的第三句」"),
+        (_respeak_third, "  改写：s01-l03 朗读（无）→「改成这样念」"),
+        (_split_adding_speech, "  改写：s01-l01"),
+        (
+            _reword_third,
+            f"  改写：s01-l03「03{LINE_TEXT[2:]}」→「换了说法的第三句」",
+        ),
         (_recite_third, "  改写：s01-l03 出处 ch01-¶001 → ch01-¶003"),
         (_drop_third, f"  删除：s01-l03「03{LINE_TEXT[2:]}」"),
         (_add_after_third, "  新增：s01-l99「新加的一句」"),
         (_split_with_new_words, "  改写：s01-l01"),
     ],
-    ids=["reworded", "cite changed", "deleted", "added", "split plus new words"],
+    ids=[
+        "speech changed",
+        "split adding a speech",
+        "reworded",
+        "cite changed",
+        "deleted",
+        "added",
+        "split plus new words",
+    ],
 )
 def test_anything_but_splitting_after_a_round_is_refused(
     record, episode, change, listed
