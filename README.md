@@ -327,7 +327,7 @@ npm run render -- ../out/sample-ch01-ep01.mp4                  # 渲染 MP4
     video/src/outro/bye-bye/timing.json video/src/outro/bye-bye/voice video/public/outro/bye-bye.wav
   ```
 
-  `make check` 里的 `tools/tests/test_bookend_audio.py` 重新生成一遍和提交的文件比（格式、长度相同，每个采样相差不超过 1），忘了重新生成会失败。
+  `make check` 里的 `tools/tests/test_bookend_audio.py` 重新生成一遍和提交的文件比（格式、长度相同，每个采样相差不超过 1；片尾不超过 4，因为它的配音经 ffmpeg 重采样，不同版本的 ffmpeg 在最后几位上不同），忘了重新生成会失败。
 - **换一个片头或片尾**（以片尾为例，片头把 `outro` 换成 `intro`）：
   1. 新建 `video/src/outro/<新ID>/`，放动画组件（导出一个不带参数的 React 组件，按 30fps、1920×1080 画，从第 0 帧开始，自己用 `useCurrentFrame`）、`timing.json`（至少有帧数 `total`）和生成音轨的脚本；字体、图片放进 `video/public/` 用 `staticFile` 读，用到风格表里的像素字体时不用再加载（`Root.tsx` 已加载）。
   2. 生成音轨到 `video/public/outro/<新ID>.wav`（44.1 kHz 双声道 16 位，长度正好是 `total` 帧），在 `tools/tests/test_bookend_audio.py` 的 `BOOKENDS` 里加一行（脚本参数各不相同）。

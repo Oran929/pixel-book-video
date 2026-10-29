@@ -18,15 +18,24 @@ SRC = REPO_ROOT / "video" / "src"
 PUBLIC = REPO_ROOT / "video" / "public"
 # 不同系统的数学库在最后一位上可能有出入：允许每个采样差 1（16 位整数）
 TOLERANCE = 1
+# 片尾的三句配音是用户录好的（24 kHz 单声道），脚本用 ffmpeg 重采样到 44.1 kHz 读进来；
+# 不同版本的 ffmpeg 重采样结果在最后几位上不同（#51：本机 ffmpeg 9.0 生成的文件，
+# CI 的 Ubuntu 24.04 上 ffmpeg 6.1 重新生成，最多差 2），所以片尾放宽到 4（约 -78 dBFS）
+FFMPEG_TOLERANCE = 4
 
-# (目录, 提交的音轨, 音轨脚本 timing.json 之后、输出文件之前的参数)
+# (目录, 提交的音轨, 音轨脚本 timing.json 之后、输出文件之前的参数, 每个采样允许的差)
 BOOKENDS = [
-    (SRC / "intro" / "load-pixel-book", PUBLIC / "intro" / "load-pixel-book.wav", []),
-    # 片尾的三句配音是用户录好的（24 kHz 单声道），脚本用 ffmpeg 读进来
+    (
+        SRC / "intro" / "load-pixel-book",
+        PUBLIC / "intro" / "load-pixel-book.wav",
+        [],
+        TOLERANCE,
+    ),
     (
         SRC / "outro" / "bye-bye",
         PUBLIC / "outro" / "bye-bye.wav",
         [SRC / "outro" / "bye-bye" / "voice"],
+        FFMPEG_TOLERANCE,
     ),
 ]
 
@@ -38,9 +47,13 @@ def _samples(path):
 
 
 @pytest.mark.parametrize(
-    ("folder", "committed", "args"), BOOKENDS, ids=lambda v: getattr(v, "name", "")
+    ("folder", "committed", "args", "tolerance"),
+    BOOKENDS,
+    ids=[folder.name for folder, *_ in BOOKENDS],
 )
-def test_committed_audio_matches_a_fresh_render(tmp_path, folder, committed, args):
+def test_committed_audio_matches_a_fresh_render(
+    tmp_path, folder, committed, args, tolerance
+):
     timing = folder / "timing.json"
     out = tmp_path / committed.name
     subprocess.run(
@@ -55,4 +68,4 @@ def test_committed_audio_matches_a_fresh_render(tmp_path, folder, committed, arg
     frames = json.loads(timing.read_text())["total"]
     assert fresh_params == committed_params == (2, 2, 44100, frames * 44100 // 30)
     diff = np.abs(fresh.astype(np.int32) - committed_samples.astype(np.int32))
-    assert diff.max() <= TOLERANCE
+    assert diff.max() <= tolerance
