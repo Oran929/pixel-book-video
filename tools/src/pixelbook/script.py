@@ -1,25 +1,32 @@
 """旁白稿（YAML）的读取与校验。只有 Python 读旁白稿（ADR-0004）。
 
-结构：期（`title`：这一期的书名或主题名，显示在画面左上角）→ 段（`id`、`title`）→ 画面（`id`、`description`）→ 旁白句
-（`id`、`text`、可选的 `speech`、`cite`）。格式不对时报错，指出是哪一句、哪个字段。
+结构：期（`title`：这一期的主题，等于大纲里同 ID 期的 `topic`，显示在画面左上角；
+`status`：`draft` 或 `final`）→ 段（`id`、`title`）→ 画面（`id`、`description`、可选的
+`points`：这个画面讲到的大纲观点 ID）→ 旁白句（`id`、`text`、可选的 `speech`、`cite`）。`cite` 是一个段落编号或编号列表（写法和大纲相同，见 `convert.parse_cite`）。
+格式不对时报错，指出是哪一句、哪个字段。
 """
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import yaml
 
+from pixelbook.convert import parse_cite
+
 # 字幕文本去掉所有空白后的最大字符数；汉字、字母、数字、标点各算 1 个
 MAX_TEXT_CHARS = 20
+# 定稿状态：过了关口 2 才改成 `final`；`draft` 的旁白稿 `voice` / `render` 要加 `--draft` 才配音
+DRAFT = "draft"
+FINAL = "final"
 
 
 @dataclass(frozen=True)
 class Line:
     id: str
     text: str
-    cite: str
+    cite: list[str]
     speech: str | None = None
 
 
@@ -28,6 +35,8 @@ class Scene:
     id: str
     description: str
     lines: list[Line]
+    # 这个画面讲到的核心观点 ID（大纲里本期 `points` 的 `id`）
+    points: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -40,7 +49,18 @@ class Segment:
 @dataclass(frozen=True)
 class Script:
     title: str
+    status: str
     segments: list[Segment]
+
+    @property
+    def scenes(self) -> list[Scene]:
+        """全部画面，按顺序。"""
+        return [scene for segment in self.segments for scene in segment.scenes]
+
+    @property
+    def lines(self) -> list[Line]:
+        """全部旁白句，按顺序。"""
+        return [line for scene in self.scenes for line in scene.lines]
 
 
 class ScriptError(Exception):
@@ -103,16 +123,25 @@ def load_script(path: Path) -> Script:
                 "text",
                 f"超过 {MAX_TEXT_CHARS} 个字符（去掉空白后实际 {length} 个）：{text}",
             )
+        if (cite := parse_cite(data["cite"])) is None:
+            raise fail(
+                where,
+                "cite",
+                "必须是一个段落编号（如 `ch02-¶034`）或编号列表，不支持范围",
+            )
         return Line(
             id=line_id,
             text=text,
-            cite=string(data, "cite", where),
+            cite=cite,
             speech=string(data, "speech", where) if "speech" in data else None,
         )
 
     def scene(data: Any, where: str) -> Scene:
         scene_id, label = labelled(data, where)
-        data = mapping(data, label, ["id", "description", "lines"])
+        data = mapping(data, label, ["id", "description", "lines"], ["points"])
+        points = items(data, "points", label) if "points" in data else []
+        if not all(isinstance(p, str) and p.strip() for p in points):
+            raise fail(label, "points", "必须是观点 ID（如 `p01`）的列表")
         return Scene(
             id=scene_id,
             description=string(data, "description", label),
@@ -120,6 +149,7 @@ def load_script(path: Path) -> Script:
                 line(item, f"{where}第 {n} 句")
                 for n, item in enumerate(items(data, "lines", label), start=1)
             ],
+            points=points,
         )
 
     def segment(data: Any, where: str) -> Segment:
@@ -134,9 +164,14 @@ def load_script(path: Path) -> Script:
             ],
         )
 
-    data = mapping(yaml.safe_load(path.read_text()), "旁白稿", ["title", "segments"])
+    data = mapping(
+        yaml.safe_load(path.read_text()), "旁白稿", ["title", "status", "segments"]
+    )
+    if data["status"] not in (DRAFT, FINAL):
+        raise fail("旁白稿", "status", f"必须是 `{DRAFT}` 或 `{FINAL}`")
     return Script(
         title=string(data, "title", "旁白稿"),
+        status=data["status"],
         segments=[
             segment(item, f"第 {n} 段")
             for n, item in enumerate(items(data, "segments", "旁白稿"), start=1)

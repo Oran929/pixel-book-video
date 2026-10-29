@@ -90,13 +90,11 @@ def find_new_terms(script: Script, table: dict[str, str]) -> dict[str, list[str]
     手写了 `speech` 的旁白句不检查。
     """
     found: dict[str, list[str]] = {}
-    for segment in script.segments:
-        for scene in segment.scenes:
-            for line in scene.lines:
-                if line.speech is not None:
-                    continue
-                for term in new_terms(line.text, table):
-                    found.setdefault(term, []).append(line.id)
+    for line in script.lines:
+        if line.speech is not None:
+            continue
+        for term in new_terms(line.text, table):
+            found.setdefault(term, []).append(line.id)
     return found
 
 

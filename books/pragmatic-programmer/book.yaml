@@ -1,0 +1,4 @@
+# 书配置：书名、作者、出版社（写简介时照着写）；音色覆盖可选，不写就用项目默认音色 voice.yaml
+title: 程序员修炼之道：通向务实的最高境界（第2版）
+author: David Thomas、Andrew Hunt
+publisher: 电子工业出版社

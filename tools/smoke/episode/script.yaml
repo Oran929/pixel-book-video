@@ -1,6 +1,8 @@
 # 冒烟测试的固定小样例（票 11）：两段、三个画面、带一份分镜。
 # 用假 TTS（静音 wav，每字 0.2 秒）配音，只验证渲染管线和时长，不验证音质。
 title: 冒烟样例
+# 定稿状态：draft 的旁白稿配音要加 --draft
+status: final
 segments:
   - id: s01
     title: 开场

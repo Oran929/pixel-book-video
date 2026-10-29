@@ -68,14 +68,22 @@ def test_fixed_sample_renders_with_the_computed_number_of_frames(repo, capsys):
     assert f"成片 {mp4}" in out
     assert "复核未通过：无" in out
     timeline = json.loads((episode / "timeline.json").read_text())
-    # 假 TTS 每字 0.2 秒：4 句共 30 字 = 6 秒；停顿 0.5（分镜覆盖）+ 0.3（同画面）
-    # + 0.8（换画面）= 1.6 秒；共 7.6 秒，30fps 约 228 帧（逐句取整到整帧）
-    assert 225 <= timeline["totalFrames"] <= 232
+    # 假 TTS 每字 0.2 秒：正文 4 句共 30 字 = 6 秒；停顿 0.5（分镜覆盖）+ 0.3（同画面）
+    # + 0.8（换画面）= 1.6 秒；正文 7.6 秒。片尾（票 #15）前换画面停 0.8 秒，
+    # 3 句共 33 字 = 6.6 秒，句间 2 × 0.3 秒；共 15.6 秒，30fps 约 468 帧（逐句取整到整帧）
+    assert 465 <= timeline["totalFrames"] <= 472
+    assert [line["id"] for line in timeline["lines"][-3:]] == [
+        "outro-l01",
+        "outro-l02",
+        "outro-l03",
+    ]
     assert abs(video_frames(mp4) - timeline["totalFrames"]) <= 1
-    # 约 8 秒的样例必然"太短"：只报告，不让命令失败
+    # 约 16 秒的样例必然"太短"：只报告，不让命令失败
     assert timeline["duration"]["verdict"] == "too-short"
     # 判断的说明文字由时间轴导出命令写进 timeline.json，汇总原样打印
-    assert "总时长 0:07：太短（目标 4:00–6:00，只报告）" in out
+    # 正文（含片尾前的停顿）8.4 秒，片尾 7.2 秒，分开写
+    assert "总时长 0:15：太短（目标 4:00–6:00，只报告）（正文 0:08，片尾 0:07）" in out
+    # 打点时间表不列片尾（每期都一样）
     assert (episode / "segments.txt").read_text().splitlines() == [
         "00:00 开场",
         "00:05 结尾",

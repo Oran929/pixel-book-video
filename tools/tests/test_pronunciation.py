@@ -3,6 +3,7 @@
 import shutil
 
 import pytest
+from conftest import OUTRO
 
 from pixelbook import REPO_ROOT
 from pixelbook.asr import FakeAsrEngine
@@ -35,7 +36,7 @@ def script(*lines: tuple[str, str | None]) -> str:
             body += f"            speech: '{speech}'\n"
         body += f"            cite: ch01-¶{n:03d}\n"
     return (
-        "title: 示例书\nsegments:\n  - id: s01\n    title: 开场\n    scenes:\n"
+        "title: 示例书\nstatus: final\nsegments:\n  - id: s01\n    title: 开场\n    scenes:\n"
         "      - id: s01-c01\n        description: 画面\n        lines:\n" + body
     )
 
@@ -66,7 +67,7 @@ def episode(tmp_path):
 def test_spoken_text_replaces_terms_from_the_table(episode):
     engine = episode(script(("Python 读作派森", None)), {"Python": "派森"})
 
-    assert engine.texts == ["派森 读作派森"]
+    assert engine.texts == ["派森 读作派森", *OUTRO]
 
 
 def test_longer_term_wins_over_its_prefix(episode):
@@ -74,7 +75,7 @@ def test_longer_term_wins_over_its_prefix(episode):
 
     engine = episode(script(("KV Cache 里的 KV", None)), table)
 
-    assert engine.texts == ["KV 缓存 里的 K V"]
+    assert engine.texts == ["KV 缓存 里的 K V", *OUTRO]
 
 
 def test_replacement_is_case_sensitive_and_deterministic(episode):
@@ -86,7 +87,7 @@ def test_replacement_is_case_sensitive_and_deterministic(episode):
     shutil.rmtree(episode.path.parents[2] / "cache")
     second = episode(text, dict(reversed(table.items()))).texts
 
-    assert first == second == ["dry 原则 不是 干"]
+    assert first == second == ["dry 原则 不是 干", *OUTRO]
 
 
 def test_handwritten_speech_wins_over_the_table(episode):
@@ -94,13 +95,13 @@ def test_handwritten_speech_wins_over_the_table(episode):
         script(("用 KV Cache 加速", "用键值缓存加速")), {"KV Cache": "KV 缓存"}
     )
 
-    assert engine.texts == ["用键值缓存加速"]
+    assert engine.texts == ["用键值缓存加速", *OUTRO]
 
 
 def test_unchanged_entry_keeps_spoken_text_as_written(episode):
     engine = episode(script(("第一条原则叫 DRY。", None)), TABLE)
 
-    assert engine.texts == ["第一条原则叫 DRY。"]
+    assert engine.texts == ["第一条原则叫 DRY。", *OUTRO]
     assert new_terms("第一条原则叫 DRY。", TABLE) == []
 
 
@@ -163,11 +164,13 @@ def test_new_terms_refuse_voicing_and_name_the_lines(episode):
 def test_no_new_terms_means_voicing_runs(episode):
     engine = episode(script(("用 KV Cache 加速", None), ("性能提升 30%", None)), TABLE)
 
-    assert engine.texts == ["用 KV Cache 加速", "性能提升 30%"]
+    assert engine.texts == ["用 KV Cache 加速", "性能提升 30%", *OUTRO]
 
 
 def test_repo_table_starts_with_the_two_confirmed_terms():
-    assert load_pronunciation(REPO_ROOT / "pronunciation.yaml") == TABLE
+    # 之后确认的术语接在后面（如 #13 加的 ETC、Bug），表的开头不变
+    table = load_pronunciation(REPO_ROOT / "pronunciation.yaml")
+    assert dict(list(table.items())[: len(TABLE)]) == TABLE
 
 
 def test_empty_table_file_is_an_empty_table(tmp_path):
