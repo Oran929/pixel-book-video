@@ -23,6 +23,8 @@ from pixelbook.outline import (
     episode_scope,
     load_outline,
     outside_scope,
+    tip_number_message,
+    tip_numbers,
 )
 from pixelbook.script import FINAL, Script, ScriptError, load_script, text_length
 
@@ -38,8 +40,6 @@ QUOTED_TERM = re.compile(
     r"「([^」]+)」|“([^”]+)”|\"([^\"]+)\"|『([^』]+)』|《([^》]+)》"
 )
 TIP_TERM = re.compile(r"提示\d+")
-# 旁白句里书的提示编号：「提示14」「提示 14」「提示１４」；对观众没有意义，不念也不显示
-TIP_NUMBER = re.compile(r"提示\s*[0-9０-９]+")
 # 大纲的 `minutes` 跟着定稿走：每段的估算分钟数取到这个粒度写回大纲（`pixelbook sync-minutes`）
 MINUTES_STEP = 0.25
 
@@ -300,21 +300,19 @@ def points_cited(context: Context) -> list[Finding]:
 
 
 def no_tip_numbers(context: Context) -> list[Finding]:
-    """字幕 `text` 和朗读 `speech` 里不出现书的提示编号（`提示14`、`提示 14`）：编号对观众没有
-    意义，讲提示框的内容就够了。画面说明不查（由 `description_terms` 对照原文）。"""
-    findings = []
-    for line in context.script.lines:
-        for field, value in (("text", line.text), ("speech", line.speech)):
-            for match in TIP_NUMBER.finditer(value or ""):
-                findings.append(
-                    Finding(
-                        ERROR,
-                        line.id,
-                        f"`{field}` 里有书里的提示编号「{match.group()}」，"
-                        "编号对观众没有意义，不念也不显示",
-                    )
-                )
-    return findings
+    """标题 `title`、段标题、字幕 `text` 和朗读 `speech` 里不出现书的提示编号（`提示14`、
+    `提示 14`、`提示十四`）：编号对观众没有意义，讲提示框的内容就够了。画面说明不查（由
+    `description_terms` 对照原文）。"""
+    script = context.script
+    fields = [(WHOLE_SCRIPT, "title", script.title)]
+    fields += [(segment.id, "title", segment.title) for segment in script.segments]
+    for line in script.lines:
+        fields += [(line.id, "text", line.text), (line.id, "speech", line.speech)]
+    return [
+        Finding(ERROR, where, tip_number_message(f"`{field}`", number))
+        for where, field, value in fields
+        for number in tip_numbers(value or "")
+    ]
 
 
 def cite_in_scope(context: Context) -> list[Finding]:

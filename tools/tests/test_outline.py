@@ -432,3 +432,41 @@ def test_warnings_are_listed_after_errors_when_the_check_fails(check, long_parag
     assert code == 1
     assert "ch01-¶099" in out
     assert "疑似照搬原文" in out
+
+
+@pytest.mark.parametrize(
+    ("change", "where", "number"),
+    [
+        (
+            lambda d: _ep(d, 1).update(topic="提示1与第一单元"),
+            "第 1 期（ep01）：`topic`",
+            "提示1",
+        ),
+        (
+            lambda d: _ep(d, 1)["segments"][1].update(title="提示 14"),
+            "第 1 期（ep01）第 2 段：`title`",
+            "提示 14",
+        ),
+        (
+            lambda d: _ep(d, 2)["points"][0].update(text="提示十四说的观点"),
+            "第 2 期（ep02）第 1 条观点（p03）：`text`",
+            "提示十四",
+        ),
+    ],
+    ids=["topic", "segment title", "point text"],
+)
+def test_a_tip_number_in_the_outline_is_an_error(check, change, where, number):
+    # 书的提示编号对观众没有意义：主题、段标题和观点都不写（和旁白稿同一条规则）
+    data = outline()
+    change(data)
+    code, out = check(data)
+    assert code == 1
+    assert f"{where} 里有书里的提示编号「{number}」" in out
+
+
+def test_the_word_tip_without_a_number_is_fine_in_the_outline(check):
+    data = outline()
+    _ep(data, 1)["topic"] = "提示一下第一单元"
+    _ep(data, 1)["points"][0]["text"] = "这条提示一定要记住"
+    code, out = check(data)
+    assert code == 0, out

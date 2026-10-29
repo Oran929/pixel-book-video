@@ -504,6 +504,8 @@ def test_quoting_the_tip_box_title_next_to_a_cited_paragraph_is_not_copying(
         ("text", "提示 14：别重复自己", "提示 14"),
         ("text", "书里的提示１５", "提示１５"),  # 全角数字
         ("speech", "这就是提示15说的", "提示15"),
+        ("text", "提示十四说的", "提示十四"),  # 中文数字
+        ("speech", "这就是提示 二十", "提示 二十"),
     ],
 )
 def test_a_tip_number_in_a_line_is_an_error(check, field, text, number):
@@ -517,9 +519,28 @@ def test_a_tip_number_in_a_line_is_an_error(check, field, text, number):
     assert f"s01-l04：`{field}` 里有书里的提示编号「{number}」" in _errors(out)
 
 
+def test_a_tip_number_in_the_title_or_a_segment_title_is_an_error(check):
+    # 标题和段标题显示在画面上，同样不写编号；和大纲一致时也报（`check` 不跑大纲检查）
+    data = script()
+    data["title"] = "提示十四与第一单元"
+    data["segments"][0]["title"] = "提示 2"
+    plan = outline()
+    plan["episodes"][0]["topic"] = "提示十四与第一单元"
+    plan["episodes"][0]["segments"][0]["title"] = "提示 2"
+
+    code, out = check(data, plan)
+
+    assert code == 1
+    errors = _errors(out)
+    assert "旁白稿：`title` 里有书里的提示编号「提示十四」" in errors
+    assert "s01：`title` 里有书里的提示编号「提示 2」" in errors
+    assert errors.count("提示编号") == 2
+
+
 def test_a_tip_without_a_number_is_fine(check):
     data = script()
     _line(data, 4)["text"] = "提示框里说，要提示自己"
+    _line(data, 5)["text"] = "我们提示一下，提示一定要看"
 
     assert check(data)[0] == 0
 

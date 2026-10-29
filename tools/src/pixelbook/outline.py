@@ -25,6 +25,12 @@ EPISODE_ID = re.compile(r"^ep\d{2}$")
 # 每期的段数和预计总时长（含两端）
 SEGMENTS = (4, 6)
 SECONDS = (4 * 60, 6 * 60)
+# 书的提示编号：「提示14」「提示 14」「提示１４」「提示十四」。对观众没有意义，大纲的主题、段标题、
+# 观点和旁白稿的字幕、朗读、标题都不写（画面说明可以写，用来指明是哪个提示框）。中文数字后面
+# 紧跟量词或「下」「定」时不算（「提示一下」「这条提示一定要记住」）
+TIP_NUMBER = re.compile(
+    r"提示\s*(?:[0-9０-９]+|[零〇一二三四五六七八九十百]+(?![零〇一二三四五六七八九十百下定个些次条点种句遍声番位]))"
+)
 
 
 @dataclass(frozen=True)
@@ -200,6 +206,7 @@ def check_outline(path: Path) -> tuple[Outline, list[str]]:
             problems.append(f"{where}：`id` 和{episodes[episode.id]}重复")
         episodes.setdefault(episode.id, where)
         problems += _check_segments(episode, where)
+        problems += _check_tip_numbers(episode, where)
         problems += _check_units(episode, where, chapter, source)
         scope = episode_scope(episode, chapter)
         for m, point in enumerate(episode.points, start=1):
@@ -233,6 +240,32 @@ def check_outline(path: Path) -> tuple[Outline, list[str]]:
             + (f"\n{format_warnings(warnings)}" if warnings else "")
         )
     return outline, warnings
+
+
+def tip_numbers(text: str) -> list[str]:
+    """`text` 里书的提示编号（`TIP_NUMBER`），按出现顺序。"""
+    return [match.group() for match in TIP_NUMBER.finditer(text)]
+
+
+def tip_number_message(where: str, number: str) -> str:
+    return f"{where} 里有书里的提示编号「{number}」，编号对观众没有意义，不念也不显示"
+
+
+def _check_tip_numbers(episode: Episode, where: str) -> list[str]:
+    fields = [(f"{where}：`topic`", episode.topic)]
+    fields += [
+        (f"{where}第 {n} 段：`title`", segment.title)
+        for n, segment in enumerate(episode.segments, start=1)
+    ]
+    fields += [
+        (f"{where}第 {n} 条观点（{point.id}）：`text`", point.text)
+        for n, point in enumerate(episode.points, start=1)
+    ]
+    return [
+        tip_number_message(label, number)
+        for label, text in fields
+        for number in tip_numbers(text)
+    ]
 
 
 def format_warnings(warnings: list[str]) -> str:
