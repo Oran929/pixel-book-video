@@ -1073,7 +1073,7 @@ def test_a_character_missing_from_the_font_is_reported_with_its_line(
 def test_a_character_missing_from_the_font_in_the_title_is_reported_as_title(
     tmp_path, script_path
 ):
-    # 左上角的书名/主题名也用像素字体显示，一样要查
+    # 左上角的主题也用像素字体显示，一样要查
     script_path.write_text(SCRIPT.replace("title: 程序员修炼之道", "title: 𠀀之书"))
 
     with pytest.raises(PipelineError, match="title"):

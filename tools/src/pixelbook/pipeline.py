@@ -58,7 +58,7 @@ def voice_episode(
     句子照常使用，并列进期目录里的检查报告 `report.json`（每次运行都列出）；
     字符对比不通过、靠拼音对比通过的句子（多半是同音字）也列进报告，单独一项。
 
-    给了字幕字体 `font` 时，配音前先做缺字检查：字幕文本和书名/主题名 `title`
+    给了字幕字体 `font` 时，配音前先做缺字检查：字幕文本和主题 `title`
     里字体没有字形的字列进报告的 `missing_glyphs`（旁白句 ID 或 `title`，和字）。
     有缺字就抛出 `PipelineError`，报告里只有这一项；不配音，也不碰合成清单、
     Remotion 静态目录和锁定音色。不给字体就不检查，报告里也没有这一项。
@@ -85,7 +85,7 @@ def voice_episode(
         raise PipelineError(f"字幕字体 {font} 不存在，无法做缺字检查")
     glyphs: dict[str, Any] = {}
     if font is not None:
-        # 左上角的书名/主题名也用像素字体显示，报告里的 ID 记作 `title`
+        # 左上角的主题也用像素字体显示，报告里的 ID 记作 `title`
         glyphs["missing_glyphs"] = missing_glyphs(
             [("title", script.title)]
             + [
@@ -186,7 +186,7 @@ def missing_glyphs_message(
     return (
         f"{script_path}: 字幕里有 {len(missing)} 个字在像素字体里没有字形"
         f"（会显示成系统字体），拒绝配音：\n{listing}\n"
-        "改写这些旁白句的字幕（`title` 是左上角的书名/主题名），"
+        "改写这些旁白句的字幕（`title` 是左上角的主题），"
         f"或换一款有这些字的字体（{font.name}）。"
     )
 

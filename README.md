@@ -122,12 +122,12 @@ uv run pixelbook outline ../books/pragmatic-programmer/ch02/outline.yaml
 
 ## 从旁白稿到 MP4
 
-旁白稿放在 `books/<书>/<章>/<期>/script.yaml`（样例：`books/sample/ch01/ep01/script.yaml`）。顶层的 `title` 必填，是这一期的书名或主题名，显示在画面左上角（样例里是示例值「读一本8bit像素书」），缺了或为空时 `voice` 报错。
+旁白稿放在 `books/<书>/<章>/<期>/script.yaml`（样例：`books/sample/ch01/ep01/script.yaml`）。顶层的 `title` 必填，是这一期的主题，显示在画面左上角（样例里是示例值「读一本8bit像素书」），缺了或为空时 `voice` 报错。
 
 ### 旁白稿与检查
 
 ```yaml
-title: 读一本8bit像素书          # 本期主题，显示在画面左上角
+title: 读一本8bit像素书          # 主题：等于大纲里这一期的 topic，显示在画面左上角
 status: final                    # 必填：draft（写稿中）或 final（过了关口 2 才改）
 segments:
   - id: s01
@@ -135,6 +135,7 @@ segments:
     scenes:
       - id: s01-c01
         description: 一个方块落下
+        points: [p01]            # 可选：这个画面讲到的大纲观点 ID
         lines:
           - id: s01-l01
             text: 第一条原则叫 DRY。      # 字幕，去掉空白后不超过 20 字
@@ -145,6 +146,8 @@ segments:
             cite: [ch02-¶040, ch02-¶041]  # 或编号列表；不支持范围
 ```
 
+- **`title`**：主题只在大纲里改。旁白稿对应同一章 `outline.yaml` 里和期目录同名的那一期（`ch02/ep01/` 对应大纲里的 `ep01`），`title` 必须等于它的 `topic`。要改主题，先改大纲，再重新跑 `/script` 同步，不单独改旁白稿的 `title`。
+- **`points`**：画面的可选字段，观点 ID 的列表（大纲里本期 `points` 的 `id`）。本期的每条观点都要至少被一个画面讲到，画面也只能引用本期的观点。
 - **`cite`**：一个段落编号字符串，或编号列表（写法和大纲相同）。不支持范围（`ch02-¶040–¶045` 是格式错误）。出处只给检查和语义核对用，不进合成清单，配音和 Remotion 不受影响。
 - **`status`**：`draft` 或 `final`。`voice` 和 `render` 遇到 `draft` 拒绝运行；确实要给草稿配音（比如先听一遍），加 `--draft`。`render --draft` 把它透传给配音一步。
 
@@ -155,11 +158,19 @@ cd tools
 uv run pixelbook check ../books/pragmatic-programmer/ch02/ep01/script.yaml
 ```
 
-输出分成「报错」和「警告」两块，每条以旁白句 ID 开头（不属于某一句的问题记在「旁白稿」下），最后一行写通过与否。**退出码只受报错影响**：有报错为 1，只有警告为 0。先查格式（和 `voice` 相同：缺字段、多出不认识的字段、ID 重复、字幕超过 20 字、`status` 不是 `draft`/`final`、`cite` 写法不对），格式错时报第一处；格式对了再一次列出下面所有报错：
+输出分成「报错」和「警告」两块，每条以旁白句 ID 开头（`points` 的问题用画面 ID，不属于某一句的问题记在「旁白稿」下），最后一行写通过与否。**退出码只受报错影响**：有报错为 1，只有警告为 0。先查格式（和 `voice` 相同：缺字段、多出不认识的字段、ID 重复、字幕超过 20 字、`status` 不是 `draft`/`final`、`cite` 写法不对），格式错时报第一处；格式对了再一次列出下面所有报错：
 
 - `cite` 里的编号在这一章的转换结果（`chapters/chNN.md`）里不存在；
 - 一句的 `cite` 只引用了图片段（`[图 …]`，带图题的也算）；
-- 按 250 字/分钟估算的时长不在 4:00–6:00 内（含两端）。字数口径和字幕相同：只数 `text`、去掉空白，`speech` 不算。
+- 按 250 字/分钟估算的时长不在 4:00–6:00 内（含两端）。字数口径和字幕相同：只数 `text`、去掉空白，`speech` 不算；
+- 找不到大纲、大纲格式不对（先用 `pixelbook outline` 修好），或大纲里没有这一期；这时下面几条对照大纲的检查不跑；
+- `title` 不等于大纲里这一期的 `topic`；
+- 本期大纲里有观点没被任何画面的 `points` 讲到，或某个画面的 `points` 引用了本期大纲里没有的观点（包括别的期的观点）。
+
+警告（不影响退出码）：
+
+- `cite` 里的编号不在本期 `units` 覆盖的单元或段落范围里（章首导语和章末脚注不属于任何单元，也算在范围外）。偶尔引用别处的定义可以，审稿时看一眼；
+- 照搬原文：字幕 `text` 和它 `cite` 引用的任一文字段，两边都去掉空白和标点后，有 12 个字以上连续相同。警告里写出相同的片段。
 
 章目录名必须是 `chNN`，转换结果不存在时先跑 `pixelbook convert`。样例旁白稿的出处不指向真实原文（样例书没有转换结果），不用 `check` 检查。
 
@@ -218,7 +229,7 @@ npm run render -- ../out/sample-ch01-ep01.mp4                  # 渲染 MP4
 
 ### 缺字检查
 
-`voice` 还检查字幕文本里的每个字在像素字体（`video/public/fonts/` 里的 Fusion Pixel）里有没有字形：缺字时浏览器会换成系统字体，画面上混进一个不是像素风的字。左上角的书名/主题名 `title` 也一样检查。缺的字列进检查报告的 `missing_glyphs`（旁白句 `id` 和字 `char`；书名/主题名里缺的字，`id` 记作 `title`），`voice` 打印出来并以非零码退出。这项检查在配音之前做：有缺字就不配音，合成清单、`video/public/episode/` 和锁定音色都不动，检查报告里只有 `missing_glyphs` 一项。改写那句字幕（或者换字体）后再配音。空白不检查。
+`voice` 还检查字幕文本里的每个字在像素字体（`video/public/fonts/` 里的 Fusion Pixel）里有没有字形：缺字时浏览器会换成系统字体，画面上混进一个不是像素风的字。左上角的主题 `title` 也一样检查。缺的字列进检查报告的 `missing_glyphs`（旁白句 `id` 和字 `char`；主题里缺的字，`id` 记作 `title`），`voice` 打印出来并以非零码退出。这项检查在配音之前做：有缺字就不配音，合成清单、`video/public/episode/` 和锁定音色都不动，检查报告里只有 `missing_glyphs` 一项。改写那句字幕（或者换字体）后再配音。空白不检查。
 
 只想重新复制合成清单和分镜、不重新配音时（比如改了分镜），用 `uv run pixelbook stage ../books/sample/ch01/ep01`。
 
@@ -298,7 +309,7 @@ uv run pixelbook mix ../books/sample/ch01/ep01/timeline.json   # 拼到 out/mix/
 
 - 风格表在 `video/src/style/style.ts`：16 色调色板 `PALETTE` 和按用途取色的 `COLOR`、像素网格 `GRID`（4px，画面上一个"像素"）、字号 `FONT_SIZE` 与行高、尺寸 `SIZE`（都是网格的整数倍）、描边 `border`、硬阴影 `hardShadow`、描边字 `outlinedText`。字幕框（`src/shell/`）和组件（`src/components/`）里的颜色和尺寸只能引用这些常量，`npm run test` 会检查源码里有没有写死的颜色值和数字（0、1 除外）。
 - 字体：Fusion Pixel 12px 比例宽度简体（OFL 1.1，来源和许可在 `video/public/fonts/`）。字形画在 12×12 格上，字号只能是 12 的整数倍（现在用 24 / 48 / 96），否则会模糊；测试检查这一点。字体由 `src/style/font.ts` 在第一帧之前加载。
-- 画面左上角常驻这一期的书名或主题名：旁白稿顶层的 `title`，经合成清单 `episode.json` 的 `title` 传进成片，由外壳组件 `src/shell/EpisodeTitle.tsx` 显示（橙字深色描边）。代码里没有写死的频道名。
+- 画面左上角常驻这一期的主题：旁白稿顶层的 `title`（等于大纲里这一期的 `topic`），经合成清单 `episode.json` 的 `title` 传进成片，由外壳组件 `src/shell/EpisodeTitle.tsx` 显示（橙字深色描边）。代码里没有写死的频道名。
 - 频道小人不常驻画面，是一个通用组件 `Mascot`：分镜里需要"人物做什么"时才用，参数 `character`（Q 版角色，按外观起名：`dragon`、`reader`、`whale`、`gothic`，见 `style.ts` 的 `MASCOTS`）和 `position`（站在画面底部的 `left` / `center` / `right`），例如 `{ "id": "host", "component": "Mascot", "props": { "character": "reader", "position": "left" } }`。小人是从 `character/Q.png` 裁出的透明底 PNG（`video/public/character/`，裁图脚本 `character/crop_q.py`），按原尺寸、最近邻插值显示；暂时没有动效。
 - 字幕只在显示时去掉分句标点 `，。、；`：句中的换成一个空格，句末（和句首）的直接去掉，紧挨在右引号、右书名号、右括号前的也直接去掉（`他说：“好的。”` 显示为 `他说：“好的”`）；`：“”‘’《》（）——？！` 保留（`video/src/shell/subtitle-text.ts`）。旁白脚本、配音、语音识别核对、合成清单和缺字检查都用原句。
 - 中间帧格式是 PNG（`video/remotion.config.ts`），JPEG 会让像素边缘出现杂色。

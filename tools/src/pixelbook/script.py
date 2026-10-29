@@ -1,13 +1,13 @@
 """旁白稿（YAML）的读取与校验。只有 Python 读旁白稿（ADR-0004）。
 
-结构：期（`title`：这一期的书名或主题名，显示在画面左上角；`status`：`draft` 或 `final`）
-→ 段（`id`、`title`）→ 画面（`id`、`description`）→ 旁白句（`id`、`text`、可选的 `speech`、
-`cite`）。`cite` 是一个段落编号或编号列表（写法和大纲相同，见 `convert.parse_cite`）。
+结构：期（`title`：这一期的主题，等于大纲里同 ID 期的 `topic`，显示在画面左上角；
+`status`：`draft` 或 `final`）→ 段（`id`、`title`）→ 画面（`id`、`description`、可选的
+`points`：这个画面讲到的大纲观点 ID）→ 旁白句（`id`、`text`、可选的 `speech`、`cite`）。`cite` 是一个段落编号或编号列表（写法和大纲相同，见 `convert.parse_cite`）。
 格式不对时报错，指出是哪一句、哪个字段。
 """
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -35,6 +35,8 @@ class Scene:
     id: str
     description: str
     lines: list[Line]
+    # 这个画面讲到的核心观点 ID（大纲里本期 `points` 的 `id`）
+    points: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -136,7 +138,10 @@ def load_script(path: Path) -> Script:
 
     def scene(data: Any, where: str) -> Scene:
         scene_id, label = labelled(data, where)
-        data = mapping(data, label, ["id", "description", "lines"])
+        data = mapping(data, label, ["id", "description", "lines"], ["points"])
+        points = items(data, "points", label) if "points" in data else []
+        if not all(isinstance(p, str) and p.strip() for p in points):
+            raise fail(label, "points", "必须是观点 ID（如 `p01`）的列表")
         return Scene(
             id=scene_id,
             description=string(data, "description", label),
@@ -144,6 +149,7 @@ def load_script(path: Path) -> Script:
                 line(item, f"{where}第 {n} 句")
                 for n, item in enumerate(items(data, "lines", label), start=1)
             ],
+            points=points,
         )
 
     def segment(data: Any, where: str) -> Segment:

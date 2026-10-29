@@ -1,23 +1,27 @@
 """旁白稿的机械检查：`pixelbook check <旁白稿>`。
 
 先读格式（`script.load_script`，格式不对时报第一处错），格式对了再逐条跑规则，
-全部问题一次列出。每条规则是一个函数，收到 `Context`，返回它发现的 `Finding`；
+全部问题一次列出。对照大纲的规则用同一章 `outline.yaml` 里和期目录同名的那一期；
+找不到这一期时只报一条，这些规则不跑。每条规则是一个函数，收到 `Context`，返回它发现的 `Finding`；
 新规则写成同样的函数加进 `RULES`。报错影响退出码，警告只列出。
 """
 
+import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
 from pixelbook.convert import Chapter, read_chapter
 from pixelbook.episode_path import EpisodePath
-from pixelbook.outline import SECONDS, clock
+from pixelbook.outline import SECONDS, Episode, OutlineError, clock, load_outline
 from pixelbook.script import Script, ScriptError, load_script, text_length
 
 ERROR = "报错"
 WARNING = "警告"
 # 估算时长的语速：字数口径和字幕计数相同（去掉空白后的字符数，只数字幕 `text`）
 CHARS_PER_MINUTE = 250
+# 旁白句和它引用的段落有这么多字连续相同（去掉空白和标点后）时，警告照搬原文
+COPIED_CHARS = 12
 # 不属于某一句的问题（如估算时长）记在这个位置下
 WHOLE_SCRIPT = "旁白稿"
 
@@ -25,7 +29,7 @@ WHOLE_SCRIPT = "旁白稿"
 @dataclass(frozen=True)
 class Finding:
     level: str  # ERROR 或 WARNING
-    where: str  # 旁白句 ID，或 WHOLE_SCRIPT
+    where: str  # 旁白句 ID（`points` 的问题用画面 ID），或 WHOLE_SCRIPT
     message: str
 
 
@@ -39,6 +43,8 @@ class Context:
     chapter: Chapter
     # 转换结果的文件名，写进报错里，如 `ch02.md`
     source: str
+    # 大纲里的这一期；找不到时为 None，对照大纲的规则不跑
+    outline: Episode | None
 
 
 @dataclass(frozen=True)
@@ -100,7 +106,106 @@ def estimated_duration(context: Context) -> list[Finding]:
     ]
 
 
-RULES: list[Rule] = [cite_exists, cite_has_text, estimated_duration]
+def title_is_topic(context: Context) -> list[Finding]:
+    """`title` 就是大纲给这一期定的主题；主题只在大纲里改，再同步到旁白稿。"""
+    outline = context.outline
+    if outline is None or context.script.title == outline.topic:
+        return []
+    return [
+        Finding(
+            ERROR,
+            WHOLE_SCRIPT,
+            f"`title` 是「{context.script.title}」，"
+            f"但大纲里 {outline.id} 的主题 `topic` 是「{outline.topic}」",
+        )
+    ]
+
+
+def points_covered(context: Context) -> list[Finding]:
+    """本期大纲的每条观点至少被一个画面讲到；画面只能引用本期的观点。"""
+    outline = context.outline
+    if outline is None:
+        return []
+    known = [point.id for point in outline.points]
+    scenes = [scene for segment in context.script.segments for scene in segment.scenes]
+    findings = []
+    for scene in scenes:
+        if unknown := [p for p in scene.points if p not in known]:
+            findings.append(
+                Finding(
+                    ERROR,
+                    scene.id,
+                    f"`points` 里的 {'、'.join(unknown)} 不是大纲里 {outline.id} 的观点",
+                )
+            )
+    covered = {p for scene in scenes for p in scene.points}
+    findings += [
+        Finding(
+            ERROR,
+            WHOLE_SCRIPT,
+            f"大纲里 {outline.id} 的观点 {point} 没有被任何画面的 `points` 讲到",
+        )
+        for point in known
+        if point not in covered
+    ]
+    return findings
+
+
+def cite_in_scope(context: Context) -> list[Finding]:
+    """出处落在本期 `units` 或段落范围之外时警告：偶尔引用别处可以，审稿时要看得到。"""
+    if context.outline is None:
+        return []
+    scope = _scope(context.outline, context.chapter)
+    paragraphs = context.chapter.paragraphs
+    findings = []
+    for line in context.script.lines:
+        # 编号不存在的由 `cite_exists` 报
+        if outside := [i for i in line.cite if i in paragraphs and i not in scope]:
+            findings.append(
+                Finding(
+                    WARNING,
+                    line.id,
+                    f"`cite` 里的 {'、'.join(outside)} 不在本期覆盖的单元或段落范围里",
+                )
+            )
+    return findings
+
+
+def not_copied(context: Context) -> list[Finding]:
+    """旁白句和它引用的任一段落有 12 个字以上连续相同时警告：尽量不用原文措辞。
+
+    只比较字幕 `text` 和文字段，两边都先去掉空白和标点。
+    """
+    paragraphs = context.chapter.paragraphs
+    findings = []
+    for line in context.script.lines:
+        text = _bare(line.text)
+        for cited in line.cite:
+            paragraph = paragraphs.get(cited)
+            if paragraph is None or paragraph.is_image:
+                continue
+            copied = _longest_common(text, _bare(paragraph.text))
+            if len(copied) >= COPIED_CHARS:
+                findings.append(
+                    Finding(
+                        WARNING,
+                        line.id,
+                        f"和 {cited} 有 {len(copied)} 个字连续相同（{copied}），"
+                        "疑似照搬原文",
+                    )
+                )
+    return findings
+
+
+RULES: list[Rule] = [
+    cite_exists,
+    cite_has_text,
+    estimated_duration,
+    title_is_topic,
+    points_covered,
+    cite_in_scope,
+    not_copied,
+]
 
 
 def check_script(path: Path) -> Report:
@@ -117,12 +222,62 @@ def check_script(path: Path) -> Report:
         # 格式错误只报第一处；路径在报告最后一行已经有了
         message = str(error).removeprefix(f"{path}: ")
         return Report([Finding(ERROR, WHOLE_SCRIPT, message)], [])
-    context = Context(path, episode, script, read_chapter(converted), converted.name)
-    findings = [finding for rule in RULES for finding in rule(context)]
+    outline, problem = _outline_episode(episode)
+    findings = [Finding(ERROR, WHOLE_SCRIPT, problem)] if problem else []
+    context = Context(
+        path, episode, script, read_chapter(converted), converted.name, outline
+    )
+    findings += [finding for rule in RULES for finding in rule(context)]
     return Report(
         errors=[f for f in findings if f.level == ERROR],
         warnings=[f for f in findings if f.level == WARNING],
     )
+
+
+def _outline_episode(episode: EpisodePath) -> tuple[Episode | None, str | None]:
+    """大纲里和期目录同名的那一期；找不到时返回原因。"""
+    if not episode.outline.is_file():
+        return None, f"找不到大纲 {episode.outline}，先写大纲再写旁白稿"
+    try:
+        outline = load_outline(episode.outline)
+    except OutlineError as error:
+        return None, f"大纲格式不对，先跑 `pixelbook outline` 修好：{error}"
+    for item in outline.episodes:
+        if item.id == episode.dir.name:
+            return item, None
+    return None, f"大纲 {episode.outline} 里没有 {episode.dir.name} 这一期"
+
+
+def _bare(text: str) -> str:
+    """去掉空白和标点（Unicode 类别 P*）。"""
+    return "".join(
+        c for c in text if not c.isspace() and unicodedata.category(c)[0] != "P"
+    )
+
+
+def _longest_common(short: str, long: str) -> str:
+    """`short` 里同时出现在 `long` 里的最长连续片段。旁白句不超过 20 字，直接枚举。"""
+    for size in range(len(short), 0, -1):
+        for start in range(len(short) - size + 1):
+            if (piece := short[start : start + size]) in long:
+                return piece
+    return ""
+
+
+def _scope(outline: Episode, chapter: Chapter) -> set[str]:
+    """本期覆盖的段落编号。大纲本身的问题（单元不存在、范围不对）由 `pixelbook outline` 报，
+    这里跳过。"""
+    scope: set[str] = set()
+    for covered in outline.units:
+        unit = chapter.units.get(covered.unit)
+        if unit is None:
+            continue
+        paragraphs = unit.paragraphs
+        if covered.start in paragraphs and covered.end in paragraphs:
+            start = paragraphs.index(covered.start)
+            paragraphs = paragraphs[start : paragraphs.index(covered.end) + 1]
+        scope.update(paragraphs)
+    return scope
 
 
 def format_report(path: Path, report: Report) -> str:

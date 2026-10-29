@@ -19,7 +19,7 @@ const MANIFEST_FILE = "episode/episode.json";
 const STORYBOARD_FILE = "episode/storyboard.json";
 
 export type EpisodeProps = {
-  /** 这一期的书名或主题名（合成清单的 `title`）；没读到合成清单时为空 */
+  /** 这一期的主题（合成清单的 `title`）；没读到合成清单时为空 */
   title: string;
   timeline: Timeline | null;
   cues: Cue[];
