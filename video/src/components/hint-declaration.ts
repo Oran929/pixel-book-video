@@ -56,7 +56,6 @@ export const HintSignProps = z
     }
   });
 
-/** HintSign 的声明 */
 export const HintSignDeclaration = declareComponent({
   props: HintSignProps,
   states: ["normal"],

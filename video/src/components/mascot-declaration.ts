@@ -101,7 +101,6 @@ export const mascotGroup = ({
   };
 };
 
-/** Mascot 的声明 */
 export const MascotDeclaration = declareComponent({
   props: MascotProps,
   states: MASCOT_STATES,

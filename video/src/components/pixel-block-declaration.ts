@@ -65,7 +65,6 @@ export const PixelBlockProps = z
     }
   });
 
-/** PixelBlock 的声明 */
 export const PixelBlockDeclaration = declareComponent({
   props: PixelBlockProps,
   states: BLOCK_STATES,

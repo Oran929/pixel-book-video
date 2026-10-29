@@ -10,7 +10,6 @@ export type ArrowState = (typeof ARROW_STATES)[number];
 /** Arrow：从一个组件指向另一个组件；两端写在分镜的 `from`、`to` 上，没有参数 */
 export const ArrowProps = z.strictObject({});
 
-/** Arrow 的声明 */
 export const ArrowDeclaration = declareConnector({
   props: ArrowProps,
   states: ARROW_STATES,

@@ -78,7 +78,6 @@ export const ComputerProps = z.strictObject({
   ),
 });
 
-/** Computer 的声明 */
 export const ComputerDeclaration = declareComponent({
   props: ComputerProps,
   states: COMPUTER_STATES,

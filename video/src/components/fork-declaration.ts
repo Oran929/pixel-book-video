@@ -125,7 +125,6 @@ export const ForkProps = z
     });
   });
 
-/** Fork 的声明 */
 export const ForkDeclaration = declareComponent({
   props: ForkProps,
   states: FORK_STATES,

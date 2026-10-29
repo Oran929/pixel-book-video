@@ -92,7 +92,6 @@ export const TimelineProps = z.strictObject({
   ),
 });
 
-/** Timeline 的声明 */
 export const TimelineDeclaration = declareComponent({
   props: TimelineProps,
   states: TIMELINE_STATES,
