@@ -12,12 +12,10 @@ from typing import Any
 
 from pixelbook import REPO_ROOT
 from pixelbook.episode_path import EpisodePathError
-from pixelbook.pipeline import REPORT_NAME, PipelineError, voice_episode
+from pixelbook.pipeline import PipelineError, VoicingSettings, voice_episode
 from pixelbook.pronunciation import PronunciationError
 from pixelbook.script import ScriptError
-from pixelbook.tts import TtsEngine
-from pixelbook.verification import Verifier
-from pixelbook.voice import Voice, VoiceConfigError
+from pixelbook.voice import VoiceConfigError
 
 VIDEO_DIR = REPO_ROOT / "video"
 TIMELINE_NAME = "timeline.json"
@@ -37,37 +35,23 @@ class RenderError(Exception):
 
 def render_episode(
     script_path: Path,
-    engine: TtsEngine,
-    voice: Voice,
-    verifier: Verifier,
-    pronunciation: dict[str, str],
+    settings: VoicingSettings,
     out: Path,
-    public_dir: Path,
-    font: Path | None = None,
-    revoice: bool = False,
     draft: bool = False,
     log: Callable[[str], None] = lambda _: None,
 ) -> dict[str, Any]:
     """把 `script_path` 这一期渲染成 `out`，返回汇总报告。
 
-    `public_dir` 是 Remotion 的静态目录（正式运行是 `video/public/`；冒烟测试用
-    临时目录，免得覆盖上屏的那一期）。`log` 在每一步开始时收到一行进度。
+    `settings.public_dir` 是 Remotion 的静态目录（正式运行是 `video/public/`；
+    冒烟测试用临时目录，免得覆盖上屏的那一期）。`log` 在每一步开始时收到一行进度。
+    汇总里的 `asr_failures`、`asr_pinyin_passes` 是配音返回的报告条目
+    （`pipeline.AsrReportEntry`）。
     """
     episode_dir = script_path.parent
 
     log(_progress("配音"))
     try:
-        voice_episode(
-            script_path,
-            engine,
-            voice,
-            public_dir,
-            pronunciation,
-            verifier,
-            revoice=revoice,
-            font=font,
-            draft=draft,
-        )
+        report = voice_episode(script_path, settings, draft=draft).report
     except (
         EpisodePathError,
         PipelineError,
@@ -76,7 +60,6 @@ def render_episode(
         VoiceConfigError,
     ) as error:
         raise RenderError("配音", str(error)) from error
-    report = json.loads((episode_dir / REPORT_NAME).read_text())
 
     log(_progress("时间轴"))
     _run(
@@ -92,7 +75,7 @@ def render_episode(
     _run(
         "渲染",
         ["npx", "remotion", "render", "Episode", str(out)]
-        + ["--public-dir", str(public_dir), "--log", "error"],
+        + ["--public-dir", str(settings.public_dir), "--log", "error"],
         cwd=VIDEO_DIR,
     )
 
@@ -105,8 +88,8 @@ def render_episode(
         "fps": timeline["fps"],
         "duration": timeline["duration"],
         "segments": str(episode_dir / SEGMENTS_NAME),
-        "asr_failures": report["asr_failures"],
-        "asr_pinyin_passes": report["asr_pinyin_passes"],
+        "asr_failures": report.asr_failures,
+        "asr_pinyin_passes": report.asr_pinyin_passes,
     }
 
 

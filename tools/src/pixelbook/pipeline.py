@@ -6,7 +6,7 @@
 import hashlib
 import json
 import shutil
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -15,7 +15,7 @@ from pixelbook.episode_path import EpisodePath
 from pixelbook.glyphs import missing_glyphs
 from pixelbook.outro import OutroError, with_outro
 from pixelbook.pronunciation import find_new_terms, spoken_text
-from pixelbook.script import DRAFT, load_script
+from pixelbook.script import DRAFT, Script, load_script
 from pixelbook.tts import TtsEngine
 from pixelbook.tts_cache import TtsCache
 from pixelbook.verification import PassedBy, Verifier
@@ -54,37 +54,128 @@ class AsrReportEntry:
     cache: str
 
 
+@dataclass(frozen=True)
+class VoicingSettings:
+    """配音要用的引擎和配置，`voice_episode`、`render_episode` 和 CLI 之间统一传。
+
+    `voice` 是这本书解析出的音色（`voice_lock.resolve_book_voice`）；`verifier`
+    用语音识别复核每句配音；朗读文本按读音表 `pronunciation` 生成。`public_dir`
+    是 Remotion 的静态目录。给了字幕字体 `font` 才做缺字检查。`revoice` 确认
+    整本书用新音色重新配音（音色和锁定不一致时不拒绝，配音后更新锁定）。
+    """
+
+    engine: TtsEngine
+    voice: Voice
+    verifier: Verifier
+    pronunciation: dict[str, str]
+    public_dir: Path
+    font: Path | None = None
+    revoice: bool = False
+
+
+@dataclass(frozen=True)
+class VoicingReport:
+    """检查报告：需要人看的问题，每次配音重写进期目录里的 `report.json`。
+
+    `missing_glyphs` 是字体里没有字形的字（旁白句 ID 或 `title`，和字）；
+    没给字体、不做缺字检查时是 `None`，`report.json` 里也没有这一项。
+    """
+
+    asr_failures: list[AsrReportEntry]
+    asr_pinyin_passes: list[AsrReportEntry]
+    missing_glyphs: list[dict[str, str]] | None = None
+
+    def to_json(self) -> dict[str, Any]:
+        report: dict[str, Any] = {
+            "asr_failures": [asdict(entry) for entry in self.asr_failures],
+            "asr_pinyin_passes": [asdict(entry) for entry in self.asr_pinyin_passes],
+        }
+        if self.missing_glyphs is not None:
+            report["missing_glyphs"] = self.missing_glyphs
+        return report
+
+
+@dataclass(frozen=True)
+class VoicedEpisode:
+    """配音的结果：写进期目录的合成清单（`episode.json` 的内容）和检查报告。"""
+
+    manifest: dict[str, Any]
+    report: VoicingReport
+
+
+@dataclass
+class _Voiced:
+    """逐句配音的中间结果：合成清单的三张表、要复制上屏的 wav、复核报告条目。"""
+
+    segments: list[dict[str, Any]] = field(default_factory=list)
+    scenes: list[dict[str, Any]] = field(default_factory=list)
+    lines: list[dict[str, Any]] = field(default_factory=list)
+    # 静态目录里的相对路径 → 缓存里的 wav
+    wavs: dict[str, Path] = field(default_factory=dict)
+    failures: list[AsrReportEntry] = field(default_factory=list)
+    pinyin_passes: list[AsrReportEntry] = field(default_factory=list)
+
+
 def voice_episode(
-    script_path: Path,
-    engine: TtsEngine,
-    voice: Voice,
-    public_dir: Path,
-    pronunciation: dict[str, str],
-    verifier: Verifier,
-    revoice: bool = False,
-    font: Path | None = None,
-    draft: bool = False,
-) -> dict[str, Any]:
-    """为 `script_path` 这一期逐句配音，写出期目录里的合成清单并返回它。
+    script_path: Path, settings: VoicingSettings, draft: bool = False
+) -> VoicedEpisode:
+    """为 `script_path` 这一期逐句配音，写出期目录里的合成清单和检查报告并返回。
 
     旁白稿后面接上固定片尾（`outro.with_outro`）：合成清单的最后一段是片尾。
 
-    `voice` 是这本书解析出的音色（`voice_lock.resolve_book_voice`）。配音前守卫
-    比较它和书的锁定音色，不一致就拒绝，除非 `revoice`；配音完成后写入锁定。
-    朗读文本按读音表 `pronunciation` 生成（手写的 `speech` 优先）。
+    配音前守卫比较书的音色 `settings.voice` 和书的锁定音色，不一致就拒绝，除非
+    `settings.revoice`；配音完成后写入锁定。朗读文本按读音表生成（手写的
+    `speech` 优先）。旁白稿是 `status: draft`（还没定稿）时拒绝配音，除非 `draft`。
 
-    旁白稿是 `status: draft`（还没定稿）时拒绝配音，除非 `draft`。
+    每句配音经语音识别复核，和朗读文本对比；重试后仍不通过的句子照常使用，
+    并列进检查报告 `report.json`（每次运行都列出）；字符对比不通过、靠拼音
+    对比通过的句子（多半是同音字）也列进报告，单独一项。
 
-    每句配音经 `verifier` 的语音识别复核，和朗读文本对比；重试后仍不通过的
-    句子照常使用，并列进期目录里的检查报告 `report.json`（每次运行都列出）；
-    字符对比不通过、靠拼音对比通过的句子（多半是同音字）也列进报告，单独一项。
-
-    给了字幕字体 `font` 时，配音前先做缺字检查：字幕文本和主题 `title`
-    里字体没有字形的字列进报告的 `missing_glyphs`（旁白句 ID 或 `title`，和字）。
-    有缺字就抛出 `PipelineError`，报告里只有这一项；不配音，也不碰合成清单、
-    Remotion 静态目录和锁定音色。不给字体就不检查，报告里也没有这一项。
+    给了字幕字体时，配音前先做缺字检查：字幕文本和主题 `title` 里字体没有
+    字形的字列进报告的 `missing_glyphs`。有缺字就抛出 `PipelineError`，报告里
+    只有这一项；不配音，也不碰合成清单、Remotion 静态目录和锁定音色。
     """
     episode = EpisodePath.from_script(script_path)
+    script = _guarded_script(script_path, settings.pronunciation, draft)
+    # 配音缓存和锁定音色放在书的目录下
+    book_dir = episode.book_dir
+    try:
+        locked = lock_record(settings.voice)
+        cache = TtsCache(
+            book_dir / "cache" / "tts",
+            settings.engine,
+            settings.voice,
+            settings.verifier,
+        )
+    except FileNotFoundError as error:
+        raise PipelineError(f"参考音频 {error.filename} 不存在，无法配音") from error
+    if not settings.revoice and (differences := lock_mismatch(book_dir, locked)):
+        raise PipelineError(voice_lock_message(script_path, book_dir, differences))
+    glyphs = _check_glyphs(script_path, script, settings.font, episode.dir)
+
+    voiced = _voice_lines(script, settings.pronunciation, cache, book_dir)
+    manifest = {
+        "voice_fingerprint": cache.voice_fingerprint,
+        "title": script.title,
+        "segments": voiced.segments,
+        "scenes": voiced.scenes,
+        "lines": voiced.lines,
+    }
+    (episode.dir / MANIFEST_NAME).write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n"
+    )
+    report = VoicingReport(voiced.failures, voiced.pinyin_passes, glyphs)
+    _write_report(episode.dir, report.to_json())
+    _stage_audio(settings.public_dir, voiced.wavs)
+    stage_episode(episode.dir, settings.public_dir)
+    write_lock(book_dir, locked)
+    return VoicedEpisode(manifest, report)
+
+
+def _guarded_script(
+    script_path: Path, pronunciation: dict[str, str], draft: bool
+) -> Script:
+    """读旁白稿并接上片尾；草稿（除非 `draft`）、有新术语时拒绝配音。"""
     script = load_script(script_path)
     if script.status == DRAFT and not draft:
         raise PipelineError(
@@ -98,38 +189,37 @@ def voice_episode(
         raise PipelineError(f"{script_path}: {error}") from error
     if terms := find_new_terms(script, pronunciation):
         raise PipelineError(new_terms_message(script_path, terms))
-    # 配音缓存和锁定音色放在书的目录下
-    book_dir = episode.book_dir
-    try:
-        locked = lock_record(voice)
-        cache = TtsCache(book_dir / "cache" / "tts", engine, voice, verifier)
-    except FileNotFoundError as error:
-        raise PipelineError(f"参考音频 {error.filename} 不存在，无法配音") from error
-    if not revoice and (differences := lock_mismatch(book_dir, locked)):
-        raise PipelineError(voice_lock_message(script_path, book_dir, differences))
-    if font is not None and not font.is_file():
-        raise PipelineError(f"字幕字体 {font} 不存在，无法做缺字检查")
-    glyphs: dict[str, Any] = {}
-    if font is not None:
-        # 左上角的主题也用像素字体显示，报告里的 ID 记作 `title`
-        glyphs["missing_glyphs"] = missing_glyphs(
-            [("title", script.title)] + [(line.id, line.text) for line in script.lines],
-            font,
-        )
-        if glyphs["missing_glyphs"]:
-            _write_report(episode.dir, glyphs)
-            raise PipelineError(
-                missing_glyphs_message(script_path, glyphs["missing_glyphs"], font)
-            )
+    return script
 
-    segments, scenes, lines = [], [], []
-    failures: list[AsrReportEntry] = []
-    pinyin_passes: list[AsrReportEntry] = []
-    wavs: dict[str, Path] = {}
+
+def _check_glyphs(
+    script_path: Path, script: Script, font: Path | None, episode_dir: Path
+) -> list[dict[str, str]] | None:
+    """缺字检查：返回缺字列表；不给字体返回 `None`。有缺字时写报告并拒绝配音。"""
+    if font is None:
+        return None
+    if not font.is_file():
+        raise PipelineError(f"字幕字体 {font} 不存在，无法做缺字检查")
+    # 左上角的主题也用像素字体显示，报告里的 ID 记作 `title`
+    missing = missing_glyphs(
+        [("title", script.title)] + [(line.id, line.text) for line in script.lines],
+        font,
+    )
+    if missing:
+        _write_report(episode_dir, {"missing_glyphs": missing})
+        raise PipelineError(missing_glyphs_message(script_path, missing, font))
+    return missing
+
+
+def _voice_lines(
+    script: Script, pronunciation: dict[str, str], cache: TtsCache, book_dir: Path
+) -> _Voiced:
+    """逐句配音（缓存命中就不重新生成），把复核没按字通过的句子分进报告。"""
+    voiced = _Voiced()
     for segment in script.segments:
-        segments.append({"id": segment.id, "title": segment.title})
+        voiced.segments.append({"id": segment.id, "title": segment.title})
         for scene in segment.scenes:
-            scenes.append({"id": scene.id, "segment": segment.id})
+            voiced.scenes.append({"id": scene.id, "segment": segment.id})
             for line in scene.lines:
                 spoken = spoken_text(line, pronunciation)
                 cached = cache.line(spoken)
@@ -146,14 +236,14 @@ def voice_episode(
                         cache=wav.relative_to(book_dir).as_posix(),
                     )
                     if chosen.passed_by == PassedBy.PINYIN:
-                        pinyin_passes.append(entry)
+                        voiced.pinyin_passes.append(entry)
                     else:
-                        failures.append(entry)
+                        voiced.failures.append(entry)
                 # 文件名带内容哈希：内容变了，Studio 就不会播放浏览器缓存里的旧音频
                 digest = hashlib.sha256(wav.read_bytes()).hexdigest()[:8]
                 audio = f"{STAGE_DIR}/{line.id}-{digest}.wav"
-                wavs[audio] = wav
-                lines.append(
+                voiced.wavs[audio] = wav
+                voiced.lines.append(
                     {
                         "id": line.id,
                         "scene": scene.id,
@@ -162,36 +252,17 @@ def voice_episode(
                         "seconds": wav_seconds(wav),
                     }
                 )
+    return voiced
 
-    manifest = {
-        "voice_fingerprint": cache.voice_fingerprint,
-        "title": script.title,
-        "segments": segments,
-        "scenes": scenes,
-        "lines": lines,
-    }
-    (episode.dir / MANIFEST_NAME).write_text(
-        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n"
-    )
 
-    _write_report(
-        episode.dir,
-        {
-            "asr_failures": [asdict(entry) for entry in failures],
-            "asr_pinyin_passes": [asdict(entry) for entry in pinyin_passes],
-            **glyphs,
-        },
-    )
-
+def _stage_audio(public_dir: Path, wavs: dict[str, Path]) -> None:
+    """清空静态目录里上一期的文件，放进这一期的 wav。"""
     stage = public_dir / STAGE_DIR
     if stage.exists():
         shutil.rmtree(stage)
     stage.mkdir(parents=True)
     for audio, wav in wavs.items():
         shutil.copyfile(wav, public_dir / audio)
-    stage_episode(episode.dir, public_dir)
-    write_lock(book_dir, locked)
-    return manifest
 
 
 def _write_report(episode_dir: Path, report: dict[str, Any]) -> None:

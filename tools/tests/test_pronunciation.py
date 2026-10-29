@@ -6,7 +6,7 @@ import pytest
 from conftest import OUTRO, fake_asr_verifier
 
 from pixelbook import REPO_ROOT
-from pixelbook.pipeline import PipelineError, voice_episode
+from pixelbook.pipeline import PipelineError, VoicingSettings, voice_episode
 from pixelbook.pronunciation import (
     PronunciationError,
     load_pronunciation,
@@ -43,11 +43,13 @@ def episode(tmp_path):
         engine = FakeTtsEngine()
         voice_episode(
             path,
-            engine,
-            VOICE,
-            tmp_path / "public",
-            table,
-            verifier=fake_asr_verifier(),
+            VoicingSettings(
+                engine=engine,
+                voice=VOICE,
+                public_dir=tmp_path / "public",
+                pronunciation=table,
+                verifier=fake_asr_verifier(),
+            ),
         )
         return engine
 

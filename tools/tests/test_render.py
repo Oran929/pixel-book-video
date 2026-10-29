@@ -12,25 +12,24 @@ from conftest import SCRIPT, VOICE
 
 from pixelbook import REPO_ROOT
 from pixelbook.asr import FakeAsrEngine
-from pixelbook.pipeline import SUBTITLE_FONT
+from pixelbook.pipeline import SUBTITLE_FONT, VoicingSettings
 from pixelbook.render import RenderError, check_frames, render_episode
 from pixelbook.tts import FakeTtsEngine
 from pixelbook.verification import Verifier
 from pixelbook.voice import Voice
 
 
-def render(script_path, tmp_path, voice=VOICE, **kwargs):
-    return render_episode(
-        script_path,
-        FakeTtsEngine(),
-        voice,
-        Verifier(FakeAsrEngine(), max_diff_rate=0, max_retries=0),
-        {},
-        out=tmp_path / "out.mp4",
+def render(script_path, tmp_path, voice=VOICE, revoice=False, **kwargs):
+    settings = VoicingSettings(
+        engine=FakeTtsEngine(),
+        voice=voice,
+        verifier=Verifier(FakeAsrEngine(), max_diff_rate=0, max_retries=0),
+        pronunciation={},
         public_dir=tmp_path / "public",
         font=REPO_ROOT / "video" / "public" / SUBTITLE_FONT,
-        **kwargs,
+        revoice=revoice,
     )
+    return render_episode(script_path, settings, out=tmp_path / "out.mp4", **kwargs)
 
 
 def test_voicing_refusal_stops_at_the_voicing_step(tmp_path, script_path):

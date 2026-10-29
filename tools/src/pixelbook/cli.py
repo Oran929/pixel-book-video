@@ -1,7 +1,6 @@
 """命令行入口：`uv run pixelbook <命令>`。"""
 
 import argparse
-import json
 from pathlib import Path
 from typing import Any
 
@@ -17,7 +16,10 @@ from pixelbook.pipeline import (
     MANIFEST_NAME,
     REPORT_NAME,
     SUBTITLE_FONT,
+    AsrReportEntry,
     PipelineError,
+    VoicingReport,
+    VoicingSettings,
     stage_episode,
     voice_episode,
 )
@@ -59,13 +61,12 @@ def _print_audition_report(report: dict[str, Any], out_dir: Path) -> None:
         print(f"  估算一期（100 句）：约 {minutes:.0f} 分钟")
 
 
-def _print_asr_report(report_path: Path) -> None:
-    report = json.loads(report_path.read_text())
-    if passes := report["asr_pinyin_passes"]:
+def _print_asr_report(report: VoicingReport, report_path: Path) -> None:
+    if passes := report.asr_pinyin_passes:
         print(f"\n{len(passes)} 句靠拼音通过（字不同、拼音相同，多半是同音字识别错）：")
         for item in passes:
-            print(f"  {item['id']}  {_rates(item)}\n{_texts(item)}")
-    if not (failures := report["asr_failures"]):
+            print(f"  {item.id}  {_rates(item)}\n{_texts(item)}")
+    if not (failures := report.asr_failures):
         return
     print(
         f"\n{len(failures)} 句复核未通过（已用差异率最低的一版；详见 {report_path}）："
@@ -78,27 +79,21 @@ def _print_asr_report(report_path: Path) -> None:
     )
 
 
-def _asr_failure(item: dict, indent: str) -> str:
+def _asr_failure(item: AsrReportEntry, indent: str) -> str:
     """一句复核未通过的句子：ID 和差异率、字幕/朗读/识别、缓存位置。"""
-    return (
-        f"{indent}{item['id']}  {_rates(item)}\n{_texts(item)}\n"
-        f"    缓存：{item['cache']}"
-    )
+    return f"{indent}{item.id}  {_rates(item)}\n{_texts(item)}\n    缓存：{item.cache}"
 
 
-def _rates(item: dict) -> str:
-    rates = f"字符差异率 {item['diff_rate']:.0%}"
+def _rates(item: AsrReportEntry) -> str:
+    rates = f"字符差异率 {item.diff_rate:.0%}"
     # 两步复核之前缓存的句子没有算过拼音
-    if item["pinyin_diff_rate"] is not None:
-        rates += f"  拼音差异率 {item['pinyin_diff_rate']:.0%}"
+    if item.pinyin_diff_rate is not None:
+        rates += f"  拼音差异率 {item.pinyin_diff_rate:.0%}"
     return rates
 
 
-def _texts(item: dict) -> str:
-    return (
-        f"    字幕：{item['text']}\n    朗读：{item['spoken']}\n"
-        f"    识别：{item['heard']}"
-    )
+def _texts(item: AsrReportEntry) -> str:
+    return f"    字幕：{item.text}\n    朗读：{item.spoken}\n    识别：{item.heard}"
 
 
 def _verifier() -> Verifier:
@@ -131,7 +126,7 @@ def _print_render_summary(summary: dict[str, Any]) -> None:
         f"  打点时间表 {summary['segments']}"
     )
     if passes := summary["asr_pinyin_passes"]:
-        ids = "、".join(item["id"] for item in passes)
+        ids = "、".join(item.id for item in passes)
         print(
             f"  靠拼音通过（多半是同音字识别错，不用处理）：{len(passes)} 句（{ids}）"
         )
@@ -145,6 +140,21 @@ def _print_render_summary(summary: dict[str, Any]) -> None:
 
 def _book_voice(script: Path) -> Voice:
     return resolve_book_voice(EpisodePath.from_script(script).book_dir, REPO_ROOT)
+
+
+def _voicing_settings(script: Path, revoice: bool) -> VoicingSettings:
+    """`voice` 和 `render` 共用的配音配置：真实 TTS 和语音识别、书的音色、读音表。"""
+    from pixelbook.qwen_tts import QwenTtsEngine
+
+    return VoicingSettings(
+        engine=QwenTtsEngine(),
+        voice=_book_voice(script),
+        verifier=_verifier(),
+        pronunciation=load_pronunciation(PRONUNCIATION),
+        public_dir=VIDEO_PUBLIC,
+        font=VIDEO_PUBLIC / SUBTITLE_FONT,
+        revoice=revoice,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -327,27 +337,18 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "render":
             return _render(args.script.resolve(), args.out, args.revoice, args.draft)
         elif args.command == "voice":
-            from pixelbook.qwen_tts import QwenTtsEngine
-
             script = args.script.resolve()
-            manifest = voice_episode(
-                script,
-                QwenTtsEngine(),
-                _book_voice(script),
-                VIDEO_PUBLIC,
-                load_pronunciation(PRONUNCIATION),
-                _verifier(),
-                revoice=args.revoice,
-                font=VIDEO_PUBLIC / SUBTITLE_FONT,
-                draft=args.draft,
+            voiced = voice_episode(
+                script, _voicing_settings(script, args.revoice), draft=args.draft
             )
+            manifest = voiced.manifest
             total = sum(line["seconds"] for line in manifest["lines"])
             print(
                 f"{len(manifest['lines'])} 句，配音共 {total:.1f} 秒（不含停顿）；"
                 f"合成清单 {args.script.parent / MANIFEST_NAME}，"
                 f"已复制到 {VIDEO_PUBLIC / 'episode'}"
             )
-            _print_asr_report(script.parent / REPORT_NAME)
+            _print_asr_report(voiced.report, script.parent / REPORT_NAME)
         elif args.command == "terms":
             table = load_pronunciation(PRONUNCIATION)
             script = args.script.resolve()
@@ -404,31 +405,14 @@ def _render(script: Path, out: Path | None, revoice: bool, draft: bool) -> int:
     ).resolve()
     try:
         try:
-            from pixelbook.qwen_tts import QwenTtsEngine
-
-            engine = QwenTtsEngine()
-            voice = _book_voice(script)
-            verifier = _verifier()
-            pronunciation = load_pronunciation(PRONUNCIATION)
+            settings = _voicing_settings(script, revoice)
         except (
             PronunciationError,
             VerificationConfigError,
             VoiceConfigError,
         ) as error:
             raise RenderError("配音", str(error)) from error
-        summary = render_episode(
-            script,
-            engine,
-            voice,
-            verifier,
-            pronunciation,
-            out=out,
-            public_dir=VIDEO_PUBLIC,
-            font=VIDEO_PUBLIC / SUBTITLE_FONT,
-            revoice=revoice,
-            draft=draft,
-            log=print,
-        )
+        summary = render_episode(script, settings, out=out, draft=draft, log=print)
     except RenderError as error:
         print(error)
         return 1
