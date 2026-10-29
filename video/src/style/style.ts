@@ -78,6 +78,23 @@ export const COLOR = {
   accent: PALETTE.orange,
   onAccent: PALETTE.paper,
   episodeTitle: PALETTE.orange,
+  /** 知识块「高亮」状态的描边和阴影 */
+  highlight: PALETTE.yellow,
+  /** 知识块「已改」状态的描边和阴影 */
+  changed: PALETTE.red,
+} as const;
+
+/**
+ * 知识块可选的颜色（分镜里的 `color` 参数）：底色和标签的颜色。
+ * 黄色留给「高亮」、红色留给「已改」的描边，不作底色。
+ */
+export const BLOCK_COLORS = {
+  orange: { fill: PALETTE.orange, text: PALETTE.paper },
+  green: { fill: PALETTE.green, text: PALETTE.paper },
+  blue: { fill: PALETTE.blue, text: PALETTE.paper },
+  purple: { fill: PALETTE.purple, text: PALETTE.paper },
+  cream: { fill: PALETTE.cream, text: PALETTE.ink },
+  stone: { fill: PALETTE.stone, text: PALETTE.paper },
 } as const;
 
 /** 尺寸（屏幕像素）：都是像素网格的整数倍，元素才落在整像素上 */
@@ -95,16 +112,12 @@ export const SIZE = {
   subtitlePaddingX: cells(12),
   channelPaddingY: cells(2),
   channelPaddingX: cells(4),
-  /** 方块组件的边长 */
-  block: cells(80),
   /** 知识块的外框到标签之间的内边距 */
   blockPadding: cells(4),
-  /** 方块组件比画面中心高出的距离 */
-  blockLift: cells(60),
+  /** 知识块切到「高亮」时先跳起多高，再落回原位 */
+  blockHop: cells(4),
   /** 落下动画的起点在终点上方多远 */
   slideDistance: cells(40),
-  /** 小人组件站在左边或右边时离画面边缘的距离（比边距小，免得和最长的字幕框重叠） */
-  mascotInset: cells(8),
 } as const;
 
 /** 描边规则：实心、不模糊，宽度取 `SIZE.stroke` / `SIZE.strokeThick` */

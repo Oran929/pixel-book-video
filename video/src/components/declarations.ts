@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { layoutGrid } from "../style/grid";
-import { FONT_SIZE, MASCOTS, SIZE } from "../style/style";
+import { BLOCK_COLORS, FONT_SIZE, MASCOTS, SIZE } from "../style/style";
 import { textWidth } from "../style/text-width";
 import { VIDEO } from "../video-config";
 import { type ComponentDeclarations, declareComponent } from "./declaration";
@@ -32,6 +32,12 @@ export const blockLabelRoom = (size: BlockSize): number =>
   SIZE.shadowOffset -
   2 * SIZE.blockPadding;
 
+export type BlockColor = keyof typeof BLOCK_COLORS;
+
+/** 知识块的状态：正常、高亮（被点到）、已改（改过的那一处） */
+export const BLOCK_STATES = ["normal", "highlight", "changed"] as const;
+export type BlockState = (typeof BLOCK_STATES)[number];
+
 /** PixelBlock：一个带字的像素方块（知识块） */
 export const PixelBlockProps = z
   .strictObject({
@@ -40,6 +46,10 @@ export const PixelBlockProps = z
     /** 大小：决定占几格和标签的字号 */
     size: z.enum(
       Object.keys(BLOCK_SIZES) as [BlockSize, ...BlockSize[]],
+    ),
+    /** 颜色：风格表 `BLOCK_COLORS` 里的名字 */
+    color: z.enum(
+      Object.keys(BLOCK_COLORS) as [BlockColor, ...BlockColor[]],
     ),
   })
   .superRefine(({ label, size }, ctx) => {
@@ -54,21 +64,19 @@ export const PixelBlockProps = z
     }
   });
 
-/** Mascot：一个 Q 版频道小人站在画面底部，分镜里需要"人物做什么"时才用 */
+/** Mascot：一个 Q 版频道小人，站在分镜 `at` 给的格子里，分镜里需要"人物做什么"时才用 */
 export const MascotProps = z.strictObject({
   /** 哪个 Q 版角色，按外观起名（见风格表 `MASCOTS`） */
   character: z.enum(
     Object.keys(MASCOTS) as [keyof typeof MASCOTS, ...(keyof typeof MASCOTS)[]],
   ),
-  /** 站在画面底部的左边、中间还是右边 */
-  position: z.enum(["left", "center", "right"]),
 });
 
 /** 组件名 → 声明；交给 `planEpisode` 核对组件名、参数、状态，并取默认动画 */
 export const COMPONENT_DECLARATIONS = {
   PixelBlock: declareComponent({
     props: PixelBlockProps,
-    states: ["normal"],
+    states: BLOCK_STATES,
     cells: ({ size }) => BLOCK_SIZES[size].cells,
     enter: "slide",
     exit: "fade",

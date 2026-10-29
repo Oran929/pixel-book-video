@@ -183,6 +183,7 @@ describe("scheduleCues", () => {
         props: { label: "DRY" },
         enter: { frame: 177, animation: "slide" },
         exit: null,
+        initialState: "normal",
         states: [],
         area: { at: [0, 0], cells: [1, 1] },
         startFrame: 177,

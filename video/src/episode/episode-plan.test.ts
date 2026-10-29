@@ -37,7 +37,7 @@ const STORYBOARD = {
         {
           id: "dry",
           component: "PixelBlock",
-          props: { label: "DRY", size: "medium" },
+          props: { label: "DRY", size: "medium", color: "orange" },
           at: [0, 0],
         },
       ],
@@ -415,18 +415,21 @@ describe("planEpisode: components on screen together must not overlap", () => {
 });
 
 // 知识块（PixelBlock，用组件注册表的声明）：`size` 决定占几格和字号
-const blockScene = (props: Record<string, unknown>) => ({
+const blockScene = (props: Record<string, unknown>, triggers: Trigger[] = []) => ({
   scenes: [
     {
       scene: "s02-c01",
       components: [{ id: "k", component: "PixelBlock", props, at: [0, 0] }],
-      triggers: [{ target: "k", line: "s02-l01", offset: 0, action: "enter" }],
+      triggers: [
+        { target: "k", line: "s02-l01", offset: 0, action: "enter" },
+        ...triggers.map((trigger) => ({ target: "k", line: "s02-l01", ...trigger })),
+      ],
     },
   ],
   pauses: [],
 });
-const planBlock = (props: Record<string, unknown>) =>
-  planEpisode(MANIFEST, blockScene(props));
+const planBlock = (props: Record<string, unknown>, triggers: Trigger[] = []) =>
+  planEpisode(MANIFEST, blockScene({ color: "orange", ...props }, triggers));
 
 describe("planEpisode: knowledge block size and label", () => {
   it.each([
@@ -469,5 +472,49 @@ describe("planEpisode: knowledge block size and label", () => {
     expect(() => planBlock({ label: "知识" })).toThrow(
       /第 1 个画面 第 1 个组件 props size/,
     );
+  });
+});
+
+describe("planEpisode: knowledge block color and states", () => {
+  it.each(["orange", "green", "blue", "purple", "cream", "stone"])(
+    "accepts the color %s from the style sheet",
+    (color) => {
+      expect(() => planBlock({ label: "知识", size: "small", color })).not.toThrow();
+    },
+  );
+
+  it("rejects a color that is not a block color", () => {
+    expect(() =>
+      planBlock({ label: "知识", size: "small", color: "#ff0000" }),
+    ).toThrow(/第 1 个画面 第 1 个组件 props color/);
+  });
+
+  it("rejects a block without a color", () => {
+    expect(() =>
+      planEpisode(MANIFEST, blockScene({ label: "知识", size: "small" })),
+    ).toThrow(/第 1 个画面 第 1 个组件 props color/);
+  });
+
+  it("enters as normal, then can be highlighted and marked as changed", () => {
+    const [cue] = planBlock({ label: "知识", size: "small" }, [
+      { action: "state", offset: 0.5, state: "highlight" },
+      { action: "state", offset: 1, state: "changed" },
+    ]).cues;
+
+    expect(cue).toMatchObject({
+      initialState: "normal",
+      states: [
+        { frame: 153, state: "highlight" },
+        { frame: 168, state: "changed" },
+      ],
+    });
+  });
+
+  it("rejects a state the block does not have", () => {
+    expect(() =>
+      planBlock({ label: "知识", size: "small" }, [
+        { action: "state", offset: 0.5, state: "broken" },
+      ]),
+    ).toThrow(/没有状态 broken，声明过的状态：normal、highlight、changed/);
   });
 });

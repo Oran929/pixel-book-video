@@ -1,15 +1,19 @@
 import {
   AbsoluteFill,
   Easing,
-  interpolate,
+  Sequence,
   useCurrentFrame,
 } from "remotion";
 import type { Animation } from "./declaration";
-import { animationFrames } from "./declaration";
 import type { Cue } from "../episode/storyboard";
+import { cellRect, layoutGrid } from "../style/grid";
 import { SIZE, snapToGrid } from "../style/style";
 import { VIDEO } from "../video-config";
 import { componentNamed } from "./registry";
+import { stageAt } from "./stage";
+
+const GRID = layoutGrid(VIDEO.width, VIDEO.height);
+const ease = Easing.out(Easing.cubic);
 
 // 在场程度 0 → 1 对应的样子：淡入淡出，或从上方落下、向上升起（位移取整到像素网格）
 const look = (animation: Animation, shown: number): React.CSSProperties => {
@@ -22,36 +26,47 @@ const look = (animation: Animation, shown: number): React.CSSProperties => {
   return {};
 };
 
-// 从 `from` 帧起播 `animation`，返回在场程度；`none` 不播，直接是 1
-const progress = (frame: number, from: number, animation: Animation) => {
-  const frames = animationFrames(animation, VIDEO.fps);
-  if (frames === 0) return 1;
-  return interpolate(frame, [from, from + frames], [0, 1], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-    easing: Easing.out(Easing.cubic),
-  });
-};
-
 /**
- * 按排期放一个组件：入场和退场套上通用动画（帧相对于入场帧）。
- * 状态暂时不传给组件，渲染接口见 #35。
+ * 按排期放一个组件：放进它在网格上占的矩形（连线类组件铺满画面），
+ * 套上通用的入场和退场动画，再把参数和这一帧的舞台信息交给组件。
+ * 要放在从 `cue.startFrame` 开始的 Sequence 里（见 `StagedCues`）。
  */
 export const Staged: React.FC<{ cue: Cue }> = ({ cue }) => {
-  const frame = useCurrentFrame();
+  const stage = stageAt(cue, cue.startFrame + useCurrentFrame());
   const Component = componentNamed(cue.component);
-  const entering = look(cue.enter.animation, progress(frame, 0, cue.enter.animation));
-  const exiting = cue.exit
-    ? look(
-        cue.exit.animation,
-        1 - progress(frame, cue.exit.frame - cue.startFrame, cue.exit.animation),
-      )
-    : {};
+  const box = cue.area ? cellRect(GRID, cue.area.at, cue.area.cells) : null;
   return (
-    <AbsoluteFill style={entering}>
-      <AbsoluteFill style={exiting}>
-        <Component {...cue.props} />
+    <AbsoluteFill
+      style={
+        box
+          ? { left: box.x, top: box.y, width: box.width, height: box.height }
+          : {}
+      }
+    >
+      <AbsoluteFill style={look(cue.enter.animation, ease(stage.enter))}>
+        <AbsoluteFill
+          style={
+            cue.exit ? look(cue.exit.animation, 1 - ease(stage.exit)) : {}
+          }
+        >
+          <Component props={cue.props} stage={stage} />
+        </AbsoluteFill>
       </AbsoluteFill>
     </AbsoluteFill>
   );
 };
+
+/** 一期（或一页样张）的全部组件：每个组件在自己的区间里出现 */
+export const StagedCues: React.FC<{ cues: Cue[] }> = ({ cues }) => (
+  <>
+    {cues.map((cue) => (
+      <Sequence
+        key={cue.key}
+        from={cue.startFrame}
+        durationInFrames={cue.endFrame - cue.startFrame}
+      >
+        <Staged cue={cue} />
+      </Sequence>
+    ))}
+  </>
+);

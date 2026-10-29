@@ -1,8 +1,4 @@
 import { AbsoluteFill } from "remotion";
-import type { z } from "zod";
-import { Mascot } from "../components/Mascot";
-import { PixelBlock } from "../components/PixelBlock";
-import type { MascotProps } from "../components/declarations";
 import { Subtitle } from "../components/resident/Subtitle";
 import {
   border,
@@ -12,31 +8,20 @@ import {
   GRID,
   hardShadow,
   outlinedText,
-  MASCOTS,
   PALETTE,
   pixelText,
   SIZE,
 } from "../style/style";
 
-// 风格样张（票 09）：集中展示调色板、像素字体、描边和阴影、小人组件。
+// 风格样张（票 09）：集中展示调色板、像素字体、描边和阴影。
 // 只在 Studio 里看（合成 ID `StyleSheet`），渲染命令只渲染 `Episode`，不进入成片。
+// 组件各有自己的样张页（`Sample-<组件名>`，#35）。
 
-/** 样张画布：宽同成片，加高到放得下两排原尺寸的小人 */
-export const STYLE_SHEET = { width: 1920, height: 4000 } as const;
+/** 样张画布：宽同成片，加高到放得下全部内容 */
+export const STYLE_SHEET = { width: 1920, height: 2320 } as const;
 
-/** 两个画框里的小人：三个站位，四个角色都出现一次 */
-const STAGES: z.infer<typeof MascotProps>[][] = [
-  [
-    { character: "dragon", position: "left" },
-    { character: "reader", position: "center" },
-    { character: "whale", position: "right" },
-  ],
-  [{ character: "gothic", position: "center" }],
-];
-
-/** 画框高度：放得下最高的小人和上下两条细描边 */
-const MASCOT_STAGE_HEIGHT =
-  Math.max(...Object.values(MASCOTS).map((m) => m.height)) + SIZE.stroke * 2;
+/** 描边与阴影示例方块的边长 */
+const SWATCH_BLOCK = GRID * 40;
 
 const SAMPLES = [
   "读一本8bit像素书",
@@ -142,7 +127,7 @@ export const StyleSheet: React.FC = () => (
       </div>
     </Section>
 
-    <Section title="描边与阴影：细描边、粗描边、右下硬阴影；字幕框、方块组件">
+    <Section title="描边与阴影：细描边、粗描边、右下硬阴影；字幕框">
       <div
         style={{
           display: "flex",
@@ -153,39 +138,29 @@ export const StyleSheet: React.FC = () => (
       >
         <div
           style={{
-            width: SIZE.block / 2,
-            height: SIZE.block / 2,
+            width: SWATCH_BLOCK,
+            height: SWATCH_BLOCK,
             backgroundColor: PALETTE.cream,
             border: border(SIZE.stroke, COLOR.ink),
           }}
         />
         <div
           style={{
-            width: SIZE.block / 2,
-            height: SIZE.block / 2,
+            width: SWATCH_BLOCK,
+            height: SWATCH_BLOCK,
             backgroundColor: PALETTE.green,
             border: border(SIZE.strokeThick, COLOR.ink),
           }}
         />
         <div
           style={{
-            width: SIZE.block / 2,
-            height: SIZE.block / 2,
+            width: SWATCH_BLOCK,
+            height: SWATCH_BLOCK,
             backgroundColor: PALETTE.blue,
             border: border(SIZE.strokeThick, COLOR.ink),
             boxShadow: hardShadow(COLOR.ink),
           }}
         />
-        {/* 方块组件 PixelBlock，原样放进一个小画框 */}
-        <div
-          style={{
-            position: "relative",
-            width: SIZE.block * 2,
-            height: SIZE.block + SIZE.blockLift + SIZE.margin,
-          }}
-        >
-          <PixelBlock label="DRY" size="large" />
-        </div>
         {/* 字幕框本身，按成片里的样子放在画框里 */}
         <div
           style={{
@@ -200,28 +175,5 @@ export const StyleSheet: React.FC = () => (
       </div>
     </Section>
 
-    <Section title="小人组件 Mascot（占位，原尺寸，最近邻插值）：画框和成片一样宽，看三个站位和四个 Q 版角色">
-      {STAGES.map((stage) => (
-        <div
-          key={stage.map((m) => m.character).join()}
-          style={{ display: "flex", flexDirection: "column", gap: GRID * 2 }}
-        >
-          <div style={{ ...pixelText("small"), color: COLOR.ink }}>
-            {stage.map((m) => `${m.character} ${m.position}`).join("、")}
-          </div>
-          <div
-            style={{
-              position: "relative",
-              height: MASCOT_STAGE_HEIGHT,
-              border: border(SIZE.stroke, PALETTE.sand),
-            }}
-          >
-            {stage.map((props) => (
-              <Mascot key={props.character} {...props} />
-            ))}
-          </div>
-        </div>
-      ))}
-    </Section>
   </AbsoluteFill>
 );

@@ -82,7 +82,11 @@ def write_bad_storyboard(episode_dir):
                             {
                                 "id": "a",
                                 "component": "PixelBlock",
-                                "props": {"label": "A", "size": "small"},
+                                "props": {
+                                    "label": "A",
+                                    "size": "small",
+                                    "color": "orange",
+                                },
                                 "at": [0, 0],
                             }
                         ],

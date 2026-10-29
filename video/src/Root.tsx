@@ -6,6 +6,8 @@ import {
 } from "./episode/Episode";
 // 像素字体在第一帧之前加载完（模块加载时挡住渲染）
 import "./style/font";
+import { COMPONENT_SAMPLES, samplePlan } from "./components/samples";
+import { ComponentSample } from "./stylesheet/ComponentSample";
 import { STYLE_SHEET, StyleSheet } from "./stylesheet/StyleSheet";
 import { VIDEO } from "./video-config";
 
@@ -33,5 +35,20 @@ export const RemotionRoot: React.FC = () => (
       width={STYLE_SHEET.width}
       height={STYLE_SHEET.height}
     />
+    {/* 组件样张：每个组件一页，用假分镜演它的每个状态和每种入场、退场动画 */}
+    {(Object.keys(COMPONENT_SAMPLES) as (keyof typeof COMPONENT_SAMPLES)[]).map(
+      (name) => (
+        <Composition
+          key={name}
+          id={`Sample-${name}`}
+          component={ComponentSample}
+          defaultProps={{ name }}
+          durationInFrames={samplePlan(name).timeline.totalFrames}
+          fps={VIDEO.fps}
+          width={VIDEO.width}
+          height={VIDEO.height}
+        />
+      ),
+    )}
   </>
 );

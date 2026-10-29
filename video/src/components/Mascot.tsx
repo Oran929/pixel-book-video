@@ -1,32 +1,19 @@
 import { AbsoluteFill, Img, staticFile } from "remotion";
 import type { z } from "zod";
-import { MASCOTS, SIZE } from "../style/style";
+import { MASCOTS } from "../style/style";
 import type { MascotProps } from "./declarations";
-
-// 站位 → 小人在画面底部的水平位置（左右两边离画面边缘 `SIZE.mascotInset`）
-const PLACEMENT = {
-  left: { justifyContent: "flex-start", paddingLeft: SIZE.mascotInset },
-  center: { justifyContent: "center" },
-  right: { justifyContent: "flex-end", paddingRight: SIZE.mascotInset },
-} as const;
+import type { RenderProps } from "./stage";
 
 /**
- * Q 版频道小人：站在画面底部的左边、中间或右边。
- * 原尺寸、最近邻插值显示（图不是对齐网格的像素画，缩放会更糊）。暂无动效。
+ * Q 版频道小人：站在分镜 `at` 给的格子里，底边对齐、水平居中。
+ * 原尺寸、最近邻插值显示（图不是对齐网格的像素画，缩放会更糊）。暂无动效，只有一个状态。
  */
-export const Mascot: React.FC<z.infer<typeof MascotProps>> = ({
-  character,
-  position,
+export const Mascot: React.FC<RenderProps<z.infer<typeof MascotProps>>> = ({
+  props: { character },
 }) => {
   const { file, width, height } = MASCOTS[character];
   return (
-    <AbsoluteFill
-      style={{
-        flexDirection: "row",
-        alignItems: "flex-end",
-        ...PLACEMENT[position],
-      }}
-    >
+    <AbsoluteFill style={{ justifyContent: "flex-end", alignItems: "center" }}>
       <Img
         src={staticFile(file)}
         style={{ width, height, imageRendering: "pixelated" }}

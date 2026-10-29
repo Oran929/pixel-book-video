@@ -38,7 +38,7 @@ const STORYBOARD = {
     {
       scene: "s02-c01",
       components: [
-        { id: "dry", component: "PixelBlock", props: { label: "DRY", size: "medium" }, at: [0, 0] },
+        { id: "dry", component: "PixelBlock", props: { label: "DRY", size: "medium", color: "orange" }, at: [0, 0] },
       ],
       triggers: [
         {

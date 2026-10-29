@@ -6,7 +6,7 @@ import {
   staticFile,
   useCurrentFrame,
 } from "remotion";
-import { Staged } from "../components/Staged";
+import { StagedCues } from "../components/Staged";
 import { EpisodeTitle } from "../components/resident/EpisodeTitle";
 import { Subtitle } from "../components/resident/Subtitle";
 import { COLOR } from "../style/style";
@@ -56,7 +56,8 @@ export const calculateEpisodeMetadata: CalculateMetadataFunction<
   };
 };
 
-const CurrentSubtitle: React.FC<{ timeline: Timeline }> = ({ timeline }) => {
+/** 当前这句旁白的字幕（两句之间的停顿里继续显示上一句） */
+export const CurrentSubtitle: React.FC<{ timeline: Timeline }> = ({ timeline }) => {
   const line = lineAt(timeline, useCurrentFrame());
   return line ? <Subtitle text={line.text} /> : null;
 };
@@ -64,15 +65,7 @@ const CurrentSubtitle: React.FC<{ timeline: Timeline }> = ({ timeline }) => {
 export const Episode: React.FC<EpisodeProps> = ({ title, timeline, cues }) => (
   <AbsoluteFill style={{ backgroundColor: COLOR.background }}>
     {title ? <EpisodeTitle title={title} /> : null}
-    {cues.map((cue) => (
-      <Sequence
-        key={cue.key}
-        from={cue.startFrame}
-        durationInFrames={cue.endFrame - cue.startFrame}
-      >
-        <Staged cue={cue} />
-      </Sequence>
-    ))}
+    <StagedCues cues={cues} />
     {timeline?.lines.map((line) => (
       // 每句的音频单独放置，不拼接成一条音轨（ADR-0003）
       <Sequence

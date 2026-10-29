@@ -251,6 +251,8 @@ export type Cue = {
   enter: { frame: number; animation: Animation };
   /** 没有退场时为 null：显示到画面结束 */
   exit: { frame: number; animation: Animation } | null;
+  /** 入场时的状态：组件声明的第一个状态 */
+  initialState: string;
   /** 各次切换状态，按帧排序 */
   states: { frame: number; state: string }[];
   /** 在网格上占的格：左上角 `at` 和占几格 `cells`；连线类组件为 null */
@@ -354,6 +356,7 @@ export const scheduleCues = (
             declared.enter,
         },
         exit: exit ? { frame: exit.frame, animation: exitAnimation } : null,
+        initialState: declared.states[0],
         states: states.map(({ frame, state }) => ({ frame, state })),
         area: used.at
           ? { at: used.at, cells: declared.cells(declared.props.parse(used.props)) }
