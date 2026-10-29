@@ -9,6 +9,7 @@ import {
 import "./style/font";
 import { COMPONENT_SAMPLES, samplePlan } from "./components/samples";
 import { ComponentSample } from "./stylesheet/ComponentSample";
+import { ComponentSamples, componentSamplesFrames } from "./stylesheet/ComponentSamples";
 import { STYLE_SHEET, StyleSheet } from "./stylesheet/StyleSheet";
 import { VIDEO } from "./video-config";
 
@@ -64,5 +65,14 @@ export const RemotionRoot: React.FC = () => (
         />
       ),
     )}
+    {/* 组件样片：上面的样张页按组件顺序首尾相接，渲染成一个 MP4 给人看（#44） */}
+    <Composition
+      id="ComponentSamples"
+      component={ComponentSamples}
+      durationInFrames={componentSamplesFrames()}
+      fps={VIDEO.fps}
+      width={VIDEO.width}
+      height={VIDEO.height}
+    />
   </>
 );
