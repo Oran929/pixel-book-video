@@ -78,7 +78,7 @@ const StoryboardShape = z.strictObject({
       triggers: z.array(TriggerShape),
     }),
   ),
-  /** 配乐登记表（`music/tracks.ts`）里的曲子 ID：全期循环播放，最后 2 秒淡出 */
+  /** 配乐登记表（`music/tracks.ts`）里的曲子 ID：全期循环播放，正文最后 `MUSIC_FADE_SECONDS` 秒淡出 */
   music: z.string({ error: "有分镜时要写 music：配乐登记表里的曲子 ID" }),
   /** 个别位置的停顿覆盖：`after` 这句之后停顿 `seconds` 秒 */
   pauses: z.array(

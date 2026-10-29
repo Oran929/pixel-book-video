@@ -2,7 +2,7 @@
 // CROSSFADE_FRAMES 帧（增益按帧取，和 Remotion 一样每帧一个值），看重叠处掉不掉音、爆不爆音。
 // 听感（重复感、曲尾自然淡出后再从头开始）留给人工关口 3，这里只把曲尾、曲首比曲子整体
 // 轻多少报出来。
-import { VIDEO } from "../video-config";
+import { samplesPerFrame } from "./tracks";
 import { CROSSFADE_FRAMES, fadeInGain, fadeOutGain } from "./crossfade";
 
 export type PcmAudio = {
@@ -41,7 +41,7 @@ const toDb = (power: number) => (power > 0 ? 10 * Math.log10(power) : -Infinity)
 
 export const measureCrossfade = ({ samples, channels, sampleRate }: PcmAudio): CrossfadeSeam => {
   const frames = samples.length / channels;
-  const perFrame = sampleRate / VIDEO.fps;
+  const perFrame = samplesPerFrame(sampleRate);
   const overlap = CROSSFADE_FRAMES * perFrame;
   const side = Math.round(sampleRate * SIDE_SECONDS);
   const tailStart = frames - overlap;

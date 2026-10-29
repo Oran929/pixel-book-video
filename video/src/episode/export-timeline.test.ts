@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -209,6 +209,17 @@ describe("exportTimeline", () => {
     });
 
     expect(() => exportTimeline(episode)).toThrow(/早于画面 s02-c01 的开始帧/);
+    expect(existsSync(join(episode, "timeline.json"))).toBe(false);
+  });
+
+  it("rejects a storyboard whose sound effect has no wav file (spec #16 user story 30)", () => {
+    write("storyboard.json", STORYBOARD);
+    // 静态目录里只有 sfx/pop.wav：分镜用到的 drop 缺文件
+    const publicDir = mkdtempSync(join(tmpdir(), "public-"));
+    mkdirSync(join(publicDir, "sfx"));
+    writeFileSync(join(publicDir, "sfx", "pop.wav"), "");
+
+    expect(() => exportTimeline(episode, { publicDir })).toThrow(/音效 drop 的文件 sfx\/drop\.wav 不存在/);
     expect(existsSync(join(episode, "timeline.json"))).toBe(false);
   });
 });

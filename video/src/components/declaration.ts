@@ -95,17 +95,42 @@ export type ComponentDeclaration<
 /** 组件名 → 声明 */
 export type ComponentDeclarations = Readonly<Record<string, ComponentDeclaration>>;
 
+/** 声明里不写时的默认值：退场淡出，不是连线类组件，退场音效 `leave` */
+export const DECLARATION_DEFAULTS = {
+  exit: "fade",
+  connector: false,
+  exitSound: "leave",
+} as const satisfies { exit: GenericAnimation; connector: boolean; exitSound: Sound };
+
+/** 登记时写的声明：`exit`、`connector`、`sounds.exit` 可以不写，用 `DECLARATION_DEFAULTS` */
+export type ComponentDeclarationInput<
+  Props extends z.ZodType,
+  State extends string,
+  Effect extends string,
+> = Omit<ComponentDeclaration<Props, State, Effect>, "exit" | "connector" | "sounds"> &
+  Partial<Pick<ComponentDeclaration<Props, State, Effect>, "exit" | "connector">> & {
+    sounds: Omit<ComponentSounds<State>, "exit"> & { exit?: Sound };
+  };
+
 /**
- * 登记一个组件的声明；`cells` 的参数类型从 `props` 推出，
+ * 登记一个组件的声明，补上没写的默认值；`cells` 的参数类型从 `props` 推出，
  * `sounds.states` 必须为 `states` 里的每个状态都写一项（少写类型检查会报错）
  */
 export const declareComponent = <
   Props extends z.ZodType,
   const State extends string,
   const Effect extends string = never,
->(
-  declaration: ComponentDeclaration<Props, State, Effect>,
-): ComponentDeclaration<Props, State, Effect> => declaration;
+>({
+  exit = DECLARATION_DEFAULTS.exit,
+  connector = DECLARATION_DEFAULTS.connector,
+  sounds: { exit: exitSound = DECLARATION_DEFAULTS.exitSound, ...sounds },
+  ...rest
+}: ComponentDeclarationInput<Props, State, Effect>): ComponentDeclaration<Props, State, Effect> => ({
+  ...rest,
+  exit,
+  connector,
+  sounds: { ...sounds, exit: exitSound },
+});
 
 /**
  * 显示文字的登记表：登记在这里的参数格式，值会显示在画面上，

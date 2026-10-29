@@ -14,11 +14,7 @@ import { Subtitle } from "../components/resident/Subtitle";
 import { COLOR } from "../style/style";
 import { VOLUME } from "../style/volume";
 import { EpisodeMusic } from "../music/EpisodeMusic";
-import { BookendWithAudio } from "../bookend/BookendWithAudio";
-import { INTRO_COMPONENTS } from "../intro/intro-components";
-import { type IntroId, INTROS } from "../intro/intros";
-import { OUTRO_COMPONENTS } from "../outro/outro-components";
-import { type OutroId, OUTROS } from "../outro/outros";
+import { type IntroId, type OutroId, SelectedBookend } from "../bookend/bookends";
 import { type MusicPlan, planEpisode } from "./episode-plan";
 import type { Cue } from "./storyboard";
 import { bodyEndFrame, lineAt, showsResidents, type Timeline } from "./timeline";
@@ -117,20 +113,9 @@ export const Episode: React.FC<EpisodeProps> = ({
     {music ? <EpisodeMusic music={music} /> : null}
     {timeline ? <CurrentSubtitle timeline={timeline} /> : null}
     {/* 片头片尾盖在最上面；它们期间没有字幕和主题，正文在片头结束后开始、片尾开始前结束 */}
-    {intro ? (
-      <BookendWithAudio
-        bookend={INTROS[intro]}
-        component={INTRO_COMPONENTS[intro]}
-        volume={VOLUME.intro}
-      />
-    ) : null}
+    {intro ? <SelectedBookend kind="intro" id={intro} /> : null}
     {outro && timeline ? (
-      <BookendWithAudio
-        bookend={OUTROS[outro]}
-        component={OUTRO_COMPONENTS[outro]}
-        volume={VOLUME.outro}
-        from={bodyEndFrame(timeline)}
-      />
+      <SelectedBookend kind="outro" id={outro} from={bodyEndFrame(timeline)} />
     ) : null}
   </AbsoluteFill>
 );

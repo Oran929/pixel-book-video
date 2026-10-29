@@ -1,12 +1,13 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { writeCredits } from "../music/credits";
 import { CROSSFADE_FRAMES, type MusicPlay, musicPlays } from "../music/crossfade";
 import { MUSIC, trackFrames } from "../music/tracks";
 import { VOLUME_DB } from "../style/volume";
 import { type MusicPlan, planEpisode } from "./episode-plan";
 import { durationReport, segmentsText, type DurationReport } from "./rhythm";
-import type { SoundCue } from "../sound/sounds";
+import { SOUNDS, type SoundCue } from "../sound/sounds";
 import type { Timeline } from "./timeline";
 
 // 期目录里的文件名，与 tools/src/pixelbook/pipeline.py 一致
@@ -26,6 +27,27 @@ export type ExportOptions = {
   storyboard?: boolean;
   /** 写到哪里，默认期目录里的 `timeline.json` */
   out?: string;
+  /** Remotion 的静态目录（核对音效文件在不在），默认 `video/public/` */
+  publicDir?: string;
+};
+
+const PUBLIC_DIR = fileURLToPath(new URL("../../public/", import.meta.url));
+
+/**
+ * 分镜用到的音效，文件都要在静态目录里（spec #16 用户故事 30）：登记过 ID 但缺 wav 时
+ * 在这里就报错，不等到渲染。纯分镜模块不读文件系统，所以放在 Node 一侧的导出里。
+ */
+const checkSoundFiles = (sounds: readonly SoundCue[], publicDir: string) => {
+  const missing = [...new Set(sounds.map(({ sound }) => sound))].filter(
+    (sound) => !existsSync(join(publicDir, SOUNDS[sound])),
+  );
+  if (missing.length > 0) {
+    throw new Error(
+      missing
+        .map((sound) => `音效 ${sound} 的文件 ${SOUNDS[sound]} 不存在：运行 \`npm run sfx\` 生成`)
+        .join("\n"),
+    );
+  }
 };
 
 /**
@@ -64,6 +86,7 @@ export const exportTimeline = (
   {
     storyboard: useStoryboard = true,
     out = join(episodeDir, TIMELINE_FILE),
+    publicDir = PUBLIC_DIR,
   }: ExportOptions = {},
 ): ExportResult => {
   const readJson = (file: string) =>
@@ -75,6 +98,7 @@ export const exportTimeline = (
       ? readJson(STORYBOARD_FILE)
       : null,
   );
+  checkSoundFiles(sounds, publicDir);
   const timeline = {
     ...computed,
     duration: durationReport(computed),

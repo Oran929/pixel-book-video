@@ -23,6 +23,10 @@ import {
 // 不引用 remotion 的文件里，这样时间轴导出命令（Node 里运行）校验分镜时
 // 不用加载 React 组件。组件实现在 registry.ts 里按同样的名字登记。
 
+/** 一张非空表的键，作 `z.enum` 的选项 */
+const keysOf = <Key extends string>(table: Readonly<Record<Key, unknown>>) =>
+  Object.keys(table) as [Key, ...Key[]];
+
 /**
  * 知识块的大小 → 占几格、标签用哪个字号、标签占哪几行。标签只有一行，放不下时报错。
  * 2:1 左右的横长条：ep01 的标签多是 2–6 个字（见 #34 的摆放试验）。
@@ -65,13 +69,9 @@ export const PixelBlockProps = z
     /** 方块上的字，例如 "DRY"；只有一行。显示文字：要出自本画面的画面说明或旁白句 */
     label: displayText(z.string().min(1)),
     /** 大小：决定占几格和标签的字号 */
-    size: z.enum(
-      Object.keys(BLOCK_SIZES) as [BlockSize, ...BlockSize[]],
-    ),
+    size: z.enum(keysOf(BLOCK_SIZES)),
     /** 颜色：风格表 `BLOCK_COLORS` 里的名字 */
-    color: z.enum(
-      Object.keys(BLOCK_COLORS) as [BlockColor, ...BlockColor[]],
-    ),
+    color: z.enum(keysOf(BLOCK_COLORS)),
   })
   .superRefine(({ label, size }, ctx) => {
     const width = textWidth(label, FONT_SIZE[BLOCK_SIZES[size].font]);
@@ -121,7 +121,7 @@ export const mascotCells = (): readonly [number, number] => {
 export const MASCOT_STATES = ["normal", "question", "exclaim"] as const;
 export type MascotState = (typeof MASCOT_STATES)[number];
 
-const MASCOT_NAMES = Object.keys(MASCOTS) as [MascotName, ...MascotName[]];
+const MASCOT_NAMES = keysOf(MASCOTS);
 
 /** 一群小人的排法：`row` 并排一排，`crowd` 挤成前后两排的一群 */
 export const MASCOT_FORMATIONS = ["row", "crowd"] as const;
@@ -516,12 +516,9 @@ export const COMPONENT_DECLARATIONS = {
       return { at: [0, labelRows[0]], cells: [cells[0], labelRows[1]] };
     },
     enter: "slide",
-    exit: "fade",
-    connector: false,
     // 落下一声；被点到轻点一声，被改动嗡一声，切回正常也轻点一声
     sounds: {
       enter: "drop",
-      exit: "leave",
       states: { normal: "blip", highlight: "blip", changed: "buzz" },
     },
   }),
@@ -530,12 +527,9 @@ export const COMPONENT_DECLARATIONS = {
     states: MASCOT_STATES,
     cells: (props) => mascotGroup(props).cells,
     enter: "fade",
-    exit: "fade",
-    connector: false,
     // 出现时弹一声；冒问号轻点一声，冒感叹号叮一声，符号消失（切回正常）不放音效
     sounds: {
       enter: "pop",
-      exit: "leave",
       states: { normal: null, question: "blip", exclaim: "ding" },
     },
   }),
@@ -545,12 +539,10 @@ export const COMPONENT_DECLARATIONS = {
     // 连线类组件不按格子摆放，不占格
     cells: () => [0, 0],
     enter: "fade",
-    exit: "fade",
     connector: true,
     // 出现时弹一声；高亮、切回正常都轻点一声
     sounds: {
       enter: "pop",
-      exit: "leave",
       states: { normal: "blip", highlight: "blip" },
     },
   }),
@@ -563,9 +555,7 @@ export const COMPONENT_DECLARATIONS = {
     // 亮起：闪两下再亮住；退场写 `light` 时倒着播，即熄灭
     effects: { light: MOTION.hintLightSeconds },
     enter: "light",
-    exit: "fade",
-    connector: false,
-    sounds: { enter: "ding", exit: "leave", states: { normal: null } },
+    sounds: { enter: "ding", states: { normal: null } },
   }),
   Computer: declareComponent({
     props: ComputerProps,
@@ -574,10 +564,8 @@ export const COMPONENT_DECLARATIONS = {
     // 上面三行格是屏幕和屏幕上的字，子组件只能嵌在底座那一行
     labelArea: () => ({ at: [0, 0], cells: [COMPUTER_CELLS[0], COMPUTER_CELLS[1] - 1] }),
     enter: "fade",
-    exit: "fade",
-    connector: false,
     // 出现时弹一声，崩溃时爆一声，重启回正常时轻点一声
-    sounds: { enter: "pop", exit: "leave", states: { normal: "blip", crashed: "crash" } },
+    sounds: { enter: "pop", states: { normal: "blip", crashed: "crash" } },
   }),
   Fork: declareComponent({
     props: ForkProps,
@@ -589,12 +577,9 @@ export const COMPONENT_DECLARATIONS = {
     availableStates: ({ roads }) =>
       FORK_STATES.filter((state) => (forkRoadOf(state)?.road ?? 0) <= roads),
     enter: "fade",
-    exit: "fade",
-    connector: false,
     // 出现时弹一声；标出一条路轻点一声，路障落下一声，撤掉路障（切回正常）轻点一声
     sounds: {
       enter: "pop",
-      exit: "leave",
       states: Object.fromEntries(
         FORK_STATES.map((state) => [
           state,
@@ -612,12 +597,9 @@ export const COMPONENT_DECLARATIONS = {
     availableStates: ({ nodes }) =>
       TIMELINE_STATES.filter((state) => timelineLitOf(state) <= nodes.length),
     enter: "fade",
-    exit: "fade",
-    connector: false,
     // 出现时弹一声，点亮时叮一声；全部熄灭（切回正常）不放音效
     sounds: {
       enter: "pop",
-      exit: "leave",
       states: Object.fromEntries(
         TIMELINE_STATES.map((state) => [state, state === "normal" ? null : "ding"]),
       ) as Record<TimelineState, "ding" | null>,
