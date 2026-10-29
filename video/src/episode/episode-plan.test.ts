@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { declareComponent } from "../components/declaration";
+import { declareComponent, declareConnector } from "../components/declaration";
 import { planEpisode as planWithBookends } from "./episode-plan";
 import { withEveryScene } from "./fixtures/every-scene";
 import { lineAt, showsResidents } from "./timeline";
@@ -821,13 +821,11 @@ describe("planEpisode: music", () => {
 // 假的组件声明：Box 按格子摆放，Link 是连线类组件（箭头），按 `from`、`to` 指向两端
 const LINKED = {
   ...BOXES,
-  Link: declareComponent({
+  Link: declareConnector({
     props: z.strictObject({}),
     states: ["normal"],
-    cells: () => [0, 0],
     enter: "fade",
     exit: "fade",
-    connector: true,
     sounds: { enter: null, exit: null, states: { normal: null } },
   }),
 };

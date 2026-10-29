@@ -3,7 +3,7 @@
 import type { Rect } from "../style/grid";
 import { COLOR, MOTION, SIZE, snapToGrid } from "../style/style";
 import { VIDEO } from "../video-config";
-import { forkRoadOf } from "./declarations";
+import { forkRoadOf } from "./fork-declaration";
 import type { Stage } from "./stage";
 
 /** 一条路这一帧的样子 */

@@ -14,6 +14,10 @@ import { MOTION } from "../style/style";
 export const ANIMATIONS = ["fade", "slide", "none"] as const;
 export type GenericAnimation = (typeof ANIMATIONS)[number];
 
+/** 一张非空表的键，作 `z.enum` 的选项 */
+export const keysOf = <Key extends string>(table: Readonly<Record<Key, unknown>>) =>
+  Object.keys(table) as [Key, ...Key[]];
+
 /** 入场或退场的动画名：通用动画，或组件自己登记的特殊效果名 */
 export type Animation = string;
 
@@ -55,7 +59,8 @@ export type ComponentSounds<State extends string = string> = {
   states: Record<State, Sound>;
 };
 
-export type ComponentDeclaration<
+/** 两种组件声明共有的部分 */
+type DeclarationBase<
   Props extends z.ZodType = z.ZodType,
   State extends string = string,
   Effect extends string = string,
@@ -64,8 +69,6 @@ export type ComponentDeclaration<
   props: Props;
   /** 状态清单，第一个是初始状态 */
   states: readonly [State, ...State[]];
-  /** 按参数算出占几格 */
-  cells(props: z.infer<Props>): Cells;
   /**
    * 组件自己的入场、退场特殊效果：效果名 → 播多少秒。分镜的 `animation` 可以写这些名字，
    * 退场动画是否在画面结束前播完也按这里的时长算。不写表示只有通用动画。
@@ -75,15 +78,8 @@ export type ComponentDeclaration<
   enter: GenericAnimation | NoInfer<Effect>;
   /** 分镜的退场触发不写 `animation` 时用的动画：通用动画或自己的特殊效果 */
   exit: GenericAnimation | NoInfer<Effect>;
-  /** 连线类组件（箭头）：不按格子摆放，按组件 id 指向两端 */
-  connector: boolean;
   /** 默认音效；分镜的触发可以用 `sound` 关掉或替换 */
   sounds: ComponentSounds<State>;
-  /**
-   * 标签占的格（相对组件自己的左上角）：嵌在里面的子组件不能压住这些格。
-   * 不写表示没有要让开的字，子组件可以放在任何格子里。
-   */
-  labelArea?(props: z.infer<Props>): { at: Cells; cells: Cells };
   /**
    * 这组参数下能用的状态（`states` 的子集，要包含初始状态）：状态和参数有关时写，
    * 比如岔路只有 3 条路时不能用 `block-4`。分镜切到不在其中的状态时报错。
@@ -92,28 +88,60 @@ export type ComponentDeclaration<
   availableStates?(props: z.infer<Props>): readonly NoInfer<State>[];
 };
 
+/** 按格子摆放的组件：分镜写 `at`（可以写 `parent`），占几格按参数算 */
+export type PlacedDeclaration<
+  Props extends z.ZodType = z.ZodType,
+  State extends string = string,
+  Effect extends string = string,
+> = DeclarationBase<Props, State, Effect> & {
+  connector: false;
+  /** 按参数算出占几格 */
+  cells(props: z.infer<Props>): Cells;
+  /**
+   * 标签占的格（相对组件自己的左上角）：嵌在里面的子组件不能压住这些格。
+   * 不写表示没有要让开的字，子组件可以放在任何格子里。
+   */
+  labelArea?(props: z.infer<Props>): { at: Cells; cells: Cells };
+};
+
+/** 连线类组件（箭头）：不按格子摆放、不占格，分镜写 `from`、`to` 指向两端的组件 id */
+export type ConnectorDeclaration<
+  Props extends z.ZodType = z.ZodType,
+  State extends string = string,
+  Effect extends string = string,
+> = DeclarationBase<Props, State, Effect> & { connector: true };
+
+export type ComponentDeclaration<
+  Props extends z.ZodType = z.ZodType,
+  State extends string = string,
+  Effect extends string = string,
+> = PlacedDeclaration<Props, State, Effect> | ConnectorDeclaration<Props, State, Effect>;
+
 /** 组件名 → 声明 */
 export type ComponentDeclarations = Readonly<Record<string, ComponentDeclaration>>;
 
-/** 声明里不写时的默认值：退场淡出，不是连线类组件，退场音效 `leave` */
+/** 是不是连线类组件；不在注册表里的组件（`undefined`）不算 */
+export const isConnector = (
+  declaration: ComponentDeclaration | undefined,
+): declaration is ConnectorDeclaration => declaration?.connector === true;
+
+/** 声明里不写时的默认值：退场淡出，退场音效 `leave` */
 export const DECLARATION_DEFAULTS = {
   exit: "fade",
-  connector: false,
   exitSound: "leave",
-} as const satisfies { exit: GenericAnimation; connector: boolean; exitSound: Sound };
+} as const satisfies { exit: GenericAnimation; exitSound: Sound };
 
-/** 登记时写的声明：`exit`、`connector`、`sounds.exit` 可以不写，用 `DECLARATION_DEFAULTS` */
-export type ComponentDeclarationInput<
-  Props extends z.ZodType,
-  State extends string,
-  Effect extends string,
-> = Omit<ComponentDeclaration<Props, State, Effect>, "exit" | "connector" | "sounds"> &
-  Partial<Pick<ComponentDeclaration<Props, State, Effect>, "exit" | "connector">> & {
+/** 登记时写的声明：`connector` 由登记函数补上，`exit`、`sounds.exit` 可以不写，用 `DECLARATION_DEFAULTS` */
+type DeclarationInput<Declaration extends DeclarationBase<z.ZodType, State>, State extends string> = Omit<
+  Declaration,
+  "exit" | "connector" | "sounds"
+> &
+  Partial<Pick<Declaration, "exit">> & {
     sounds: Omit<ComponentSounds<State>, "exit"> & { exit?: Sound };
   };
 
 /**
- * 登记一个组件的声明，补上没写的默认值；`cells` 的参数类型从 `props` 推出，
+ * 登记一个按格子摆放的组件，补上没写的默认值；`cells` 的参数类型从 `props` 推出，
  * `sounds.states` 必须为 `states` 里的每个状态都写一项（少写类型检查会报错）
  */
 export const declareComponent = <
@@ -122,13 +150,34 @@ export const declareComponent = <
   const Effect extends string = never,
 >({
   exit = DECLARATION_DEFAULTS.exit,
-  connector = DECLARATION_DEFAULTS.connector,
   sounds: { exit: exitSound = DECLARATION_DEFAULTS.exitSound, ...sounds },
   ...rest
-}: ComponentDeclarationInput<Props, State, Effect>): ComponentDeclaration<Props, State, Effect> => ({
+}: DeclarationInput<PlacedDeclaration<Props, State, Effect>, State> & {
+  connector?: false;
+}): PlacedDeclaration<Props, State, Effect> => ({
   ...rest,
   exit,
-  connector,
+  connector: false,
+  sounds: { ...sounds, exit: exitSound },
+});
+
+/** 登记一个连线类组件，补上没写的默认值；其余同 `declareComponent` */
+export const declareConnector = <
+  Props extends z.ZodType,
+  const State extends string,
+  const Effect extends string = never,
+>({
+  exit = DECLARATION_DEFAULTS.exit,
+  sounds: { exit: exitSound = DECLARATION_DEFAULTS.exitSound, ...sounds },
+  ...rest
+}: DeclarationInput<ConnectorDeclaration<Props, State, Effect>, State>): ConnectorDeclaration<
+  Props,
+  State,
+  Effect
+> => ({
+  ...rest,
+  exit,
+  connector: true,
   sounds: { ...sounds, exit: exitSound },
 });
 

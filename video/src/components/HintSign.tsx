@@ -1,7 +1,7 @@
 import { AbsoluteFill } from "remotion";
 import type { z } from "zod";
 import { border, COLOR, hardShadow, pixelText, SIZE } from "../style/style";
-import { HINT_FONT, type HintSignProps } from "./declarations";
+import { HINT_FONT, type HintSignProps } from "./hint-declaration";
 import { hintLight, lightProgress } from "./hint-look";
 import type { RenderProps } from "./stage";
 

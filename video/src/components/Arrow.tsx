@@ -3,7 +3,7 @@ import type { z } from "zod";
 import { COLOR, SIZE } from "../style/style";
 import { VIDEO } from "../video-config";
 import { arrowLine, arrowShape } from "./arrow-geometry";
-import type { ArrowProps, ArrowState } from "./declarations";
+import type { ArrowProps, ArrowState } from "./arrow-declaration";
 import type { RenderProps } from "./stage";
 
 // 各状态的箭杆颜色；高亮时黄色的芯外面包一圈深色描边，在纸色底上也看得清
