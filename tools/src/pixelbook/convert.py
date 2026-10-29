@@ -1,14 +1,16 @@
-"""把书的 EPUB 机械地转成每章一份带段落编号的 Markdown（ADR-0007）。
+"""把书的 EPUB 机械地转成每章一份带段落编号的 Markdown（ADR-0007），以及读回转换结果。
 
 直接解析 EPUB 里的 XHTML，按 spine 顺序读，不调用 pandoc，也不经过模型。
+大纲和旁白稿的出处检查用 `read_chapter` 读转换结果，写出格式和读取规则都在这里。
 """
 
 import posixpath
 import re
 import zipfile
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 from xml.etree import ElementTree as ET
 
 SOURCE_NAME = "source.epub"
@@ -40,6 +42,13 @@ SUPERSCRIPT = {"superscript", "superscript1"}
 FIGURE_TITLE = "picture_figure_title"
 # 引文段落在编号后面加 `>`
 QUOTE = ">"
+# 图片段的占位符 `[图 images/00005.jpeg]`，有图题时后面还跟着图题文字
+IMAGE = "[图 "
+# 段落编号 `chNN-¶NNN`；编号段落一行一个，编号后面空一格接文字
+PARAGRAPH_ID = re.compile(r"^ch\d{2}-¶\d{3}$")
+PARAGRAPH_LINE = re.compile(r"^(ch\d{2}-¶\d{3}) (.*)$")
+# 单元标题 `## 9　DRY——邪恶的重复`（单元号和名字之间是全角空格）
+UNIT_LINE = re.compile(r"^## (\d+)　(.*)$")
 QUOTE_CLASSES = {
     "content_reference",
     "content_reference_left",
@@ -76,6 +85,77 @@ def convert_book(book_dir: Path) -> list[Path]:
         path.write_bytes(text.encode())
         written.append(path)
     return written
+
+
+def chapter_file(book_dir: Path, number: int) -> Path:
+    """第 `number` 章的转换结果 `book_dir/chapters/chNN.md`。"""
+    return book_dir / CHAPTERS_DIR / f"ch{number:02d}.md"
+
+
+def paragraph_id(chapter: int, number: int) -> str:
+    return f"ch{chapter:02d}-¶{number:03d}"
+
+
+@dataclass(frozen=True)
+class Paragraph:
+    """转换结果里的一个编号段落。"""
+
+    id: str
+    # 编号后面的文字：引文以 `> ` 开头，图片段以占位符开头
+    text: str
+    # 所在单元的单元号；章首导语和章末脚注不属于任何单元
+    unit: int | None
+
+    @property
+    def is_image(self) -> bool:
+        return self.text.startswith(IMAGE)
+
+
+@dataclass(frozen=True)
+class Unit:
+    number: int
+    name: str
+    # 单元覆盖的段落编号，按原文顺序：从单元标题到下一个 `##` 标题或章末分隔线
+    paragraphs: list[str]
+
+
+@dataclass(frozen=True)
+class Chapter:
+    """读回的一章转换结果。"""
+
+    # 段落编号 → 段落，按原文顺序
+    paragraphs: dict[str, Paragraph] = field(default_factory=dict)
+    # 单元号 → 单元，按原文顺序
+    units: dict[int, Unit] = field(default_factory=dict)
+
+
+def read_chapter(path: Path) -> Chapter:
+    """读 `pixelbook convert` 写出的 `chNN.md`：编号段落和单元。"""
+    chapter = Chapter()
+    unit: Unit | None = None
+    for line in path.read_text().splitlines():
+        if match := UNIT_LINE.match(line):
+            unit = Unit(int(match[1]), match[2], [])
+            chapter.units[unit.number] = unit
+        elif line.startswith("## ") or line == RULE:
+            unit = None
+        elif match := PARAGRAPH_LINE.match(line):
+            number = unit.number if unit else None
+            chapter.paragraphs[match[1]] = Paragraph(match[1], match[2], number)
+            if unit:
+                unit.paragraphs.append(match[1])
+    return chapter
+
+
+def parse_cite(value: Any) -> list[str] | None:
+    """出处的写法：一个段落编号，或段落编号的非空列表（不支持范围）。
+
+    写法对时返回编号列表，不对时返回 None。大纲和旁白稿的 `cite` 写法相同。
+    """
+    ids = value if isinstance(value, list) and value else [value]
+    if all(isinstance(i, str) and PARAGRAPH_ID.match(i) for i in ids):
+        return ids
+    return None
 
 
 def _chapters(epub: zipfile.ZipFile) -> list[_Chapter]:
@@ -147,7 +227,7 @@ def _chapter_markdown(epub: zipfile.ZipFile, chapter: _Chapter) -> str:
     for kind, text in blocks:
         if kind == PARAGRAPH:
             count += 1
-            lines.append(f"ch{chapter.number:02d}-¶{count:03d} {text}")
+            lines.append(f"{paragraph_id(chapter.number, count)} {text}")
         else:
             lines.append(f"{kind} {text}".rstrip())
     return "\n\n".join(lines) + "\n"
@@ -216,7 +296,7 @@ class _Images:
 
     def placeholder(self, img: ET.Element) -> str:
         path = _join(posixpath.dirname(self.name), img.get("src", ""))
-        return f"[图 {posixpath.relpath(path, self.root or '.')}]"
+        return f"{IMAGE}{posixpath.relpath(path, self.root or '.')}]"
 
 
 def _figure(el: ET.Element, images: _Images) -> str | None:

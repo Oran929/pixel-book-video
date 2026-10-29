@@ -8,7 +8,7 @@
 pronunciation.yaml   读音表（全频道共用）
 voice.yaml           项目默认音色配置（由 `pixelbook choose-voice` 写入）
 voices/              音色试听方案（audition*.yaml）、选定的参考音频、备用音色配置（如 yujie.yaml）
-books/<书>/          书配置、原书（不提交）、转换出的章（不提交）、锁定音色、配音缓存；书 → 章 → 期
+books/<书>/          书配置、原书（不提交）、转换出的章（不提交）、锁定音色、配音缓存；书 → 章（大纲）→ 期
 tools/               Python 工具（uv 管理）：旁白稿 → 配音 → 合成清单
 video/               Remotion 项目（npm 管理）：合成清单 + 分镜 → MP4
 character/           频道形象设定图原图（Q.png、M.png）和裁图脚本
@@ -71,6 +71,54 @@ uv run pixelbook convert ../books/pragmatic-programmer   # 写出 books/pragmati
 - **脚注**：正文里的脚注标记保留成文字（如 `OpenAPI[5]`）；脚注按出现顺序追加在章末的分隔线 `---` 之后，和正文连续编号（`ch02-¶402 [5]网址参见……`）。
 - **文字**：加粗、斜体只保留文字，上标前面加 `^`（`C^n`），连续空白合并成一个空格。
 - **报错**：遇到规则覆盖不到的元素（如表格、不认识的 `div`、夹在文字里的图片）就停下，写明文件和元素，不静默丢弃。这时先在 `tools/src/pixelbook/convert.py` 里补上规则。
+
+## 大纲
+
+一章一份大纲 `books/<书>/chNN/outline.yaml`（提交），章目录名和转换结果 `chapters/chNN.md` 同名。大纲写这一章拆成哪几期、每期讲什么、带出处的核心观点，审过之后才写旁白稿。
+
+```yaml
+chapter: 2                       # 章号，必须和章目录 chNN 一致
+episodes:
+  - id: ep01                     # 期 ID，ep01 起，两位数补零；也是期目录名
+    topic: 优秀设计与 DRY         # 主题：概括这一期覆盖的单元，显示在画面左上角；旁白稿的 title 必须等于它
+    units:                       # 覆盖的单元，按单元号写
+      - 8
+      - unit: 9                  # 长单元拆成两期时，写明这一期覆盖的段落范围（含两端）
+        from: ch02-¶034
+        to: ch02-¶060
+    segments:                    # 段：4–6 段，每段的标题和预计分钟数
+      - title: 开场
+        minutes: 0.5
+      - title: ETC
+        minutes: 1.5
+      # ……
+    points:                      # 核心观点
+      - id: p01                  # 观点 ID，整份大纲里唯一；旁白稿画面的 points 引用它
+        text: 好的设计比坏的设计更容易变更
+        cite: ch02-¶012          # 出处：一个段落编号，或编号列表（[ch02-¶040, ch02-¶041]），不支持范围
+```
+
+- **`units`**：单元号是原书的单元编号（转换结果里的 `## 9　DRY——邪恶的重复`），一个单元覆盖它的标题到下一个单元标题（或章末的 `---`）之间的编号段落。写 `{unit, from, to}` 时 `from`、`to` 都必须是这个单元里的段落，且 `from` 不在 `to` 后面。
+- **`minutes`**：正数，可以是小数（`1.5` 是 1 分 30 秒）。
+- **`cite`**：写法和旁白稿相同。
+
+检查（只检查，不生成任何东西）：
+
+```sh
+cd tools
+uv run pixelbook outline ../books/pragmatic-programmer/ch02/outline.yaml
+```
+
+通过时退出码 0，否则 1。先查格式（缺字段、多出不认识的字段、类型不对、期 ID 不是 `epNN`、`cite` 写成范围），格式错时报第一处；格式对了再一次列出下面所有问题，每条指出哪一期、哪个字段：
+
+- `chapter` 和章目录不一致；
+- 期 ID 重复，同一期里段标题重复，观点 ID 在整份大纲里重复；
+- 一期的段数不在 4–6 内；
+- 一期各段 `minutes` 的总和不在 4:00–6:00 内（含两端）；
+- `units` 里的单元在转换结果里没有，或段落范围不在这个单元里、首尾颠倒；
+- `cite` 里的编号在这一章的转换结果里不存在。
+
+转换结果不存在时先跑 `pixelbook convert`。
 
 ## 从旁白稿到 MP4
 

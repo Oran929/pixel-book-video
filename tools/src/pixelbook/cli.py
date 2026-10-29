@@ -10,6 +10,7 @@ from pixelbook.audition import AuditionError, choose_voice, run_audition
 from pixelbook.convert import CHAPTERS_DIR, ConvertError, convert_book
 from pixelbook.episode_path import EpisodePath, EpisodePathError
 from pixelbook.mix import MixError, mix_timeline
+from pixelbook.outline import OutlineError, check_outline
 from pixelbook.pipeline import (
     MANIFEST_NAME,
     REPORT_NAME,
@@ -205,6 +206,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     convert.add_argument("book", type=Path, help="books/<书>/")
 
+    outline = commands.add_parser(
+        "outline",
+        help="检查一章的大纲：格式、ID 唯一、段数、时长、出处（只检查，不生成）",
+    )
+    outline.add_argument("outline", type=Path, help="books/<书>/chNN/outline.yaml")
+
     args = parser.parse_args(argv)
     try:
         if args.command == "audition":
@@ -220,6 +227,10 @@ def main(argv: list[str] | None = None) -> int:
             written = convert_book(book)
             names = "、".join(path.stem for path in written)
             print(f"{len(written)} 章（{names}），写到 {book / CHAPTERS_DIR}")
+        elif args.command == "outline":
+            checked = check_outline(args.outline.resolve())
+            ids = "、".join(episode.id for episode in checked.episodes)
+            print(f"大纲检查通过：{len(checked.episodes)} 期（{ids}）")
         elif args.command == "render":
             return _render(args.script.resolve(), args.out, args.revoice)
         elif args.command == "voice":
@@ -280,6 +291,7 @@ def main(argv: list[str] | None = None) -> int:
         ConvertError,
         EpisodePathError,
         MixError,
+        OutlineError,
         ScriptError,
         PipelineError,
         PronunciationError,
