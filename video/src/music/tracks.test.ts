@@ -1,8 +1,14 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { missingMusicFiles, missingMusicNote } from "./local-files";
 import { defineMusicLibrary, MUSIC, MUSIC_DIR, samplesPerFrame } from "./tracks";
 
 const PUBLIC = new URL("../../public/", import.meta.url);
+
+// 曲子文件只留在本机（#53）：CI 上没有，缺的那几首跳过读文件的检查，打印一行说明
+// （写 stderr：vitest 不显示测试文件顶层的 console.log）
+const MISSING: string[] = missingMusicFiles(PUBLIC);
+if (MISSING.length > 0) process.stderr.write(`${missingMusicNote(MISSING)}\n`);
 
 /**
  * 读 OGG/Vorbis 文件：逐页走过去，采样率和声道数取自第一页的 Vorbis 标识头，
@@ -98,16 +104,12 @@ describe.each(Object.entries(MUSIC))("配乐 %s", (id, track) => {
     expect(track.file).toBe(`${MUSIC_DIR}/${id}.ogg`);
   });
 
-  it("文件存在", () => {
-    expect(existsSync(file)).toBe(true);
-  });
-
   it("记了核对日期和作品页", () => {
     expect(track.checkedOn).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(track.source).toMatch(/^https:\/\/opengameart\.org\/content\//);
   });
 
-  it("文件是 OGG/Vorbis，采样率和采样数与登记表一致，采样数是一帧采样数的整数倍", () => {
+  it.skipIf(MISSING.includes(id))("文件是 OGG/Vorbis，采样率和采样数与登记表一致，采样数是一帧采样数的整数倍", () => {
     const ogg = readOggVorbis(file);
     expect(ogg.codec).toBe("\u0001vorbis");
     expect(ogg.sampleRate).toBe(track.sampleRate);
@@ -117,8 +119,8 @@ describe.each(Object.entries(MUSIC))("配乐 %s", (id, track) => {
 });
 
 describe("配乐目录", () => {
-  it("没有没登记的文件", () => {
-    const registered = Object.values(MUSIC).map((track) => track.file.slice(MUSIC_DIR.length + 1));
+  it("除了获取说明 README.md，没有没登记的文件", () => {
+    const registered = ["README.md", ...Object.values(MUSIC).map((track) => track.file.slice(MUSIC_DIR.length + 1))];
     expect(readdirSync(new URL(`${MUSIC_DIR}/`, PUBLIC)).filter((name) => !registered.includes(name))).toEqual([]);
   });
 

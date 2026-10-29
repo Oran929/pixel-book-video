@@ -2,10 +2,18 @@
 // 把曲尾和曲首重叠 1 秒交叉淡化（measureCrossfade），打印一张 Markdown 表（可以直接贴进评论）。
 // 有曲子掉音或爆音时以非零码退出。只在本机运行，要 ffmpeg。
 import { decode } from "./ffmpeg";
+import { MUSIC_README, missingMusicFiles } from "./local-files";
 import { measureCrossfade } from "./seam";
 import { MUSIC } from "./tracks";
 
 const PUBLIC = new URL("../../public/", import.meta.url);
+
+// 曲子文件只留在本机（#53）：缺文件时报错，不静默跳过
+const missing = missingMusicFiles(PUBLIC);
+if (missing.length > 0) {
+  console.error(`本机缺配乐文件 ${missing.join("、")}，获取方法见 ${MUSIC_README}`);
+  process.exit(1);
+}
 
 const rows = [
   "| 曲子 | 重叠前 1 秒 / 重叠处 / 重叠后 1 秒（dBFS） | 重叠里的曲尾 / 曲首比整首轻（dB） | 结果 |",

@@ -119,6 +119,52 @@ def test_invalid_storyboard_stops_at_the_timeline_step(tmp_path, script_path):
     assert not (tmp_path / "out.mp4").exists()
 
 
+def write_good_storyboard(episode_dir):
+    scenes = [
+        {
+            "scene": scene,
+            "components": [
+                {
+                    "id": scene,
+                    "component": "PixelBlock",
+                    # 显示文字要出自画面说明或旁白句
+                    "props": {"label": label, "size": "small", "color": "orange"},
+                    "at": [0, 0],
+                }
+            ],
+            "triggers": [
+                {
+                    "target": scene,
+                    "line": line,
+                    "offset": 0,
+                    "action": "enter",
+                    "animation": "none",
+                }
+            ],
+        }
+        for scene, line, label in (
+            ("s01-c01", "s01-l01", "封面"),
+            ("s02-c01", "s02-l01", "方块"),
+        )
+    ]
+    (episode_dir / "storyboard.json").write_text(
+        json.dumps({"scenes": scenes, "music": "forgotten-path", "pauses": []})
+    )
+
+
+def test_missing_music_file_stops_before_rendering(tmp_path, script_path):
+    # 曲子文件只留在本机（#53）：静态目录里没有分镜选的那首，在渲染一步停下并指向获取说明
+    write_good_storyboard(script_path.parent)
+
+    with pytest.raises(RenderError) as error:
+        render(script_path, tmp_path)
+
+    assert error.value.step == "渲染"
+    assert "music/forgotten-path.ogg" in str(error.value)
+    assert "video/public/music/README.md" in str(error.value)
+    assert not (tmp_path / "out.mp4").exists()
+
+
 def make_mp4(path, frames, fps=30):
     subprocess.run(
         [

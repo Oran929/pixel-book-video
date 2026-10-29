@@ -39,3 +39,6 @@ video/public/episode/
 !video/public/outro/*.wav
 # 片尾的配音是用户录好的，音轨脚本读它们
 !video/src/outro/*/voice/*.wav
+# 配乐文件只留在本机，不进 Git（spec #16 修订四，#53）；获取方法见目录里的 README.md
+video/public/music/*
+!video/public/music/README.md

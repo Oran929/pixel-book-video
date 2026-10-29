@@ -20,6 +20,8 @@ from pixelbook.voice import VoiceConfigError
 VIDEO_DIR = REPO_ROOT / "video"
 TIMELINE_NAME = "timeline.json"
 SEGMENTS_NAME = "segments.txt"
+# 曲子文件的获取方法（曲子文件只留在本机，#53）
+MUSIC_README = "video/public/music/README.md"
 STEPS = ("配音", "时间轴", "渲染", "核对时长")
 # 失败时最多附上命令输出的最后几行
 OUTPUT_TAIL = 30
@@ -71,6 +73,7 @@ def render_episode(
     timeline = json.loads(timeline_path.read_text())
 
     log(_progress("渲染"))
+    _require_music_file(timeline, settings.public_dir)
     out.parent.mkdir(parents=True, exist_ok=True)
     _run(
         "渲染",
@@ -91,6 +94,19 @@ def render_episode(
         "asr_failures": report.asr_failures,
         "asr_pinyin_passes": report.asr_pinyin_passes,
     }
+
+
+def _require_music_file(timeline: dict[str, Any], public_dir: Path) -> None:
+    """曲子文件只留在本机、不进 Git（#53）：分镜选的那首不在静态目录里时，
+    在渲染前停下并指向获取说明，不让 Remotion 报一串看不懂的错。"""
+    music = timeline.get("music")
+    if music is None or (public_dir / music["file"]).is_file():
+        return
+    raise RenderError(
+        "渲染",
+        f"配乐文件 {music['file']} 不在 {public_dir} 里（曲子文件不进 Git），"
+        f"获取方法见 {MUSIC_README}",
+    )
 
 
 def render_music_stem(out: Path, public_dir: Path) -> None:
