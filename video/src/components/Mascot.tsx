@@ -2,7 +2,7 @@ import { AbsoluteFill, Img, staticFile } from "remotion";
 import type { z } from "zod";
 import type { Rect } from "../style/grid";
 import { COLOR, MASCOTS } from "../style/style";
-import type { MascotProps } from "./declarations";
+import type { MascotProps } from "./mascot-declaration";
 import { type MascotSymbol, mascotPlacement, symbolDots, symbolLook } from "./mascot-look";
 import type { RenderProps } from "./stage";
 

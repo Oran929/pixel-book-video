@@ -2,7 +2,7 @@ import { AbsoluteFill } from "remotion";
 import type { z } from "zod";
 import type { Rect } from "../style/grid";
 import { border, COLOR, hardShadow, pixelText, SIZE, snapToGrid } from "../style/style";
-import { FORK_FONT, type ForkProps, forkLayout } from "./declarations";
+import { FORK_FONT, type ForkProps, forkLayout } from "./fork-declaration";
 import { barrierStripes, dashes, forkLook, grow, roadDashes, shift } from "./fork-look";
 import type { RenderProps } from "./stage";
 

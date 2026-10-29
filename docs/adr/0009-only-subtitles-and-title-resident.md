@@ -6,7 +6,7 @@
 
 ## Consequences
 
-- 加新的画面元素时，默认做成通用组件（参数格式等声明登记在 `video/src/components/declarations.ts`，#33 之前叫 `schemas.ts`），由分镜触发，不加进常驻的画面层。
+- 加新的画面元素时，默认做成通用组件（参数格式等声明登记在 `video/src/components/declarations.ts`，#33 之前叫 `schemas.ts`；#54 起每个组件的声明在自己的 `*-declaration.ts`，`declarations.ts` 只汇总），由分镜触发，不加进常驻的画面层。
 - 常驻的只剩字幕和左上角小标题，它们是**常驻组件**（代码在 `video/src/components/resident/`，Episode 直接放置，不进组件注册表）；"外壳"一词已作废，见下面的修订。
 
 ## 修订（2026-10-29）：「外壳」作废，字幕和主题改成常驻组件
