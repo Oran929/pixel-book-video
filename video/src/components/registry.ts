@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import type { RenderProps } from "./stage";
+import { Arrow } from "./Arrow";
 import { Mascot } from "./Mascot";
 import { PixelBlock } from "./PixelBlock";
 import { COMPONENT_DECLARATIONS } from "./declarations";
@@ -14,11 +15,12 @@ const COMPONENTS: {
 } = {
   PixelBlock,
   Mascot,
+  Arrow,
 };
 
 /**
  * 分镜里的组件名对应的实现；参数已由 `parseStoryboard` 按 declarations.ts 校验。
- * 组件拿到 `{ props, stage }`（`RenderProps`，见 stage.ts）。
+ * 组件拿到 `{ props, stage, ends }`（`RenderProps`，见 stage.ts）。
  */
 export const componentNamed = (
   name: string,

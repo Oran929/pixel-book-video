@@ -223,6 +223,27 @@
             1,
             4
           ]
+        },
+        {
+          "id": "decouple-etc",
+          "component": "Arrow",
+          "props": {},
+          "from": "decouple",
+          "to": "etc"
+        },
+        {
+          "id": "single-etc",
+          "component": "Arrow",
+          "props": {},
+          "from": "single",
+          "to": "etc"
+        },
+        {
+          "id": "naming-etc",
+          "component": "Arrow",
+          "props": {},
+          "from": "naming",
+          "to": "etc"
         }
       ],
       "triggers": [
@@ -248,6 +269,24 @@
           "target": "naming",
           "line": "s01-l14",
           "offset": 0,
+          "action": "enter"
+        },
+        {
+          "target": "decouple-etc",
+          "line": "s01-l11",
+          "offset": 0.6,
+          "action": "enter"
+        },
+        {
+          "target": "single-etc",
+          "line": "s01-l12",
+          "offset": 0.6,
+          "action": "enter"
+        },
+        {
+          "target": "naming-etc",
+          "line": "s01-l14",
+          "offset": 0.6,
           "action": "enter"
         }
       ]
@@ -1123,16 +1162,16 @@
       "scene": "s05-c04",
       "components": [
         {
-          "id": "copy",
+          "id": "copy-alone",
           "component": "PixelBlock",
           "props": {
             "label": "复制粘贴源码",
             "size": "small",
-            "color": "orange"
+            "color": "cream"
           },
           "at": [
             4,
-            4
+            1
           ]
         },
         {
@@ -1147,20 +1186,49 @@
             4,
             1
           ]
+        },
+        {
+          "id": "copy",
+          "component": "PixelBlock",
+          "props": {
+            "label": "复制粘贴源码",
+            "size": "small",
+            "color": "cream"
+          },
+          "at": [
+            4,
+            1
+          ],
+          "parent": "intent"
         }
       ],
       "triggers": [
         {
-          "target": "copy",
+          "target": "copy-alone",
           "line": "s05-l15",
           "offset": 0.5,
           "action": "enter"
         },
         {
-          "target": "intent",
-          "line": "s05-l17",
+          "target": "copy-alone",
+          "line": "s05-l16",
           "offset": 0,
-          "action": "enter"
+          "action": "exit",
+          "animation": "none"
+        },
+        {
+          "target": "intent",
+          "line": "s05-l16",
+          "offset": 0,
+          "action": "enter",
+          "animation": "fade"
+        },
+        {
+          "target": "copy",
+          "line": "s05-l16",
+          "offset": 0,
+          "action": "enter",
+          "animation": "none"
         }
       ]
     },
@@ -1176,8 +1244,8 @@
             "color": "orange"
           },
           "at": [
-            0,
-            1
+            1,
+            2
           ]
         },
         {
@@ -1189,8 +1257,8 @@
             "color": "orange"
           },
           "at": [
-            4,
-            1
+            8,
+            0
           ]
         },
         {
@@ -1203,8 +1271,22 @@
           },
           "at": [
             8,
-            1
+            4
           ]
+        },
+        {
+          "id": "code-docs",
+          "component": "Arrow",
+          "props": {},
+          "from": "code",
+          "to": "docs"
+        },
+        {
+          "id": "code-schema",
+          "component": "Arrow",
+          "props": {},
+          "from": "code",
+          "to": "schema"
         }
       ],
       "triggers": [
@@ -1224,6 +1306,18 @@
           "target": "schema",
           "line": "s05-l21",
           "offset": 2,
+          "action": "enter"
+        },
+        {
+          "target": "code-docs",
+          "line": "s05-l22",
+          "offset": 0,
+          "action": "enter"
+        },
+        {
+          "target": "code-schema",
+          "line": "s05-l22",
+          "offset": 0.5,
           "action": "enter"
         }
       ]

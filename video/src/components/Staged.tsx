@@ -27,7 +27,7 @@ const look = (animation: Animation, shown: number): React.CSSProperties => {
 };
 
 /**
- * 按排期放一个组件：放进它在网格上占的矩形（连线类组件铺满画面），
+ * 按排期放一个组件：放进它在网格上占的矩形（连线类组件铺满画面，另外拿到两端的矩形），
  * 套上通用的入场和退场动画，再把参数和这一帧的舞台信息交给组件。
  * 要放在从 `cue.startFrame` 开始的 Sequence 里（见 `StagedCues`）。
  */
@@ -35,6 +35,12 @@ export const Staged: React.FC<{ cue: Cue }> = ({ cue }) => {
   const stage = stageAt(cue, cue.startFrame + useCurrentFrame());
   const Component = componentNamed(cue.component);
   const box = cue.area ? cellRect(GRID, cue.area.at, cue.area.cells) : null;
+  const ends = cue.ends
+    ? {
+        from: cellRect(GRID, cue.ends.from.at, cue.ends.from.cells),
+        to: cellRect(GRID, cue.ends.to.at, cue.ends.to.cells),
+      }
+    : null;
   return (
     <AbsoluteFill
       style={
@@ -49,7 +55,7 @@ export const Staged: React.FC<{ cue: Cue }> = ({ cue }) => {
             cue.exit ? look(cue.exit.animation, 1 - ease(stage.exit)) : {}
           }
         >
-          <Component props={cue.props} stage={stage} />
+          <Component props={cue.props} stage={stage} ends={ends} />
         </AbsoluteFill>
       </AbsoluteFill>
     </AbsoluteFill>

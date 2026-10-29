@@ -81,6 +81,14 @@ export const sampleEpisode = (
 
 const BLOCK_COLOR_NAMES = Object.keys(BLOCK_COLORS);
 
+/** 箭头样张里的知识块：箭头的两端 */
+const block = (id: string, label: string, at: [number, number], size = "small") => ({
+  id,
+  component: "PixelBlock",
+  props: { label, size, color: "orange" },
+  at,
+});
+
 /** 组件名 → 样张；少一个组件，类型检查会报错 */
 export const COMPONENT_SAMPLES: Record<ComponentName, ComponentSample> = {
   PixelBlock: {
@@ -142,6 +150,21 @@ export const COMPONENT_SAMPLES: Record<ComponentName, ComponentSample> = {
           { target: "dry", line: 8, offset: 0, action: "exit" },
         ],
       },
+      {
+        description: "嵌套：小方块复制粘贴源码嵌在大方块知识和意图的左上角，标签在中间一行，子组件只能放在上下两行",
+        lines: [
+          { text: "大方块入场", seconds: 1.5 },
+          { text: "小方块嵌在左上角（parent）", seconds: 2 },
+        ],
+        components: [
+          { id: "intent", component: "PixelBlock", props: { label: "知识和意图", size: "large", color: "orange" }, at: [4, 1] },
+          { id: "copy", component: "PixelBlock", props: { label: "复制粘贴源码", size: "small", color: "cream" }, at: [4, 1], parent: "intent" },
+        ],
+        triggers: [
+          { target: "intent", line: 9, offset: 0, action: "enter" },
+          { target: "copy", line: 10, offset: 0, action: "enter" },
+        ],
+      },
     ],
   },
   Mascot: {
@@ -177,6 +200,78 @@ export const COMPONENT_SAMPLES: Record<ComponentName, ComponentSample> = {
             ...(animation ? { animation } : {}),
           })),
         ),
+      },
+    ],
+  },
+  Arrow: {
+    title: "样张：箭头 Arrow",
+    scenes: [
+      {
+        description: "知识块 DRY 指向知识块 ETC：箭头入场，高亮，切回正常，退场",
+        lines: [
+          { text: "两个知识块落下", seconds: 1.5 },
+          { text: "箭头入场：默认 fade（pop）", seconds: 1.5 },
+          { text: "切到高亮 highlight（blip）", seconds: 1.5 },
+          { text: "切回正常 normal（blip）", seconds: 1.5 },
+          { text: "退场：默认 fade（leave）", seconds: 1.5 },
+        ],
+        components: [
+          block("dry", "DRY", [0, 1], "medium"),
+          block("etc", "ETC", [8, 3], "medium"),
+          { id: "arrow", component: "Arrow", props: {}, from: "dry", to: "etc" },
+        ],
+        triggers: [
+          { target: "dry", line: 1, offset: 0, action: "enter" },
+          { target: "etc", line: 1, offset: 0, action: "enter" },
+          { target: "arrow", line: 2, offset: 0, action: "enter" },
+          { target: "arrow", line: 3, offset: 0, action: "state", state: "highlight" },
+          { target: "arrow", line: 4, offset: 0, action: "state", state: "normal" },
+          { target: "arrow", line: 5, offset: 0, action: "exit" },
+        ],
+      },
+      {
+        description: "改一处要连带改三处：代码指向文档、数据库 Schema、测试，三个箭头 slide、none、fade 依次入场，再依次退场",
+        lines: [
+          { text: "入场：slide none fade", seconds: 2.5 },
+          { text: "退场：slide none fade", seconds: 2.5 },
+        ],
+        components: [
+          block("code", "代码", [1, 2], "medium"),
+          block("docs", "文档", [9, 0]),
+          block("schema", "数据库 Schema", [8, 2], "medium"),
+          block("tests", "测试", [9, 5]),
+          ...(["docs", "schema", "tests"] as const).map((to) => ({
+            id: `to-${to}`,
+            component: "Arrow",
+            props: {},
+            from: "code",
+            to,
+          })),
+        ],
+        triggers: [
+          ...(["code", "docs", "schema", "tests"] as const).map((target) => ({
+            target,
+            line: 6,
+            offset: 0,
+            action: "enter" as const,
+            sound: target === "code" ? undefined : null,
+          })),
+          ...(
+            [
+              ["to-docs", "slide"],
+              ["to-schema", "none"],
+              ["to-tests", "fade"],
+            ] as const
+          ).flatMap(([target, animation], i) =>
+            (["enter", "exit"] as const).map((action) => ({
+              target,
+              line: action === "enter" ? 6 : 7,
+              offset: (action === "enter" ? 0.6 : 0) + i * 0.6,
+              action,
+              animation,
+            })),
+          ),
+        ],
       },
     ],
   },

@@ -14,16 +14,23 @@ import {
 // 不用加载 React 组件。组件实现在 registry.ts 里按同样的名字登记。
 
 /**
- * 知识块的大小 → 占几格、标签用哪个字号。标签只有一行，放不下时报错。
+ * 知识块的大小 → 占几格、标签用哪个字号、标签占哪几行。标签只有一行，放不下时报错。
  * 2:1 左右的横长条：ep01 的标签多是 2–6 个字（见 #34 的摆放试验）。
+ * `labelRows`：标签单行垂直居中，压住的行 `[第几行起, 几行]`（相对方块自己）。
+ * 大号方块 372 像素高，字号 96 的行框 128 像素居中，字形落在中间一行里，
+ * 上下两行空着，可以嵌子组件（#40）；中号、小号的标签占满整个方块。
  */
 export const BLOCK_SIZES = {
-  small: { cells: [2, 1], font: "small" },
-  medium: { cells: [3, 2], font: "subtitle" },
-  large: { cells: [4, 3], font: "large" },
+  small: { cells: [2, 1], font: "small", labelRows: [0, 1] },
+  medium: { cells: [3, 2], font: "subtitle", labelRows: [0, 2] },
+  large: { cells: [4, 3], font: "large", labelRows: [1, 1] },
 } as const satisfies Record<
   string,
-  { cells: readonly [number, number]; font: keyof typeof FONT_SIZE }
+  {
+    cells: readonly [number, number];
+    font: keyof typeof FONT_SIZE;
+    labelRows: readonly [number, number];
+  }
 >;
 export type BlockSize = keyof typeof BLOCK_SIZES;
 
@@ -76,12 +83,24 @@ export const MascotProps = z.strictObject({
   ),
 });
 
+/** 箭头的状态：正常、高亮（「改一处要连带改三处」时点亮连线） */
+export const ARROW_STATES = ["normal", "highlight"] as const;
+export type ArrowState = (typeof ARROW_STATES)[number];
+
+/** Arrow：从一个组件指向另一个组件；两端写在分镜的 `from`、`to` 上，没有参数 */
+export const ArrowProps = z.strictObject({});
+
 /** 组件名 → 声明；交给 `planEpisode` 核对组件名、参数、状态，并取默认动画 */
 export const COMPONENT_DECLARATIONS = {
   PixelBlock: declareComponent({
     props: PixelBlockProps,
     states: BLOCK_STATES,
     cells: ({ size }) => BLOCK_SIZES[size].cells,
+    // 标签横贯整个方块，占 `labelRows` 那几行；子组件只能嵌在标签以外的行里
+    labelArea: ({ size }) => {
+      const { cells, labelRows } = BLOCK_SIZES[size];
+      return { at: [0, labelRows[0]], cells: [cells[0], labelRows[1]] };
+    },
     enter: "slide",
     exit: "fade",
     connector: false,
@@ -101,5 +120,20 @@ export const COMPONENT_DECLARATIONS = {
     exit: "fade",
     connector: false,
     sounds: { enter: "pop", exit: "leave", states: { normal: null } },
+  }),
+  Arrow: declareComponent({
+    props: ArrowProps,
+    states: ARROW_STATES,
+    // 连线类组件不按格子摆放，不占格
+    cells: () => [0, 0],
+    enter: "fade",
+    exit: "fade",
+    connector: true,
+    // 出现时弹一声；高亮、切回正常都轻点一声
+    sounds: {
+      enter: "pop",
+      exit: "leave",
+      states: { normal: "blip", highlight: "blip" },
+    },
   }),
 } as const satisfies ComponentDeclarations;

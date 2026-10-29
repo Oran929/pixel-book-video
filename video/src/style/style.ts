@@ -118,6 +118,11 @@ export const SIZE = {
   blockHop: cells(4),
   /** 落下动画的起点在终点上方多远 */
   slideDistance: cells(40),
+  /** 箭头两端离组件边框留的空 */
+  arrowGap: cells(4),
+  /** 箭头的箭头头：从尖到底边的长度、底边的半宽 */
+  arrowHeadLength: cells(10),
+  arrowHeadHalfWidth: cells(8),
 } as const;
 
 /** 描边规则：实心、不模糊，宽度取 `SIZE.stroke` / `SIZE.strokeThick` */

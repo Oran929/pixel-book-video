@@ -64,6 +64,22 @@ describe.each(
   });
 });
 
+describe("知识块的标签位置（嵌套时子组件要让开）", () => {
+  const { PixelBlock } = COMPONENT_DECLARATIONS;
+  it.each([
+    ["small", { at: [0, 0], cells: [2, 1] }],
+    ["medium", { at: [0, 0], cells: [3, 2] }],
+    ["large", { at: [0, 1], cells: [4, 1] }],
+  ] as const)("size %s 的标签占 %j，落在方块自己的格子里", (size, area) => {
+    const props = PixelBlock.props.parse({ label: "知识", size, color: "orange" });
+    const label = PixelBlock.labelArea!(props);
+    const [columns, rows] = PixelBlock.cells(props);
+    expect(label).toEqual(area);
+    expect(label.at[0] + label.cells[0]).toBeLessThanOrEqual(columns);
+    expect(label.at[1] + label.cells[1]).toBeLessThanOrEqual(rows);
+  });
+});
+
 describe("显示文字参数", () => {
   it("PixelBlock 的 label 是显示文字，Mascot 没有显示文字", () => {
     expect(displayTextFields(COMPONENT_DECLARATIONS.PixelBlock.props)).toEqual(["label"]);

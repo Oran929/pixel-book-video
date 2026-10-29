@@ -53,8 +53,11 @@ export const layoutGrid = (width: number, height: number): LayoutGrid => {
   };
 };
 
+/** 画面上的矩形（屏幕像素） */
+export type Rect = { x: number; y: number; width: number; height: number };
+
 /** 从 `at` 格起、占 `cells` 格的矩形（屏幕像素） */
-export const cellRect = (grid: LayoutGrid, at: GridPoint, cells: GridPoint) => ({
+export const cellRect = (grid: LayoutGrid, at: GridPoint, cells: GridPoint): Rect => ({
   x: grid.left + at[0] * grid.cellWidth,
   y: grid.top + at[1] * grid.cellHeight,
   width: cells[0] * grid.cellWidth,

@@ -49,6 +49,11 @@ export type ComponentDeclaration<
   connector: boolean;
   /** 默认音效；分镜的触发可以用 `sound` 关掉或替换 */
   sounds: ComponentSounds<State>;
+  /**
+   * 标签占的格（相对组件自己的左上角）：嵌在里面的子组件不能压住这些格。
+   * 不写表示没有要让开的字，子组件可以放在任何格子里。
+   */
+  labelArea?(props: z.infer<Props>): { at: Cells; cells: Cells };
 };
 
 /** 组件名 → 声明 */

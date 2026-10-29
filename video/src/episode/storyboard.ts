@@ -68,6 +68,11 @@ const StoryboardShape = z.strictObject({
           at: z
             .tuple([z.number().int().min(0), z.number().int().min(0)])
             .optional(),
+          /** 父组件的 id：有意嵌套，格子和区间都落在父组件里，不算重叠；连线类组件不写 */
+          parent: z.string().optional(),
+          /** 连线类组件（箭头）的起点和终点：本画面里两个按格子摆放的组件的 id；其余组件不写 */
+          from: z.string().optional(),
+          to: z.string().optional(),
         }),
       ),
       triggers: z.array(TriggerShape),
@@ -144,7 +149,47 @@ const storyboardSchema = (
         const where = at("components", j, "at");
         if (declared.connector) {
           if (used.at) issue(where, `${name}是连线类组件，不写 at`);
+          if (used.parent !== undefined) {
+            issue(at("components", j, "parent"), `${name}是连线类组件，不写 parent`);
+          }
+          (["from", "to"] as const).forEach((end) => {
+            const target = used[end];
+            const path = at("components", j, end);
+            if (target === undefined) {
+              issue(path, `${name}是连线类组件，要写 ${end}：本画面里一个组件的 id`);
+              return;
+            }
+            const other = scene.components.find((c) => c.id === target);
+            if (!other) {
+              issue(path, `${name}指向的 ${target} 不是本画面的组件`);
+            } else if (declarationOf(components, other.component)?.connector) {
+              issue(path, `${name}指向的 ${target} 是连线类组件，箭头只能连按格子摆放的组件`);
+            }
+          });
+          if (used.from !== undefined && used.from === used.to) {
+            issue(at("components", j, "to"), `${name}的 from 和 to 都是 ${used.to}`);
+          }
           return;
+        }
+        (["from", "to"] as const).forEach((end) => {
+          if (used[end] !== undefined) {
+            issue(at("components", j, end), `${name}不是连线类组件，不写 ${end}`);
+          }
+        });
+        if (used.parent !== undefined) {
+          const path = at("components", j, "parent");
+          const k = scene.components.findIndex((c) => c.id === used.parent);
+          const parent = scene.components[k];
+          if (used.parent === used.id) {
+            issue(path, `${name}不能是自己的父组件`);
+          } else if (!parent) {
+            issue(path, `${name}的父组件 ${used.parent} 不是本画面的组件`);
+          } else if (declarationOf(components, parent.component)?.connector) {
+            issue(path, `${name}的父组件 ${used.parent} 是连线类组件，不能当父组件`);
+          } else if (k >= j) {
+            // 后写的画在上面：父组件先写，子组件才不会被它盖住（也排除了环）
+            issue(path, `${name}要写在父组件 ${used.parent} 后面（后写的画在上面）`);
+          }
         }
         if (!used.at) {
           issue(where, `${name}要写 at：左上角所在的格 [列, 行]`);
@@ -281,6 +326,9 @@ export const parseStoryboard = (
 export const pauseOverrides = (storyboard: Storyboard): PauseOverrides =>
   Object.fromEntries(storyboard.pauses.map((pause) => [pause.after, pause.seconds]));
 
+/** 网格上的一块：左上角所在的格 `at`，占几格 `cells` */
+export type Area = { at: Cells; cells: Cells };
+
 /** 一个组件在本画面里的排期 */
 export type Cue = {
   /** `<画面 ID>/<组件 id>`，在整期里唯一 */
@@ -296,7 +344,9 @@ export type Cue = {
   /** 各次切换状态，按帧排序 */
   states: { frame: number; state: string; sound: Sound }[];
   /** 在网格上占的格：左上角 `at` 和占几格 `cells`；连线类组件为 null */
-  area: { at: Cells; cells: Cells } | null;
+  area: Area | null;
+  /** 连线类组件（箭头）两端组件占的格：起点 `from`、终点 `to`；其余组件为 null */
+  ends: { from: Area; to: Area } | null;
 } & FrameSpan /* 从入场帧到退场动画结束（没有退场时到画面结束） */;
 
 /**
@@ -304,7 +354,8 @@ export type Cue = {
  * 触发帧 = 旁白句开始帧 + 偏移秒数 × 帧率，四舍五入到整帧；
  * 落在所在画面之外、帧顺序不是「入场 ≤ 切换状态 < 退场」、同一帧切两次状态、
  * 切到当前已经是的状态、退场动画在画面结束前播不完时报错，不悄悄截断；
- * 同一画面里同时在画面上的两个组件格子重叠时也报错。
+ * 同一画面里同时在画面上的两个组件格子重叠时也报错（子组件和父组件除外）；
+ * 箭头的区间超出两端组件、子组件的格子或区间超出父组件、子组件压住父组件的标签时报错。
  * `storyboard` 须已经过 `parseStoryboard` 和同一份合成清单、同一份组件声明核对。
  */
 export const scheduleCues = (
@@ -432,17 +483,50 @@ export const scheduleCues = (
         area: used.at
           ? { at: used.at, cells: declared.cells(declared.props.parse(used.props)) }
           : null,
+        ends: null,
         startFrame: enter.frame,
         endFrame: exitEnd,
       };
     });
-    rejectOverlaps(
-      cues,
-      scene.components.map((used) => used.id),
-      `分镜第 ${i + 1} 个画面`,
-    );
-    return cues;
+    const inScene = `分镜第 ${i + 1} 个画面`;
+    const linked = linkEnds(scene, cues, inScene);
+    rejectStrayChildren(scene, linked, components, inScene);
+    rejectOverlaps(linked, scene.components, inScene);
+    return linked;
   });
+
+const spanText = ({ startFrame, endFrame }: FrameSpan) =>
+  `第 ${startFrame} 帧到第 ${endFrame} 帧`;
+
+/** `inner` 的帧区间完全落在 `outer` 里（同一帧入场、同一帧离开画面都算） */
+const spanWithin = (inner: FrameSpan, outer: FrameSpan) =>
+  inner.startFrame >= outer.startFrame && inner.endFrame <= outer.endFrame;
+
+/**
+ * 给连线类组件（箭头）填上两端组件占的格 `ends`；箭头在画面上的区间
+ * 必须完全落在两端组件的区间里，否则报错。端点已由 `parseStoryboard` 核对过。
+ */
+const linkEnds = (
+  scene: Storyboard["scenes"][number],
+  cues: Cue[],
+  where: string,
+): Cue[] => {
+  const cueOf = (id: string) => cues[scene.components.findIndex((c) => c.id === id)]!;
+  return cues.map((cue, j) => {
+    const used = scene.components[j]!;
+    if (used.from === undefined || used.to === undefined) return cue;
+    const ends = { from: cueOf(used.from), to: cueOf(used.to) };
+    (["from", "to"] as const).forEach((end) => {
+      const other = ends[end];
+      if (!spanWithin(cue, other)) {
+        throw new Error(
+          `${where} 第 ${j + 1} 个组件 ${used.id}: 箭头从${spanText(cue)}（不含）在画面上，超出${end === "from" ? "起点" : "终点"} ${used[end]} 的${spanText(other)}（不含）`,
+        );
+      }
+    });
+    return { ...cue, ends: { from: ends.from.area!, to: ends.to.area! } };
+  });
+};
 
 /**
  * 排期里要放的音效，按帧排序（同一帧的按分镜里的先后）：入场、切换状态、退场各自的音效。
@@ -466,13 +550,20 @@ export const soundCues = (cues: Cue[]): SoundCue[] => {
 
 /**
  * 同一时间都在画面上（帧区间 `[startFrame, endFrame)` 相交，含退场动画）的两个组件，
- * 占的格子重叠时报错。连线类组件不占格子，不参加。
+ * 占的格子重叠时报错。连线类组件不占格子，不参加；子组件和它的父组件（及更上层）不算重叠
+ * （子组件落在父组件里由 `rejectStrayChildren` 保证）。
  */
-const rejectOverlaps = (cues: Cue[], ids: string[], where: string) => {
+const rejectOverlaps = (
+  cues: Cue[],
+  used: Storyboard["scenes"][number]["components"],
+  where: string,
+) => {
+  const ids = used.map((c) => c.id);
   cues.forEach((later, k) => {
     cues.slice(0, k).forEach((earlier, j) => {
       const [mine, theirs] = [later.area, earlier.area];
       if (!mine || !theirs) return;
+      if (isAncestor(used, ids[j]!, ids[k]!) || isAncestor(used, ids[k]!, ids[j]!)) return;
       const from = Math.max(later.startFrame, earlier.startFrame);
       const until = Math.min(later.endFrame, earlier.endFrame);
       if (from >= until) return;
@@ -490,5 +581,75 @@ const rejectOverlaps = (cues: Cue[], ids: string[], where: string) => {
         `${where}: ${name(k)} 和${name(j)} 的格子重叠（格 [${cell[0]}, ${cell[1]}]），从第 ${from} 帧到第 ${until} 帧（不含）同时在画面上`,
       );
     });
+  });
+};
+
+/** `ancestor` 是不是 `id` 的父组件，或父组件的父组件……（`parseStoryboard` 已排除了环） */
+const isAncestor = (
+  used: Storyboard["scenes"][number]["components"],
+  ancestor: string,
+  id: string,
+): boolean => {
+  const parent = used.find((c) => c.id === id)?.parent;
+  return parent !== undefined && (parent === ancestor || isAncestor(used, ancestor, parent));
+};
+
+/** `inner` 的格子完全落在 `outer` 里 */
+const areaWithin = (inner: Area, outer: Area) =>
+  ([0, 1] as const).every(
+    (axis) =>
+      inner.at[axis] >= outer.at[axis] &&
+      inner.at[axis] + inner.cells[axis] <= outer.at[axis] + outer.cells[axis],
+  );
+
+/** 两块格子有没有公共的格 */
+const areasMeet = (a: Area, b: Area) =>
+  ([0, 1] as const).every(
+    (axis) =>
+      Math.max(a.at[axis], b.at[axis]) <
+      Math.min(a.at[axis] + a.cells[axis], b.at[axis] + b.cells[axis]),
+  );
+
+const areaText = ({ at, cells }: Area) => `从 [${at[0]}, ${at[1]}] 起的 ${cells[0]}×${cells[1]} 格`;
+
+/**
+ * 子组件（写了 `parent` 的）的格子和区间都必须完全落在父组件里，
+ * 也不能压住父组件的标签（父组件声明的 `labelArea`）；任一条不满足都报错。
+ */
+const rejectStrayChildren = (
+  scene: Storyboard["scenes"][number],
+  cues: Cue[],
+  components: ComponentDeclarations,
+  where: string,
+) => {
+  scene.components.forEach((used, j) => {
+    if (used.parent === undefined) return;
+    const k = scene.components.findIndex((c) => c.id === used.parent);
+    const [child, parent] = [cues[j]!, cues[k]!];
+    const name = `${where} 第 ${j + 1} 个组件 ${used.id}`;
+    const parentName = `父组件 ${used.parent}`;
+    if (!areaWithin(child.area!, parent.area!)) {
+      throw new Error(
+        `${name}: 占${areaText(child.area!)}，超出${parentName}${areaText(parent.area!)}`,
+      );
+    }
+    const declared = components[parent.component]!;
+    const label = declared.labelArea?.(declared.props.parse(parent.props));
+    if (label) {
+      const onScreen = {
+        at: [parent.area!.at[0] + label.at[0], parent.area!.at[1] + label.at[1]] as const,
+        cells: label.cells,
+      };
+      if (areasMeet(child.area!, onScreen)) {
+        throw new Error(
+          `${name}: 压住了${parentName}的标签（标签占${areaText(onScreen)}），换到父组件标签以外的格子`,
+        );
+      }
+    }
+    if (!spanWithin(child, parent)) {
+      throw new Error(
+        `${name}: 从${spanText(child)}（不含）在画面上，超出${parentName}的${spanText(parent)}（不含）`,
+      );
+    }
   });
 };

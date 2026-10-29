@@ -387,12 +387,14 @@ uv run pixelbook terms ../books/sample/ch01/ep01/script.yaml   # 每个新术语
 ```
 
 - `scene`：合成清单里的画面 ID。`components`：本画面用的组件，`id` 是本画面里的名字，`component` 是组件名，`props` 按该组件的参数格式校验。
-- `at`：组件左上角所在的格 `[列, 行]`，从 0 开始（见下面的「网格」）。连线类组件（箭头）不写 `at`，其余组件必须写。组件占几格由组件按参数自己算，分镜只写位置。
-- 新组件要登记三处：**声明**在 `video/src/components/declarations.ts`（用 `declareComponent`，格式见 `declaration.ts`：参数格式 `props`（zod）、状态清单 `states`（第一个是初始状态）、占几格 `cells`（按参数算，`[列数, 行数]`）、入场和退场的默认动画 `enter`、`exit`、是否是连线类组件 `connector`、默认音效 `sounds`（见下面的「音效」）；会显示在画面上的参数用 `displayText` 标出，见下面的「显示文字」），**实现**在 `video/src/components/registry.ts`，**样张**在 `video/src/components/samples.ts`；少登记一处，类型检查会报错。分镜检查只依赖声明，不含 JSX，时间轴导出命令在 Node 里也用它校验分镜。
+- `at`：组件左上角所在的格 `[列, 行]`，从 0 开始（见下面的「网格」）。连线类组件（箭头）不写 `at`，改写 `from`、`to`；其余组件必须写 `at`。组件占几格由组件按参数自己算，分镜只写位置。
+- `parent`（可选）：父组件的 id，表示有意嵌套（大方块里占一小角）；`from`、`to`：连线类组件的起点和终点。见下面的「箭头和嵌套」。
+- 新组件要登记三处：**声明**在 `video/src/components/declarations.ts`（用 `declareComponent`，格式见 `declaration.ts`：参数格式 `props`（zod）、状态清单 `states`（第一个是初始状态）、占几格 `cells`（按参数算，`[列数, 行数]`）、入场和退场的默认动画 `enter`、`exit`、是否是连线类组件 `connector`、默认音效 `sounds`（见下面的「音效」）、可选的标签位置 `labelArea`（见下面的「箭头和嵌套」）；会显示在画面上的参数用 `displayText` 标出，见下面的「显示文字」），**实现**在 `video/src/components/registry.ts`，**样张**在 `video/src/components/samples.ts`；少登记一处，类型检查会报错。分镜检查只依赖声明，不含 JSX，时间轴导出命令在 Node 里也用它校验分镜。
 - **渲染接口**（`video/src/components/stage.ts`）：组件实现是 `React.FC<RenderProps<参数>>`，拿到两样东西：
 
   ```ts
-  type RenderProps<Props> = { props: Props; stage: Stage };
+  type RenderProps<Props> = { props: Props; stage: Stage; ends: Ends | null };
+  type Ends = { from: Rect; to: Rect }; // 连线类组件两端组件的矩形（屏幕像素），其余组件为 null
   type Stage = {
     state: string;       // 当前状态：入场时是声明的第一个状态，之后按 state 触发变化
     stateFrames: number; // 进入当前状态以来的帧数（进入的那一帧是 0；初始状态从入场帧算起）
@@ -401,7 +403,7 @@ uv run pixelbook terms ../books/sample/ch01/ep01/script.yaml   # 每个新术语
   };
   ```
 
-  Episode 按排期把组件放进它在网格上占的矩形（`cellRect`，连线类组件铺满画面），外面套上通用的入场和退场动画（`fade`、`slide`、`none`，带缓动），组件自己只画「这个状态、这一帧」的样子，填满给它的矩形。排期在 `Cue` 里带上 `initialState`，`stageAt(cue, 帧)` 算出舞台信息。
+  Episode 按排期把组件放进它在网格上占的矩形（`cellRect`，连线类组件铺满画面），外面套上通用的入场和退场动画（`fade`、`slide`、`none`，带缓动），组件自己只画「这个状态、这一帧」的样子，填满给它的矩形。排期在 `Cue` 里带上 `initialState`，`stageAt(cue, 帧)` 算出舞台信息；连线类组件的 `Cue.ends` 是两端组件占的格，Episode 换算成屏幕矩形交给组件。
 - **样张**：每个组件在 Studio 里有一页 `Sample-<组件名>`，用 `samples.ts` 里的假分镜（经同一个 `planEpisode` 排期）把它的每个状态、每种入场和退场动画、每个默认音效都演一遍，字幕位置写着这一刻在演什么，同时放出音效。`npm run test` 检查每个登记的组件都有样张、样张通过分镜检查、演到了每个状态和每种入场退场动画、放到了入场、退场和切到每个状态的默认音效。导出某一帧：`npx remotion still Sample-PixelBlock ../out/samples/pixelblock.png --frame=300`。
 - `triggers`：每条触发让 `target` 组件在 `line` 这句开始后偏移 `offset` 秒做一个动作（ADR-0011），`action` 三选一：
   - `enter` 入场、`exit` 退场：可选 `animation`，不写就用组件声明的默认动画。
@@ -423,7 +425,7 @@ uv run pixelbook terms ../books/sample/ch01/ep01/script.yaml   # 每个新术语
 - **每格**：区域宽 ÷ 12、区域高 ÷ 6，各自向下对齐到像素网格 `GRID`（4px）；余下的像素平均分到两侧（每侧也向下对齐到 4px）。
 - 1920×1080 下：区域 x 64–1856、y 128–880，每格 **148 × 124** 像素，第 0 列从 x = 72 开始，第 0 行从 y = 132 开始。
 - **越界**：`at` 加上组件占的格数超出 12 列或 6 行时报错（报出第几个画面、第几个组件、超出哪一边）。
-- **重叠**：同一时间都在画面上的两个组件，格子有重叠就报错，报出两个组件、第一个重叠的格和同时在画面上的帧。「同时在画面上」按排期的帧区间算：从入场帧到退场动画播完（没有退场的到画面结束），所以先退场、后入场的两个组件，后一个要等前一个的退场动画播完（`fade`、`slide` 0.4 秒；`none` 不用等）才能占同一格。连线类组件不参加重叠检查。
+- **重叠**：同一时间都在画面上的两个组件，格子有重叠就报错，报出两个组件、第一个重叠的格和同时在画面上的帧。「同时在画面上」按排期的帧区间算：从入场帧到退场动画播完（没有退场的到画面结束），所以先退场、后入场的两个组件，后一个要等前一个的退场动画播完（`fade`、`slide` 0.4 秒；`none` 不用等）才能占同一格。连线类组件不参加重叠检查；子组件和它的父组件（及更上层）不算重叠，和别的组件照常检查。
 
 **知识块**（`PixelBlock`）的参数是 `label`（一行字）、`size` 和 `color`。`color` 是风格表 `BLOCK_COLORS` 里的名字（`orange`、`green`、`blue`、`purple`、`cream`、`stone`；黄色和红色留给状态）。状态有 `normal`（深色描边和阴影，初始状态）、`highlight`（描边和阴影变黄）、`changed`（描边和阴影变红），切到后两种时跳一下（`SIZE.blockHop`，0.4 秒）。默认入场 `slide`、退场 `fade`。方块占满格子，右下留出硬阴影的偏移，标签单行居中、不换行、不加字距。`size` 同时决定占几格和标签的字号：
 
@@ -439,7 +441,30 @@ uv run pixelbook terms ../books/sample/ch01/ep01/script.yaml   # 每个新术语
 - 拉丁字母、数字、空格和半角符号（U+0020–U+007E）按字体度量：`video/src/style/ascii-advances.json` 是从字体文件的 `hmtx` 表导出的每个字符的步进宽度（字体像素，乘以 字号 ÷ 12 就是屏幕像素），例如 `W` 10、`M` 8、`a` 6、`i` 4。`tools/tests/test_font_metrics.py` 核对这张表和字体文件一致；换字体时要重新导出。
 - 不算字距（知识块的标签不加字距）。例：`数据库 Schema` 在字号 48 下是 3 × 48 + 6 × 4 + 39 × 4 = 324 像素。
 
-`video/src/episode/ep01-placement.test.ts` 用 ch02 ep01 的合成清单（`fixtures/ep01-episode.json`，去掉了音频路径）和一份占位分镜，把 17 个画面各摆了一遍，作为摆放的参考。
+#### 箭头和嵌套
+
+**箭头**（`Arrow`，连线类组件，spec #16 用户故事 20、21、33）从一个组件指到另一个组件：
+
+```json
+{ "id": "dry-etc", "component": "Arrow", "props": {}, "from": "dry", "to": "etc" }
+```
+
+- 不写 `at`、不写 `parent`，没有参数；`from`、`to` 必须都写，必须是本画面里两个不同的、按格子摆放的组件（不能指向另一个箭头）。不是连线类组件的写了 `from`、`to` 也报错。
+- 箭头在画面上的区间（从入场帧到退场动画播完，没有退场的到画面结束）必须完全落在两端组件各自的区间里：和端点同一帧入场、同一帧离开画面都合法；早于某一端入场，或某一端已经离开画面时箭头还在，都报错（报出第几个画面、第几个组件、箭头和那一端的帧区间）。端点退场时，箭头要一起退场（同样长的退场动画，或更早）。
+- 画法：沿两端矩形中心的连线，从起点组件的边框外 `SIZE.arrowGap` 出发，尖停在终点组件边框外 `SIZE.arrowGap`；粗箭杆（`SIZE.strokeThick`）加三角形箭头头（`SIZE.arrowHeadLength`、`SIZE.arrowHeadHalfWidth`），坐标取整到像素网格，不抗锯齿。两端挨得太近、放不下箭头头时不画。端点在网格上怎么摆，箭头就怎么斜，所以摆放时两端之间要留出空档，箭杆不要穿过别的组件（这一条没有检查，靠看样帧）。
+- 入场时箭杆从起点长到终点（按入场进度），外面再套通用的入场动画；默认入场、退场都是 `fade`。状态 `normal`（深色，初始）、`highlight`（黄色的芯加深色描边）。默认音效：入场 `pop`、退场 `leave`，切到 `normal`、`highlight` 都是 `blip`。
+- 箭头画在组件列表里它的位置上（后写的画在上面），一般写在两端组件后面。
+
+**嵌套**（spec #16 用户故事 22）：子组件写 `parent: <父组件 id>`，`at` 照常写网格上的绝对位置：
+
+- 父组件必须是本画面里按格子摆放的组件，**写在子组件前面**（后写的画在上面，子组件才不会被父组件盖住），不能是自己。
+- 子组件的格子必须完全落在父组件的格子里，区间也必须完全落在父组件的区间里（同一帧入场合法）；这时不算重叠。任一条不满足都报错。
+- 子组件不能压住父组件的标签：组件声明里的 `labelArea(props)` 给出标签占的格（相对组件自己的左上角），子组件的格子和它有公共格就报错。不写 `labelArea` 的组件没有要让开的字。知识块的标签横贯整个方块：`large` 只占中间一行（`[0, 1]` 起 4×1 格；行高 128 像素居中，字形落在中间一行里），上下两行可以嵌子组件；`medium`、`small` 的标签占满整个方块，不能嵌子组件。
+- 例：`知识和意图`（`large`，`at: [4, 1]`）的左上角嵌一个 `复制粘贴源码`（`small`，`at: [4, 1]`，`parent: "intent"`）。
+
+样张：`Sample-Arrow`（一个知识块指向另一个，高亮、切回、退场；一个知识块指向三个，三种入场和退场动画），`Sample-PixelBlock` 的最后一个画面演嵌套。
+
+`video/src/episode/ep01-placement.test.ts` 用 ch02 ep01 的合成清单（`fixtures/ep01-episode.json`，去掉了音频路径）和一份占位分镜，把 17 个画面各摆了一遍，作为摆放的参考：s01-c03 三个方块各有一个箭头指向 ETC；s05-c04 的「复制粘贴源码」先单独出现，旁白说「只是很小的一部分」时用 `none` 瞬间换成大方块「知识和意图」左上角的子组件（子组件不能早于父组件入场）；s05-c05 代码在左，箭头指向右上的文档和右下的数据库 Schema。
 
 #### 显示文字
 

@@ -773,3 +773,230 @@ describe("planEpisode: music", () => {
     expect(planEpisode(MANIFEST, null).music).toBeNull();
   });
 });
+
+// 假的组件声明：Box 按格子摆放，Link 是连线类组件（箭头），按 `from`、`to` 指向两端
+const LINKED = {
+  ...BOXES,
+  Link: declareComponent({
+    props: z.strictObject({}),
+    states: ["normal"],
+    cells: () => [0, 0],
+    enter: "fade",
+    exit: "fade",
+    connector: true,
+    sounds: { enter: null, exit: null, states: { normal: null } },
+  }),
+};
+type Used = Record<string, unknown> & { id: string };
+const box = (id: string, at: [number, number], extra: Record<string, unknown> = {}): Used => ({
+  id,
+  component: "Box",
+  props: { w: 2, h: 1 },
+  at,
+  ...extra,
+});
+const link = (id: string, from: unknown, to: unknown): Used => ({
+  id,
+  component: "Link",
+  props: {},
+  from,
+  to,
+});
+// 都在 s02-c01（第 138–213 帧）里；`triggers` 的 line 都是 s02-l01
+const planLinked = (components: Used[], triggers: Trigger[]) =>
+  planEpisode(
+    MANIFEST,
+    {
+      scenes: [
+        {
+          scene: "s02-c01",
+          components,
+          triggers: triggers.map((trigger) => ({ line: "s02-l01", ...trigger })),
+        },
+      ],
+      music: "pixel-sprinter",
+      pauses: [],
+    },
+    LINKED,
+  );
+const AB = [box("a", [0, 0]), box("b", [6, 2])];
+
+describe("planEpisode: arrows point from one component to another", () => {
+  it("rejects an end that is not a component in this scene", () => {
+    expect(() =>
+      planLinked(
+        [...AB, link("ab", "a", "nope")],
+        [enterAt("a"), enterAt("b"), enterAt("ab")],
+      ),
+    ).toThrow(/第 1 个画面 第 3 个组件 to: 组件 ab（Link）指向的 nope 不是本画面的组件/);
+  });
+
+  it("rejects an arrow that enters before one of its ends", () => {
+    // b 在第 168 帧入场，箭头在第 153 帧
+    expect(() =>
+      planLinked(
+        [...AB, link("ab", "a", "b")],
+        [enterAt("a"), enterAt("b", 1), enterAt("ab", 0.5)],
+      ),
+    ).toThrow(
+      /分镜第 1 个画面 第 3 个组件 ab: 箭头从第 153 帧到第 213 帧（不含）在画面上，超出终点 b 的第 168 帧到第 213 帧/,
+    );
+  });
+
+  it("rejects an arrow still on screen after one of its ends has exited", () => {
+    // a 在第 168 帧退场，默认 slide 12 帧，第 180 帧离开画面；箭头没有退场，显示到第 213 帧
+    expect(() =>
+      planLinked(
+        [...AB, link("ab", "a", "b")],
+        [enterAt("a"), enterAt("b"), exitAt("a", 1), enterAt("ab", 0.5)],
+      ),
+    ).toThrow(
+      /分镜第 1 个画面 第 3 个组件 ab: 箭头从第 153 帧到第 213 帧（不含）在画面上，超出起点 a 的第 138 帧到第 180 帧（不含）/,
+    );
+  });
+
+  it("accepts an arrow entering on the same frame as its ends, and gives it both ends' cells", () => {
+    const plan = planLinked(
+      [...AB, link("ab", "a", "b")],
+      [enterAt("a"), enterAt("b"), enterAt("ab")],
+    );
+    const arrow = plan.cues.find((cue) => cue.key === "s02-c01/ab")!;
+
+    expect(arrow).toMatchObject({
+      startFrame: 138,
+      area: null,
+      ends: {
+        from: { at: [0, 0], cells: [2, 1] },
+        to: { at: [6, 2], cells: [2, 1] },
+      },
+    });
+  });
+
+  it("accepts an arrow that exits together with its ends", () => {
+    expect(() =>
+      planLinked(
+        [...AB, link("ab", "a", "b")],
+        [enterAt("a"), enterAt("b"), enterAt("ab"), exitAt("a", 1), exitAt("b", 1), exitAt("ab", 1)],
+      ),
+    ).not.toThrow();
+  });
+
+  it.each([
+    ["placed with `at`", { ...link("ab", "a", "b"), at: [0, 0] }, /第 3 个组件 at: 组件 ab（Link）是连线类组件，不写 at/],
+    ["without `from`", link("ab", undefined, "b"), /第 3 个组件 from: 组件 ab（Link）是连线类组件，要写 from/],
+    ["pointing from and to the same component", link("ab", "a", "a"), /第 3 个组件 to: 组件 ab（Link）的 from 和 to 都是 a/],
+    ["with a parent", { ...link("ab", "a", "b"), parent: "a" }, /第 3 个组件 parent: 组件 ab（Link）是连线类组件，不写 parent/],
+  ] as [string, Used, RegExp][])("rejects an arrow %s", (_, arrow, message) => {
+    expect(() =>
+      planLinked([...AB, arrow], [enterAt("a"), enterAt("b"), enterAt("ab")]),
+    ).toThrow(message);
+  });
+
+  it("rejects an arrow pointing at another arrow", () => {
+    expect(() =>
+      planLinked(
+        [...AB, link("ab", "a", "b"), link("x", "a", "ab")],
+        [enterAt("a"), enterAt("b"), enterAt("ab"), enterAt("x")],
+      ),
+    ).toThrow(/第 4 个组件 to: 组件 x（Link）指向的 ab 是连线类组件/);
+  });
+
+  it("rejects `from` and `to` on a component that is not a connector", () => {
+    expect(() =>
+      planLinked(
+        [box("a", [0, 0]), box("b", [6, 2], { to: "a" })],
+        [enterAt("a"), enterAt("b")],
+      ),
+    ).toThrow(/第 2 个组件 to: 组件 b（Box）不是连线类组件，不写 to/);
+  });
+});
+
+// 大方块 big 占 [2, 1] 起的 4×3 格；small 是它的子组件
+const big = (extra: Record<string, unknown> = {}) =>
+  box("big", [2, 1], { props: { w: 4, h: 3 }, ...extra });
+const nested = (at: [number, number], extra: Record<string, unknown> = {}) =>
+  box("small", at, { parent: "big", ...extra });
+
+describe("planEpisode: a component nested in a corner of its parent", () => {
+  it("does not count a child inside its parent's cells as an overlap", () => {
+    expect(() =>
+      planLinked([big(), nested([2, 1])], [enterAt("big"), enterAt("small")]),
+    ).not.toThrow();
+  });
+
+  it("rejects a child whose cells go past its parent's", () => {
+    // big 占第 2–5 列；small 从第 5 列起占 2 列，到第 6 列
+    expect(() =>
+      planLinked([big(), nested([5, 1])], [enterAt("big"), enterAt("small")]),
+    ).toThrow(
+      /分镜第 1 个画面 第 2 个组件 small: 占从 \[5, 1\] 起的 2×1 格，超出父组件 big从 \[2, 1\] 起的 4×3 格/,
+    );
+  });
+
+  it("rejects a child that enters before its parent", () => {
+    expect(() =>
+      planLinked([big(), nested([2, 1])], [enterAt("big", 1), enterAt("small", 0.5)]),
+    ).toThrow(
+      /分镜第 1 个画面 第 2 个组件 small: 从第 153 帧到第 213 帧（不含）在画面上，超出父组件 big的第 168 帧到第 213 帧（不含）/,
+    );
+  });
+
+  it("rejects a child still on screen after its parent has exited", () => {
+    expect(() =>
+      planLinked([big(), nested([2, 1])], [enterAt("big"), enterAt("small"), exitAt("big", 1)]),
+    ).toThrow(/第 2 个组件 small: 从第 138 帧到第 213 帧（不含）在画面上，超出父组件 big的第 138 帧到第 180 帧（不含）/);
+  });
+
+  it("accepts a child entering with its parent and exiting before it", () => {
+    expect(() =>
+      planLinked(
+        [big(), nested([2, 1])],
+        [enterAt("big"), enterAt("small"), exitAt("small", 1)],
+      ),
+    ).not.toThrow();
+  });
+
+  it("still rejects a child overlapping another component that is not its parent", () => {
+    expect(() =>
+      planLinked(
+        [big(), nested([2, 1]), box("other", [0, 0], { props: { w: 3, h: 2 } })],
+        [enterAt("big", 1), enterAt("small", 1), enterAt("other")],
+      ),
+    ).toThrow(/第 2 个组件 small 和第 3 个组件 other 的格子重叠|第 3 个组件 other 和第 1 个组件 big 的格子重叠/);
+  });
+
+  it.each([
+    ["is not in this scene", [big(), box("small", [2, 1], { parent: "nope" })], /第 2 个组件 parent: 组件 small（Box）的父组件 nope 不是本画面的组件/],
+    ["is written after the child (it would be drawn over it)", [nested([2, 1]), big()], /第 1 个组件 parent: 组件 small（Box）要写在父组件 big 后面（后写的画在上面）/],
+    ["is the child itself", [big(), box("small", [2, 1], { parent: "small" })], /第 2 个组件 parent: 组件 small（Box）不能是自己的父组件/],
+  ] as [string, Used[], RegExp][])("rejects a parent that %s", (_, components, message) => {
+    expect(() =>
+      planLinked(components, [enterAt("big"), enterAt("small")]),
+    ).toThrow(message);
+  });
+
+  it("rejects a child covering its parent's label", () => {
+    // 大号知识块的标签在中间一行：[4, 1] 起的 4×3 格，标签占 [4, 2] 起的 4×1 格
+    const plan = () =>
+      planEpisode(
+        MANIFEST,
+        {
+          scenes: [
+            {
+              scene: "s02-c01",
+              components: [
+                { id: "intent", component: "PixelBlock", props: { label: "知识和意图", size: "large", color: "orange" }, at: [4, 1] },
+                { id: "dry", component: "PixelBlock", props: { label: "DRY", size: "small", color: "blue" }, at: [4, 2], parent: "intent" },
+              ],
+              triggers: ["intent", "dry"].map((target) => ({ target, line: "s02-l01", offset: 0, action: "enter" })),
+            },
+          ],
+          music: "pixel-sprinter",
+          pauses: [],
+        },
+      );
+    expect(plan).toThrow(
+      /第 2 个组件 dry: 压住了父组件 intent的标签（标签占从 \[4, 2\] 起的 4×1 格），换到父组件标签以外的格子/,
+    );
+  });
+});

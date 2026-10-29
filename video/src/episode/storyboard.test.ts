@@ -189,6 +189,7 @@ describe("scheduleCues", () => {
         initialState: "normal",
         states: [],
         area: { at: [0, 0], cells: [1, 1] },
+        ends: null,
         startFrame: 177,
         endFrame: 237,
       },

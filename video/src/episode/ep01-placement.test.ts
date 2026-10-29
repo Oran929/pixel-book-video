@@ -11,7 +11,7 @@ import { OUTRO_SEGMENT } from "./manifest";
 
 // ep01 摆放试验（#34）：在动画之前，先看 ch02 ep01 的 17 个画面能不能放进 12×6 网格。
 // 合成清单抄自 books/pragmatic-programmer/ch02/ep01/episode.json（gitignore），去掉了音频路径；
-// 分镜是占位摆放，组件需求按 #13 评论里的清单。知识块用组件注册表里真实的声明（`size` 决定格数，
+// 分镜是占位摆放，组件需求按 #13 评论里的清单；箭头和嵌套（#40）用组件注册表里真实的声明。知识块用组件注册表里真实的声明（`size` 决定格数，
 // 标签按字体度量检查），其余组件还没做，用下面只占格子的占位声明。
 const read = (name: string) =>
   JSON.parse(
@@ -34,6 +34,7 @@ const placeholder = (cells: readonly [number, number]) =>
 // 占位尺寸（列数, 行数），每格 148×124 像素
 const PLACEHOLDERS: ComponentDeclarations = {
   PixelBlock: COMPONENT_DECLARATIONS.PixelBlock,
+  Arrow: COMPONENT_DECLARATIONS.Arrow,
   // 小人按 1/2 大小：约 205×295 像素 → 2 × 3 格（尺寸由 #42 决定）
   Mascot: placeholder([2, 3]),
   // 提示牌：「提示14」加一行标题
@@ -58,7 +59,28 @@ describe("ep01 摆放试验", () => {
     expect(scenes.filter((scene) => !placed.has(scene))).toEqual([]);
   });
 
-  it("每个组件都按格子摆放（试验里没有连线类组件）", () => {
-    expect(plan.cues.every((cue) => cue.area !== null)).toBe(true);
+  it("箭头（s01-c03 三个方块指向 ETC，s05-c05 代码指向文档和数据库 Schema）拿到两端的格子，其余组件按格子摆放", () => {
+    const arrows = plan.cues.filter((cue) => cue.component === "Arrow");
+    expect(arrows.map((cue) => cue.key)).toEqual([
+      "s01-c03/decouple-etc",
+      "s01-c03/single-etc",
+      "s01-c03/naming-etc",
+      "s05-c05/code-docs",
+      "s05-c05/code-schema",
+    ]);
+    expect(arrows.every((cue) => cue.area === null && cue.ends !== null)).toBe(true);
+    expect(
+      plan.cues.filter((cue) => cue.component !== "Arrow").every((cue) => cue.area !== null),
+    ).toBe(true);
+  });
+
+  it("s05-c04 的「复制粘贴源码」先单独出现，再嵌进大方块「知识和意图」的左上角", () => {
+    const cue = (id: string) => plan.cues.find((c) => c.key === `s05-c04/${id}`)!;
+    const [alone, intent, copy] = [cue("copy-alone"), cue("intent"), cue("copy")];
+    // 单独的小块瞬间消失的那一帧，大方块入场，嵌着的小块瞬间出现在同一格
+    expect(alone.endFrame).toBe(intent.startFrame);
+    expect(copy.startFrame).toBe(intent.startFrame);
+    expect(copy.area).toEqual({ at: [4, 1], cells: [2, 1] });
+    expect(intent.area).toEqual({ at: [4, 1], cells: [4, 3] });
   });
 });
