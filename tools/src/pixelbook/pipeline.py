@@ -13,7 +13,7 @@ from pixelbook.audio import wav_seconds
 from pixelbook.episode_path import EpisodePath
 from pixelbook.glyphs import missing_glyphs
 from pixelbook.pronunciation import find_new_terms, spoken_text
-from pixelbook.script import load_script
+from pixelbook.script import DRAFT, load_script
 from pixelbook.tts import TtsEngine
 from pixelbook.tts_cache import TtsCache
 from pixelbook.verification import Verifier
@@ -44,12 +44,15 @@ def voice_episode(
     verifier: Verifier,
     revoice: bool = False,
     font: Path | None = None,
+    draft: bool = False,
 ) -> dict[str, Any]:
     """为 `script_path` 这一期逐句配音，写出期目录里的合成清单并返回它。
 
     `voice` 是这本书解析出的音色（`voice_lock.resolve_book_voice`）。配音前守卫
     比较它和书的锁定音色，不一致就拒绝，除非 `revoice`；配音完成后写入锁定。
     朗读文本按读音表 `pronunciation` 生成（手写的 `speech` 优先）。
+
+    旁白稿是 `status: draft`（还没定稿）时拒绝配音，除非 `draft`。
 
     每句配音经 `verifier` 的语音识别复核，和朗读文本对比；重试后仍不通过的
     句子照常使用，并列进期目录里的检查报告 `report.json`（每次运行都列出）；
@@ -62,6 +65,11 @@ def voice_episode(
     """
     episode = EpisodePath.from_script(script_path)
     script = load_script(script_path)
+    if script.status == DRAFT and not draft:
+        raise PipelineError(
+            f"{script_path}: 旁白稿还是 `status: {DRAFT}`（没有定稿），不配音；"
+            "确实要给草稿配音，加 `--draft`"
+        )
     if terms := find_new_terms(script, pronunciation):
         raise PipelineError(new_terms_message(script_path, terms))
     # 配音缓存和锁定音色放在书的目录下

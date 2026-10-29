@@ -18,6 +18,7 @@ VOICE = Voice(
 # 两段、三句的旁白稿；第三句带手写的 `speech`
 SCRIPT = """\
 title: 程序员修炼之道
+status: final
 segments:
   - id: s01
     title: 开场

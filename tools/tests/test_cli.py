@@ -22,6 +22,7 @@ YUJIE = Voice(model="base-model", speaker="Serena")
 # 一句、带读音表里的术语 DRY：命令行的测试数一数引擎调用、看朗读文本，一句最清楚
 DRY_SCRIPT = """\
 title: 示例书
+status: final
 segments:
   - id: s01
     title: 开场
@@ -125,6 +126,30 @@ def test_voice_refuses_a_changed_voice_until_revoice(repo, engine, asr, capsys):
     assert cli.main(["voice", _script(repo), "--revoice"]) == 0
     assert _locked_speaker(repo) == "Serena"
     assert engine.voices == [DEFAULT, YUJIE]
+
+
+def _mark_draft(repo):
+    path = repo / "books" / "demo" / "ch01" / "ep01" / "script.yaml"
+    path.write_text(DRY_SCRIPT.replace("status: final", "status: draft"))
+
+
+def test_voice_refuses_a_draft_script(repo, engine, asr, capsys):
+    _mark_draft(repo)
+
+    assert cli.main(["voice", _script(repo)]) == 1
+
+    out = capsys.readouterr().out
+    assert "status: draft" in out and "--draft" in out
+    assert engine.voices == []
+    assert not (repo / "books" / "demo" / "voice.lock").exists()
+
+
+def test_voice_with_draft_voices_a_draft_script(repo, engine, asr):
+    _mark_draft(repo)
+
+    assert cli.main(["voice", _script(repo), "--draft"]) == 0
+
+    assert engine.voices == [DEFAULT]
 
 
 def test_term_audition_uses_the_book_voice_without_guard_or_lock(repo, engine):
@@ -268,6 +293,28 @@ def test_render_passes_revoice_through_and_stops_at_the_failing_step(
     assert "第 2 步「时间轴」失败" in out and "s09-l09" in out
     assert _locked_speaker(repo) == "Serena"
     assert not (repo / "out" / "demo-ch01-ep01.mp4").exists()
+
+
+def test_render_refuses_a_draft_script_at_the_voicing_step(repo, engine, asr, capsys):
+    _mark_draft(repo)
+
+    assert cli.main(["render", _script(repo)]) == 1
+
+    out = capsys.readouterr().out
+    assert "第 1 步「配音」失败" in out and "--draft" in out
+    assert engine.voices == []
+
+
+def test_render_passes_draft_through_to_the_voicing_step(repo, engine, asr, capsys):
+    # 分镜不合格：配音一步通过后在时间轴一步停下，不进入（慢的）渲染
+    _mark_draft(repo)
+    episode = repo / "books" / "demo" / "ch01" / "ep01"
+    (episode / "storyboard.json").write_text(json.dumps(BAD_STORYBOARD))
+
+    assert cli.main(["render", _script(repo), "--draft"]) == 1
+
+    assert "第 2 步「时间轴」失败" in capsys.readouterr().out
+    assert engine.voices == [DEFAULT]
 
 
 def test_mix_without_out_refuses_a_timeline_outside_an_episode_dir(repo, capsys):

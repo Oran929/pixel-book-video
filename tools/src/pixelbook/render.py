@@ -45,6 +45,7 @@ def render_episode(
     public_dir: Path,
     font: Path | None = None,
     revoice: bool = False,
+    draft: bool = False,
     log: Callable[[str], None] = lambda _: None,
 ) -> dict[str, Any]:
     """把 `script_path` 这一期渲染成 `out`，返回汇总报告。
@@ -65,6 +66,7 @@ def render_episode(
             verifier,
             revoice=revoice,
             font=font,
+            draft=draft,
         )
     except (
         EpisodePathError,

@@ -124,6 +124,45 @@ uv run pixelbook outline ../books/pragmatic-programmer/ch02/outline.yaml
 
 旁白稿放在 `books/<书>/<章>/<期>/script.yaml`（样例：`books/sample/ch01/ep01/script.yaml`）。顶层的 `title` 必填，是这一期的书名或主题名，显示在画面左上角（样例里是示例值「读一本8bit像素书」），缺了或为空时 `voice` 报错。
 
+### 旁白稿与检查
+
+```yaml
+title: 读一本8bit像素书          # 本期主题，显示在画面左上角
+status: final                    # 必填：draft（写稿中）或 final（过了关口 2 才改）
+segments:
+  - id: s01
+    title: 开场
+    scenes:
+      - id: s01-c01
+        description: 一个方块落下
+        lines:
+          - id: s01-l01
+            text: 第一条原则叫 DRY。      # 字幕，去掉空白后不超过 20 字
+            speech: 第一条原则叫 D R Y。  # 可选：朗读文本
+            cite: ch02-¶040               # 出处：一个段落编号
+          - id: s01-l02
+            text: 意思是不要重复你自己。
+            cite: [ch02-¶040, ch02-¶041]  # 或编号列表；不支持范围
+```
+
+- **`cite`**：一个段落编号字符串，或编号列表（写法和大纲相同）。不支持范围（`ch02-¶040–¶045` 是格式错误）。出处只给检查和语义核对用，不进合成清单，配音和 Remotion 不受影响。
+- **`status`**：`draft` 或 `final`。`voice` 和 `render` 遇到 `draft` 拒绝运行；确实要给草稿配音（比如先听一遍），加 `--draft`。`render --draft` 把它透传给配音一步。
+
+一条命令跑完旁白稿的全部机械检查（只检查，不生成任何东西）：
+
+```sh
+cd tools
+uv run pixelbook check ../books/pragmatic-programmer/ch02/ep01/script.yaml
+```
+
+输出分成「报错」和「警告」两块，每条以旁白句 ID 开头（不属于某一句的问题记在「旁白稿」下），最后一行写通过与否。**退出码只受报错影响**：有报错为 1，只有警告为 0。先查格式（和 `voice` 相同：缺字段、多出不认识的字段、ID 重复、字幕超过 20 字、`status` 不是 `draft`/`final`、`cite` 写法不对），格式错时报第一处；格式对了再一次列出下面所有报错：
+
+- `cite` 里的编号在这一章的转换结果（`chapters/chNN.md`）里不存在；
+- 一句的 `cite` 只引用了图片段（`[图 …]`，带图题的也算）；
+- 按 250 字/分钟估算的时长不在 4:00–6:00 内（含两端）。字数口径和字幕相同：只数 `text`、去掉空白，`speech` 不算。
+
+章目录名必须是 `chNN`，转换结果不存在时先跑 `pixelbook convert`。样例旁白稿的出处不指向真实原文（样例书没有转换结果），不用 `check` 检查。
+
 ### 完整步骤
 
 1. 写旁白稿 `script.yaml`（和可选的分镜 `storyboard.json`，见下文"分镜"）。
@@ -138,14 +177,14 @@ uv run pixelbook outline ../books/pragmatic-programmer/ch02/outline.yaml
 
    | 步 | 做什么 | 常见的失败 |
    | --- | --- | --- |
-   | 1 配音 | 同 `pixelbook voice`：新术语检查、音色锁定守卫、缺字检查、逐句配音与复核，复制到 `video/public/episode/` | 新术语、音色和锁定不一致、缺字、配置文件写错 |
+   | 1 配音 | 同 `pixelbook voice`：定稿状态守卫、新术语检查、音色锁定守卫、缺字检查、逐句配音与复核，复制到 `video/public/episode/` | 旁白稿是 `draft`、新术语、音色和锁定不一致、缺字、配置文件写错 |
    | 2 时间轴 | 同 `npm run timeline`：校验分镜（含组件触发帧是否落在画面里），写出 `timeline.json` 和 `segments.txt` | 分镜不合格 |
    | 3 渲染 | `remotion render Episode`（只渲染成片，不渲染风格样张） | Remotion 报错（附上输出的最后几行） |
    | 4 核对时长 | 用 ffprobe 数 MP4 **视频流**的帧数，和 `timeline.json` 的总帧数比，相差超过一帧就算失败 | — |
 
    全部通过后打印汇总报告：MP4 路径、帧数、总时长和 4:00–6:00 的判断、打点时间表位置、复核未通过的句子（需要试听）、靠拼音通过的句子（只列出备查）。**复核未通过和总时长超出范围不算失败**，只列在汇总里。
 
-   `--out <路径>` 改输出位置；`--revoice` 同 `voice --revoice`（音色和书的锁定音色不一致、确认整本书换音色时用）。
+   `--out <路径>` 改输出位置；`--revoice` 同 `voice --revoice`（音色和书的锁定音色不一致、确认整本书换音色时用）；`--draft` 同 `voice --draft`（旁白稿还是 `status: draft` 时放行）。
 
 3. 看汇总报告：试听复核未通过的句子，读错了就删缓存再跑一遍；看 MP4。改了分镜只要再跑一遍 `render`，配音全部命中缓存，不会重新生成。
 
@@ -159,7 +198,7 @@ npm run timeline -- ../books/sample/ch01/ep01                   # 时间轴、�
 npm run render -- ../out/sample-ch01-ep01.mp4                  # 渲染 MP4
 ```
 
-`voice` 先按读音表检查新术语（见下），没有新术语才用这本书的音色（见下文“书的音色与锁定”）逐句配音，写出期目录里的合成清单 `episode.json`，再清空 `video/public/episode/`，把每句 wav 和合成清单复制进去。Remotion 只读 `video/public/episode/episode.json`。
+`voice` 先看定稿状态（`status: draft` 时拒绝，加 `--draft` 放行），再按读音表检查新术语（见下），没有新术语才用这本书的音色（见下文“书的音色与锁定”）逐句配音，写出期目录里的合成清单 `episode.json`，再清空 `video/public/episode/`，把每句 wav 和合成清单复制进去。Remotion 只读 `video/public/episode/episode.json`。
 
 每句配音缓存在 `books/<书>/cache/tts/<指纹>.wav`（不提交），指纹由朗读文本和音色指纹算出；音色指纹包括模型、参考音频的**文件内容**、参考文本、生成参数和引擎自身的设置（如参考音频补的静音），不包括随机种子。所以再次运行时只有改过的句子会重新生成，改了音色设置或换了参考音频的内容就全部重新生成。每个 wav 旁边的 `<指纹>.json` 记录生成信息。缓存可以随时删掉，删了就整期重新生成。
 

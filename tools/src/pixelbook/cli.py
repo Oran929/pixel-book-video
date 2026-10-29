@@ -7,6 +7,7 @@ from typing import Any
 
 from pixelbook import REPO_ROOT
 from pixelbook.audition import AuditionError, choose_voice, run_audition
+from pixelbook.check import check_script, format_report
 from pixelbook.convert import CHAPTERS_DIR, ConvertError, convert_book
 from pixelbook.episode_path import EpisodePath, EpisodePathError
 from pixelbook.mix import MixError, mix_timeline
@@ -159,6 +160,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="音色和书的锁定音色不一致时，确认整本书用新音色重新配音（更新锁定）",
     )
+    voice.add_argument(
+        "--draft",
+        action="store_true",
+        help="给 `status: draft`（没有定稿）的旁白稿配音",
+    )
 
     render = commands.add_parser(
         "render",
@@ -172,6 +178,11 @@ def main(argv: list[str] | None = None) -> int:
         "--revoice",
         action="store_true",
         help="同 `voice --revoice`：确认整本书用新音色重新配音（更新锁定）",
+    )
+    render.add_argument(
+        "--draft",
+        action="store_true",
+        help="同 `voice --draft`：给没有定稿的旁白稿出片",
     )
 
     terms = commands.add_parser(
@@ -212,6 +223,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     outline.add_argument("outline", type=Path, help="books/<书>/chNN/outline.yaml")
 
+    check = commands.add_parser(
+        "check",
+        help="旁白稿的全部机械检查：格式、出处、估算时长……报错和警告分开列出",
+    )
+    check.add_argument("script", type=Path, help="books/<书>/<章>/<期>/script.yaml")
+
     args = parser.parse_args(argv)
     try:
         if args.command == "audition":
@@ -231,8 +248,13 @@ def main(argv: list[str] | None = None) -> int:
             checked = check_outline(args.outline.resolve())
             ids = "、".join(episode.id for episode in checked.episodes)
             print(f"大纲检查通过：{len(checked.episodes)} 期（{ids}）")
+        elif args.command == "check":
+            script = args.script.resolve()
+            report = check_script(script)
+            print(format_report(script, report))
+            return 0 if report.passed else 1
         elif args.command == "render":
-            return _render(args.script.resolve(), args.out, args.revoice)
+            return _render(args.script.resolve(), args.out, args.revoice, args.draft)
         elif args.command == "voice":
             from pixelbook.qwen_tts import QwenTtsEngine
 
@@ -246,6 +268,7 @@ def main(argv: list[str] | None = None) -> int:
                 _verifier(),
                 revoice=args.revoice,
                 font=VIDEO_PUBLIC / SUBTITLE_FONT,
+                draft=args.draft,
             )
             total = sum(line["seconds"] for line in manifest["lines"])
             print(
@@ -303,7 +326,7 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def _render(script: Path, out: Path | None, revoice: bool) -> int:
+def _render(script: Path, out: Path | None, revoice: bool, draft: bool) -> int:
     out = (
         out or REPO_ROOT / "out" / f"{EpisodePath.from_script(script).id}.mp4"
     ).resolve()
@@ -331,6 +354,7 @@ def _render(script: Path, out: Path | None, revoice: bool) -> int:
             public_dir=VIDEO_PUBLIC,
             font=VIDEO_PUBLIC / SUBTITLE_FONT,
             revoice=revoice,
+            draft=draft,
             log=print,
         )
     except RenderError as error:

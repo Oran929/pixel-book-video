@@ -229,8 +229,8 @@ def _check_segments(episode: Episode, where: str) -> list[str]:
     low, high = SECONDS
     if not low <= seconds <= high:
         problems.append(
-            f"{where}：各段 `minutes` 的总和是 {_clock(seconds)}，"
-            f"应该在 {_clock(low)}–{_clock(high)} 内"
+            f"{where}：各段 `minutes` 的总和是 {clock(seconds)}，"
+            f"应该在 {clock(low)}–{clock(high)} 内"
         )
     return problems
 
@@ -266,5 +266,5 @@ def _span(paragraphs: list[str]) -> str:
     return f"（{paragraphs[0]}–{paragraphs[-1]}）" if paragraphs else "（没有段落）"
 
 
-def _clock(seconds: int) -> str:
+def clock(seconds: int) -> str:
     return f"{seconds // 60}:{seconds % 60:02d}"
