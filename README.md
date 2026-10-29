@@ -465,6 +465,25 @@ uv run pixelbook terms ../books/sample/ch01/ep01/script.yaml   # 每个新术语
 - **音量**：旁白、音效、配乐的音量常量在 `video/src/style/volume.ts` 的 `VOLUME_DB`，用 dB 写（相对旁白），换算成 Remotion 要的 0–1 线性值 `VOLUME`（以旁白为 1）。现在音效 -12 dB、配乐 -20 dB，到人工关口 3 再调。音效文件本身的峰值在 -6 到 -8 dBFS（`npm run test` 检查每个音效文件是 16 位单声道、有声音、峰值低于 -1 dBFS）。
 - `npm run test` 还检查：登记的每个音效的 wav 和参数文件都在、参数是 16 位采样，`sfx/` 里没有没登记的文件，每个组件声明的音效都已登记。`make smoke` 用静音的假旁白真实渲染一次，用 ffmpeg `silencedetect` 检查每个音效都在它的帧响起，并检查三个不同的音效同时响起时不削波。
 
+#### 配乐
+
+配乐库有 8 首 CC0 的 8-bit 循环曲，每期从里面选一首垫在旁白下面（spec #16 用户故事 44–48，修订 D2；入库记录见 #38）。播放（循环、音量、淡出）和分镜里的 `music` 字段在后续的票里做。
+
+- **登记表**：`video/src/music/tracks.ts` 的 `MUSIC`（曲子 ID → 文件、曲名、作者、作品页、许可、核对日期、采样率、采样数、是否无缝循环）。和音效登记表一样是纯 TypeScript 模块，Node 和 Remotion 共用。登记表用 `defineMusicLibrary` 定义，导入时就校验：许可不是 `CC0` 报错（简介里永远不用署名，CC-BY 等需要署名的不收），采样数不是一帧采样数的整数倍报错（30fps 下 44.1 kHz 一帧 1470 个、48 kHz 一帧 1600 个，这样循环长度是整数帧，不会被取整）。
+- **曲子**（ID：曲名，作者）：`flowerbed-fields`：Flowerbed Fields [Loop]，`sideways-city`：Sideways City（循环版），`starlight-city`：Starlight City（zip 里的循环版），`pixel-sprinter`：Pixel Sprinter（循环版），这四首是 Zane Little Music；`the-arplands`：The Arplands，LordZintick；`lasso-lady`：Lasso Lady，congusbongus；`arcade-background-music`：arcade background music，aqrezes；`delayed-chiptune`：Delayed Chiptune，Centurion_of_war。都来自 OpenGameArt，许可在作品页上核对过（日期记在登记表里）。
+- **文件**：`video/public/music/<ID>.ogg`，OGG/Vorbis（oggenc `-q 3`，约 110 kbps），8 首共约 8.5 MB。不用 MP3（MP3 编码器会在头尾补静音，循环点会断）。不能放在 `video/public/episode/` 下：配音每次都会删掉那个目录。
+- **入库**（只在本机做，要 ffmpeg 和 oggenc，`brew install vorbis-tools`）：先在作品页上核对许可，把源文件下载到一个目录，每首一个子目录（子目录和文件名见 `video/src/music/intake-music.ts` 的 `SOURCES`），然后
+
+  ```sh
+  cd video
+  npm run music:intake -- /path/to/downloads   # 写 public/music/<ID>.ogg，打印每首的采样率和采样数
+  npm run music:seams                           # 接缝检查，打印一张 Markdown 表
+  ```
+
+  把打印出的采样率、采样数抄进登记表。入库命令对每首：解码 → 按需去掉首尾静音（`trimSilence`，只有 arcade background music 用：源文件曲首约 46 毫秒、曲尾约 1.7 秒是静音）→ **按周期重采样**把采样数对齐到一帧的整数倍（`video/src/music/stretch.ts`：把曲子当成首尾相接的环，用 Blackman 窗 sinc 插值整体拉长或缩短，快慢变化不到 0.05%；不裁剪也不补零，所以接缝处仍是曲尾接曲首）→ oggenc 编码 → 用 ffprobe 的 `duration_ts` 核对编码后的采样数（不用 `format=duration`）。源文件有 wav 时用 wav；只有 OGG 的（Lasso Lady、Delayed Chiptune）从 OGG 解码再编码一次。
+- **接缝检查**：`npm run music:seams` 解码登记表里的每首曲子，把曲尾接回曲首（`video/src/music/seam.ts` 的 `measureSeam`），量两样：接缝处的采样差（超过 0.01，并且超过接缝两侧各 10 毫秒里相邻采样最大差的 2 倍，算断开），接缝两侧各 50 毫秒的 RMS（跳变超过 10 dB，或一侧低于 -60 dBFS，算不无缝）。量出来的结果和登记表的 `seamless` 不一致时以非零码退出。它只能挡住咔哒声和空档，挡不住节拍接错，听感留到人工关口 3。
+- `npm run test` 检查：登记的每首曲子的文件都在 `music/` 里、文件名就是 ID；许可是 CC0，记了核对日期和作品页；文件是 OGG/Vorbis，采样率和采样数（读 OGG 最后一页的 granule position）与登记表一致，采样数是一帧采样数的整数倍；`music/` 里没有没登记的文件；许可不是 CC0、采样数没对齐时 `defineMusicLibrary` 报错。
+
 ### 时间轴、打点时间表与试听音轨
 
 停顿规则只在 TypeScript 的时间轴函数里（`video/src/episode/timeline.ts`）。想听逐句配音按停顿排好后的整体效果，先导出时间轴，再拼一条试听音轨（不是正式产物，渲染时 Remotion 仍逐句放音频）：

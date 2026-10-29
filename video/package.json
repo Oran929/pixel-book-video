@@ -9,7 +9,9 @@
     "test": "vitest run",
     "render": "remotion render Episode",
     "timeline": "tsx src/episode/timeline-cli.ts",
-    "sfx": "tsx src/sound/generate-sfx.ts"
+    "sfx": "tsx src/sound/generate-sfx.ts",
+    "music:intake": "tsx src/music/intake-music.ts",
+    "music:seams": "tsx src/music/check-seams.ts"
   },
   "dependencies": {
     "@remotion/cli": "^4.0.539",
