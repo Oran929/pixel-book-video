@@ -176,7 +176,7 @@ uv run pixelbook check ../books/pragmatic-programmer/ch02/ep01/script.yaml
 警告（不影响退出码）：
 
 - `cite` 里的编号不在本期 `units` 覆盖的单元或段落范围里（章首导语不属于任何单元，算在范围外；章末脚注和大纲检查一样，看它的标记所在的段落）。偶尔引用别处的定义可以，审稿时看一眼；
-- 照搬原文：字幕 `text` 和它 `cite` 引用的任一文字段，两边都去掉空白和标点后，有 12 个字以上连续相同。警告里写出相同的片段。
+- 照搬原文：字幕 `text` 和它 `cite` 引用的任一文字段，两边都去掉空白和标点后，有 12 个字以上连续相同。警告里写出相同的片段。提示框标题可以照用：字幕里照用了紧挨着这一段的提示框标题（`提示N` 后面的部分）时，那一截不参与比较。
 
 章目录名必须是 `chNN`，转换结果不存在时先跑 `pixelbook convert`。样例旁白稿的出处不指向真实原文（样例书没有转换结果），不用 `check` 检查。
 
@@ -192,7 +192,7 @@ uv run pixelbook factcheck-packet ../books/pragmatic-programmer/ch02/ep01
 uv run pixelbook factcheck-record ../books/pragmatic-programmer/ch02/ep01 <裁判的回答.yaml>
 ```
 
-- **`factcheck-packet`**：旁白稿除 `factcheck.yaml` 以外还有任何报错（即 `check` 的报错去掉核对结果那几条）时拒绝，打印检查报告、退出码 1。旧的 `factcheck.yaml` 对不上不拦，这一轮就是要重新核对。材料里没有主题、段标题、画面说明、`points` 和 `speech`。
+- **`factcheck-packet`**：旁白稿除 `factcheck.yaml` 以外还有任何报错（即 `check` 的报错去掉核对结果那几条）时拒绝，打印检查报告、退出码 1。旧的 `factcheck.yaml` 对不上不拦，这一轮就是要重新核对。材料里没有主题、段标题、画面说明、`points` 和 `speech`。提示框标题（`### 提示N　…`）不是编号段落、引用不到，所以引用了紧挨在提示框前面或后面的那一段时，材料按原文位置在这一段前后加一行 `提示框：提示15　DRY——不要重复自己`（脚注标记去掉；相邻两段共用的只列一次），旁白复述提示框也有原文可核对。
 - **`factcheck-record`**：裁判的回答要和旁白稿逐句对应（同样的句子 ID、同样的顺序、不多不少），否则报出第一处对不上的位置、不写文件，要把同一份材料交给新的裁判。对得上时整份覆盖 `factcheck.yaml`：`round` 是旧文件的 `round` + 1（没有旧文件时为 1），每句抄下当前的字幕和出处。最后打印汇报：各判定的句数，先列不支持、再列部分支持的句子（ID、字幕、理由）；有不支持的句子时写明还能再核对几轮（`/script` 最多 3 轮，`judge.MAX_ROUNDS`），或轮次已用完。旧文件格式不对时拒绝，算不出轮次；从头核对就先删掉它。
 
 ```yaml

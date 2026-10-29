@@ -12,7 +12,7 @@ import yaml
 from pixelbook import cli
 
 # 单元 1：¶001–¶003 是文字段（¶002 是引文），¶004、¶005 是图片段（¶005 带图题）；
-# 单元 2：¶006；章末脚注 ¶007 不属于任何单元（它的标记在 ¶006 里）
+# 单元 2：提示框标题后面是 ¶006；章末脚注 ¶007 不属于任何单元（它的标记在 ¶006 里）
 CHAPTER = """\
 # 第1章　示例
 
@@ -29,6 +29,8 @@ ch01-¶004 [图 images/00001.jpeg]
 ch01-¶005 [图 images/00002.jpeg] 图表 1——一张带图题的图
 
 ## 2　第二单元
+
+### 提示1　程序员要为自己的职业生涯负责
 
 ch01-¶006 另一个单元的正文[1]。
 
@@ -468,6 +470,29 @@ def test_eleven_characters_copied_is_not_a_warning(check):
     assert "警告：无" in check(data)[1]
 
 
+def test_quoting_the_tip_box_title_next_to_a_cited_paragraph_is_not_copying(
+    check, episode
+):
+    # 提示框标题可以照用；正文复述了标题时，照用标题不算照搬那一段
+    chapter = episode.parent.parent / "chapters" / "ch01.md"
+    chapter.write_text(
+        CHAPTER.replace(
+            "另一个单元的正文[1]。",
+            "所以说，程序员要为自己的职业生涯负责，这是第一条[1]。",
+        )
+    )
+    data = outline()
+    data["episodes"][0]["units"] = [1, 2]
+    lines = script()
+    _line(lines, 3)["text"] = "提示1：程序员要为自己的职业生涯负责"
+    _line(lines, 3)["cite"] = "ch01-¶006"
+
+    code, out = check(lines, data)
+
+    assert code == 0, out
+    assert "警告：无" in out
+
+
 def test_copying_is_only_compared_with_the_cited_paragraphs(check):
     data = script()
     _line(data, 3)["text"] = "对自己的职业生涯负责，不害"
@@ -613,6 +638,35 @@ def test_the_packet_gives_each_line_with_only_its_cited_paragraphs(pixelbook, ep
         f"## s01-l01\n\n旁白：{LINE_TEXT}\n\n原文：\n\nch01-¶001 第一段正文。\n\n"
         f"## s01-l02\n\n旁白：{LINE_TEXT}\n\n原文：\n\n"
         "ch01-¶002 > 一段引文。\nch01-¶004 [图 images/00001.jpeg]\n\n"
+    )
+
+
+def test_the_packet_shows_the_tip_box_next_to_a_cited_paragraph(pixelbook, episode):
+    # 提示框标题不是编号段落，引用不到；引用它紧挨着的段落时，材料里带上它
+    chapter = episode.parent.parent / "chapters" / "ch01.md"
+    chapter.write_text(
+        CHAPTER.replace(
+            "ch01-¶003 第三段", "### 提示0　一条在前面的提示\n\nch01-¶003 第三段"
+        )
+    )
+    data = outline()
+    data["episodes"][0]["units"] = [1, 2]
+    lines = script()
+    _line(lines, 1)["cite"] = ["ch01-¶002", "ch01-¶003"]
+    _line(lines, 3)["cite"] = ["ch01-¶006"]
+
+    code, out = pixelbook(["factcheck-packet", str(episode)], lines, data)
+
+    assert code == 0, out
+    # ¶002 和 ¶003 共用一个提示框，只列一次，按原文顺序放在两段之间
+    assert (
+        "原文：\n\nch01-¶002 > 一段引文。\n提示框：提示0　一条在前面的提示\n"
+        "ch01-¶003 第三段" in out
+    )
+    assert (
+        "## s01-l03\n\n旁白：一二三四五六七八九十一二三四五六七八九十\n\n原文：\n\n"
+        "提示框：提示1　程序员要为自己的职业生涯负责\nch01-¶006 另一个单元的正文[1]。\n\n"
+        in out
     )
 
 

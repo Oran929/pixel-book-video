@@ -11,7 +11,7 @@ from pathlib import Path
 import yaml
 
 from pixelbook.check import RULES, check_script, factcheck_matches, format_report
-from pixelbook.convert import read_chapter
+from pixelbook.convert import Paragraph, read_chapter
 from pixelbook.episode_path import EpisodePath
 from pixelbook.factcheck import (
     PARTIAL,
@@ -25,6 +25,8 @@ from pixelbook.factcheck import (
 )
 from pixelbook.script import Line, load_script
 
+# 核对材料里提示框标题那一行的开头
+TIP = "提示框："
 # `/script` 最多核对这么多轮：不支持的句子改写后重新核对，用完后置顶交给用户
 MAX_ROUNDS = 3
 
@@ -48,9 +50,25 @@ def packet(episode: EpisodePath) -> str:
     paragraphs = read_chapter(episode.chapter.converted).paragraphs
     blocks = []
     for line in script.lines:
-        cited = "\n".join(f"{i} {paragraphs[i].text}" for i in line.cite)
+        cited = "\n".join(_cited(line.cite, paragraphs))
         blocks.append(f"## {line.id}\n\n旁白：{line.text}\n\n原文：\n\n{cited}\n\n")
     return "".join(blocks)
+
+
+def _cited(cite: list[str], paragraphs: dict[str, Paragraph]) -> list[str]:
+    """引用的段落，按原文位置带上紧挨着它的提示框标题；相邻两段共用的只列一次。"""
+    rows: list[str] = []
+    for i in cite:
+        paragraph = paragraphs[i]
+        before, after = paragraph.tip_before, paragraph.tip_after
+        for row in (
+            *([f"{TIP}{before}"] if before else []),
+            f"{i} {paragraph.text}",
+            *([f"{TIP}{after}"] if after else []),
+        ):
+            if row not in rows[-1:]:
+                rows.append(row)
+    return rows
 
 
 def record(episode: EpisodePath, answer: Path) -> str:

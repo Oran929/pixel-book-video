@@ -8,7 +8,7 @@ import posixpath
 import re
 import zipfile
 from collections.abc import Iterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 from xml.etree import ElementTree as ET
@@ -49,6 +49,8 @@ PARAGRAPH_ID = re.compile(r"^ch\d{2}-¶\d{3}$")
 PARAGRAPH_LINE = re.compile(r"^(ch\d{2}-¶\d{3}) (.*)$")
 # 单元标题 `## 9　DRY——邪恶的重复`（单元号和名字之间是全角空格）
 UNIT_LINE = re.compile(r"^## (\d+)　(.*)$")
+# 提示框标题 `### 提示15　DRY——不要重复自己`
+TIP_LINE = re.compile(r"^### (提示\d+　.*)$")
 # 章末脚注以它的编号开头，如 `[18]译注：……`；正文里的标记也写成 `[18]`
 FOOTNOTE_LINE = re.compile(r"^\[(\d+)\]")
 QUOTE_CLASSES = {
@@ -109,6 +111,10 @@ class Paragraph:
     unit: int | None
     # 章末脚注：它的标记 `[N]` 所在的段落；标记在标题里时，是标题后面的第一个编号段落
     marked_in: str | None = None
+    # 紧挨在这一段前面、后面的提示框标题（`### 提示N　…`，去掉脚注标记），没有时为 None。
+    # 提示框只有标题，不是编号段落，引用不到；核对材料和照搬检查经由相邻的段落用它
+    tip_before: str | None = None
+    tip_after: str | None = None
 
     @property
     def is_image(self) -> bool:
@@ -139,6 +145,9 @@ def read_chapter(path: Path) -> Chapter:
     unit: Unit | None = None
     marks = _Marks()
     in_notes = False
+    # 提示框：等着挂到下一段上的标题，和紧挨在提示框前面的那一段（中间隔着别的标题就不算）
+    tip: str | None = None
+    previous: str | None = None
     for line in path.read_text().splitlines():
         if match := UNIT_LINE.match(line):
             unit = Unit(int(match[1]), match[2], [])
@@ -147,8 +156,16 @@ def read_chapter(path: Path) -> Chapter:
             unit, in_notes = None, True
         elif line.startswith("## "):
             unit = None
-        if line.startswith("#"):
+        if line.startswith("#") or line == RULE:
             marks.scan(line, None)
+            tip = None
+            if match := TIP_LINE.match(line):
+                tip = re.sub(r"\[\d+\]", "", match[1]).strip()
+                if previous:
+                    chapter.paragraphs[previous] = replace(
+                        chapter.paragraphs[previous], tip_after=tip
+                    )
+            previous = None
         elif match := PARAGRAPH_LINE.match(line):
             id, text = match[1], match[2]
             note = FOOTNOTE_LINE.match(text) if in_notes else None
@@ -159,7 +176,9 @@ def read_chapter(path: Path) -> Chapter:
                 text,
                 unit.number if unit else None,
                 marked_in=marks.found.get(int(note[1])) if note else None,
+                tip_before=tip,
             )
+            tip, previous = None, id
             if unit:
                 unit.paragraphs.append(id)
     return chapter
