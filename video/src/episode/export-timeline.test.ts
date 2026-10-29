@@ -93,6 +93,7 @@ describe("exportTimeline", () => {
         intro: { seconds: 422 / 30, text: "0:14" },
         body: { seconds: 214 / 30, text: "0:07" },
         outro: { seconds: 10.8, text: "0:10" },
+        partsText: "（片头 0:14，正文 0:07，片尾 0:10）",
       },
       // 没有分镜：不放音效，也不放配乐
       sounds: [],
@@ -118,7 +119,7 @@ describe("exportTimeline", () => {
 
     // 片头 422 帧之后才放配乐，正文到第 422 + 61 + 36 + 45 + 24 + 75 = 663 帧结束，
     // 在这之前的 60 帧淡出，片尾（324 帧）期间不放；文件、曲长（forgotten path 40.03 秒
-    // = 1201 帧）、每次循环（正文比曲子短，只放一次）和音量供全长试验做参照
+    // = 1201 帧）、每次循环（正文比曲子短，只放一次）、交叉淡化帧数和音量供全长试验做参照
     expect(read(join(episode, "timeline.json"))).toMatchObject({
       totalFrames: 663 + 324,
       music: {
@@ -129,6 +130,7 @@ describe("exportTimeline", () => {
         file: "music/forgotten-path.ogg",
         trackFrames: 1201,
         plays: [{ from: 422, to: 663, fadeIn: null, fadeOut: null }],
+        crossfadeFrames: 30,
         volumeDb: -20,
       },
     });

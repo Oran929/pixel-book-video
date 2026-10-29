@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { writeCredits } from "../music/credits";
-import { type MusicPlay, musicPlays } from "../music/crossfade";
+import { CROSSFADE_FRAMES, type MusicPlay, musicPlays } from "../music/crossfade";
 import { MUSIC, trackFrames } from "../music/tracks";
 import { VOLUME_DB } from "../style/volume";
 import { type MusicPlan, planEpisode } from "./episode-plan";
@@ -41,12 +41,13 @@ export type ExportedTimeline = Timeline & {
 
 /**
  * 配乐，外加文件（以 `video/public/` 为起点）、曲长几帧、每次循环（起止帧和交叉淡化的帧区间，
- * 见 `musicPlays`）和音量（dB，相对旁白）
+ * 见 `musicPlays`）、每个接缝交叉淡化几帧（`CROSSFADE_FRAMES`）和音量（dB，相对旁白）
  */
 export type ExportedMusic = MusicPlan & {
   file: string;
   trackFrames: number;
   plays: MusicPlay[];
+  crossfadeFrames: number;
   volumeDb: number;
 };
 
@@ -83,6 +84,7 @@ export const exportTimeline = (
       file: MUSIC[music.track].file,
       trackFrames: trackFrames(music.track),
       plays: musicPlays(music, trackFrames(music.track)),
+      crossfadeFrames: CROSSFADE_FRAMES,
       volumeDb: VOLUME_DB.music,
     },
   };

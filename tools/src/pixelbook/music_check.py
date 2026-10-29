@@ -21,10 +21,11 @@ import numpy as np
 # 量电平时统一重采样到的采样率（Remotion 渲染出的音轨就是 48 kHz）
 SAMPLE_RATE = 48000
 # 静音判定：低于 -50 dBFS、持续 20 毫秒以上
-SILENCE_DB = -50
+SILENCE_THRESHOLD_DB = -50
 SILENCE_SECONDS = 0.02
 # 参照低于这个电平的帧（曲子里的停顿、淡出的最后几帧）不比：差值全是噪声
-FLOOR_DB = -60.0
+# （和 `video/src/music/seam.ts` 的 `COMPARE_FLOOR_DB` 同名同值）
+COMPARE_FLOOR_DB = -60.0
 # 音效那一帧至少要比配乐高出这么多 dB
 SOUND_DB = 3.0
 # 交叉淡化前后看多少秒的静音
@@ -37,17 +38,91 @@ TOLERANCE_DB = 1.0
 REMOTION_VOLUME_STEPS = 97
 
 
+@dataclass(frozen=True)
+class FrameSpan:
+    """帧区间 [start, end)（`timeline.json` 里写作 `from`、`to`）。"""
+
+    start: int
+    end: int
+
+    @classmethod
+    def from_json(cls, span: dict | None) -> "FrameSpan | None":
+        return None if span is None else cls(span["from"], span["to"])
+
+
+@dataclass(frozen=True)
+class MusicPlay:
+    """一次循环（和 crossfade.ts 的 `MusicPlay` 一样）：从 `start` 放到 `end`（不含），
+    `fade_in`、`fade_out` 是和上一次、下一次重叠的帧区间（没有为 None）。"""
+
+    start: int
+    end: int
+    fade_in: FrameSpan | None
+    fade_out: FrameSpan | None
+
+
+@dataclass(frozen=True)
+class MusicSchedule:
+    """`timeline.json` 的 `music`（时间轴导出命令算好的排期，这里原样用，ADR-0004）。"""
+
+    track: str
+    file: str
+    start_frame: int
+    end_frame: int
+    fade_from: int
+    track_frames: int
+    crossfade_frames: int
+    plays: list[MusicPlay]
+    volume_db: float
+
+    @classmethod
+    def from_json(cls, music: dict) -> "MusicSchedule":
+        return cls(
+            track=music["track"],
+            file=music["file"],
+            start_frame=music["startFrame"],
+            end_frame=music["endFrame"],
+            fade_from=music["fadeFrom"],
+            track_frames=music["trackFrames"],
+            crossfade_frames=music["crossfadeFrames"],
+            plays=[
+                MusicPlay(
+                    p["from"],
+                    p["to"],
+                    FrameSpan.from_json(p["fadeIn"]),
+                    FrameSpan.from_json(p["fadeOut"]),
+                )
+                for p in music["plays"]
+            ],
+            volume_db=music["volumeDb"],
+        )
+
+    @property
+    def seams(self) -> list[FrameSpan]:
+        """每个接缝交叉淡化的帧区间（第二次起每次循环的淡入）。"""
+        return [p.fade_in for p in self.plays if p.fade_in is not None]
+
+
 def music_problems(
     stem: list[float], reference: list[float], *, start: int, end: int
 ) -> list[str]:
     """`stem` 是配乐声轨的逐帧电平，`reference` 是参照；比第 `start` 到 `end`（不含）帧。
 
-    参照低于 `FLOOR_DB` 的帧不比。整体的差取中位数；每帧的电平超出「前后一帧的参照电平
-    加上整体的差」`TOLERANCE_DB` 以上，算问题，连续的帧合成一段报。
+    参照低于 `COMPARE_FLOOR_DB` 的帧不比。整体的差取中位数；每帧的电平超出「前后一帧的
+    参照电平加上整体的差」`TOLERANCE_DB` 以上，算问题，连续的帧合成一段报。
     """
-    compared = [f for f in range(start, end) if reference[f] >= FLOOR_DB]
+    return _compare_music(stem, reference, start=start, end=end)[1]
+
+
+def _compare_music(
+    stem: list[float], reference: list[float], *, start: int, end: int
+) -> tuple[float, list[str]]:
+    """`music_problems` 的做法，连同整体的差（没有可比的帧时为 0）一起返回。"""
+    compared = [f for f in range(start, end) if reference[f] >= COMPARE_FLOOR_DB]
     if not compared:
-        return [f"第 {start}–{end - 1} 帧没有可比的帧（参照全低于 {FLOOR_DB} dBFS）"]
+        return 0.0, [
+            f"第 {start}–{end - 1} 帧没有可比的帧（参照全低于 {COMPARE_FLOOR_DB} dBFS）"
+        ]
     gain = median(stem[f] - reference[f] for f in compared)
 
     def deviation(f: int) -> float:
@@ -56,9 +131,7 @@ def music_problems(
         near = [reference[g] for g in range(max(start, f - 1), min(end, f + 2))]
         low = min(near) + gain - TOLERANCE_DB
         high = max(near) + gain + TOLERANCE_DB
-        if stem[f] < low:
-            return stem[f] - (reference[f] + gain)
-        if stem[f] > high:
+        if stem[f] < low or stem[f] > high:
             return stem[f] - (reference[f] + gain)
         return 0.0
 
@@ -70,19 +143,19 @@ def music_problems(
             f"{_frames(first, last)}的配乐比参照偏了 {worst:+.1f} dB"
             f"（允许 ±{TOLERANCE_DB:.0f} dB，台阶边上按前后一帧放宽）"
         )
-    return problems
+    return gain, problems
 
 
-def _volume(music: dict, play: dict, frame: int) -> float:
+def _volume(music: MusicSchedule, play: MusicPlay, frame: int) -> float:
     """第 `frame` 帧这次循环的线性音量（和 crossfade.ts 的 `musicVolume` 一样）。"""
-    gain = 10 ** (music["volumeDb"] / 20)
-    for span, curve in ((play["fadeIn"], math.sin), (play["fadeOut"], math.cos)):
-        if span and span["from"] <= frame < span["to"]:
-            progress = (frame - span["from"] + 0.5) / (span["to"] - span["from"])
+    gain = 10 ** (music.volume_db / 20)
+    for span, curve in ((play.fade_in, math.sin), (play.fade_out, math.cos)):
+        if span and span.start <= frame < span.end:
+            progress = (frame - span.start + 0.5) / (span.end - span.start)
             gain *= curve(math.pi / 2 * progress)
-    if frame >= music["fadeFrom"]:
+    if frame >= music.fade_from:
         gain *= max(
-            0.0, (music["endFrame"] - frame) / (music["endFrame"] - music["fadeFrom"])
+            0.0, (music.end_frame - frame) / (music.end_frame - music.fade_from)
         )
     return gain
 
@@ -96,7 +169,7 @@ def _remotion_volumes(volumes: list[float]) -> list[float]:
 
 
 def music_reference(
-    music: dict,
+    music: MusicSchedule,
     total_frames: int,
     fps: int,
     public_dir: Path,
@@ -106,27 +179,27 @@ def music_reference(
 ) -> Path:
     """照排期把原曲放成一份 `total_frames` 帧长的参照，写成 48 kHz 立体声 wav（`out`）。
 
-    `music` 是 `timeline.json` 的 `music`：每次循环（`plays`）从曲首放起，每帧乘
+    `music` 是 `timeline.json` 的 `music` 排期：每次循环（`plays`）从曲首放起，每帧乘
     `_volume` 的音量（取整同 Remotion），叠在一起。每次循环的起点像 Remotion 那样放在整毫秒上
     （它用 `adelay=<毫秒>` 摆放每份音频，第 f 帧放在 round(f / fps × 1000) 毫秒，比整帧最多差
     1/3 毫秒，48 kHz 下 16 个采样）。音量按整帧切换；`lead_frames` 让每级台阶提前这么多帧
     （测试里用 0.5 模仿 Remotion 按帧中点切换）。
     """
     per_frame = SAMPLE_RATE // fps
-    track = _decode(public_dir / music["file"])
+    track = _decode(public_dir / music.file)
     mix = np.zeros((total_frames * per_frame, 2), dtype=np.float64)
     lead = round(lead_frames * per_frame)
-    for play in music["plays"]:
-        frames = play["to"] - play["from"]
+    for play in music.plays:
+        frames = play.end - play.start
         volumes = _remotion_volumes(
-            [_volume(music, play, f) for f in range(play["from"], play["to"])]
+            [_volume(music, play, f) for f in range(play.start, play.end)]
         )
         # 每个采样的音量：第 i 个采样属于第 (i + lead) // per_frame 帧
         index = np.minimum(
             (np.arange(frames * per_frame) + lead) // per_frame, frames - 1
         )
         gains = np.asarray(volumes)[index]
-        at = math.floor(play["from"] * 1000 / fps + 0.5) * SAMPLE_RATE // 1000
+        at = math.floor(play.start * 1000 / fps + 0.5) * SAMPLE_RATE // 1000
         # 起点挪到整毫秒后，最后一次循环可能伸出总长一点点，截掉
         segment = track[: min(frames * per_frame, len(mix) - at)]
         mix[at : at + len(segment)] += segment * gains[: len(segment), None]
@@ -150,26 +223,19 @@ def _decode(path: Path) -> np.ndarray:
     return np.frombuffer(raw, dtype="<f4").reshape(-1, 2)
 
 
-def intro_problems(stem: list[float], start: int) -> list[str]:
-    """配乐声轨在第 `start` 帧（片头结束）之前应当是静音：配乐不覆盖片头（#50）。"""
-    loud = [f for f, level in enumerate(stem[:start]) if level > SILENCE_DB]
+def bookend_silence_problems(
+    stem: list[float], frames: range, part: str, already: str
+) -> list[str]:
+    """配乐声轨在 `frames` 这些帧里应当是静音：配乐不覆盖片头（#50）、片尾（#51）。
+
+    `part` 是这段的说法（「片头期间」「片尾期间」），`already` 是报问题时的语气（「就」「还」）。
+    """
+    loud = [f for f in frames if stem[f] > SILENCE_THRESHOLD_DB]
     if not loud:
         return []
     span = _frames(loud[0], loud[-1])
-    return [
-        f"片头期间（第 0–{start - 1} 帧）配乐声轨就有声音：{span}高于 {SILENCE_DB} dBFS"
-    ]
-
-
-def outro_problems(stem: list[float], end: int) -> list[str]:
-    """配乐声轨从第 `end` 帧（正文结束、片尾开始）起应当是静音：配乐不覆盖片尾（#51）。"""
-    loud = [f + end for f, level in enumerate(stem[end:]) if level > SILENCE_DB]
-    if not loud:
-        return []
-    span = _frames(loud[0], loud[-1])
-    return [
-        f"片尾期间（第 {end}–{len(stem) - 1} 帧）配乐声轨还有声音：{span}高于 {SILENCE_DB} dBFS"
-    ]
+    where = f"{part}（第 {frames.start}–{frames.stop - 1} 帧）"
+    return [f"{where}配乐声轨{already}有声音：{span}高于 {SILENCE_THRESHOLD_DB} dBFS"]
 
 
 def duration_problems(*, video: float, audio: float, fps: int) -> list[str]:
@@ -180,8 +246,8 @@ def duration_problems(*, video: float, audio: float, fps: int) -> list[str]:
 
 
 def _gains(levels: list[float], reference: list[float]) -> list[float | None]:
-    """逐帧比参照高多少 dB；参照低于 FLOOR_DB 的帧为 None。"""
-    return [s - r if r >= FLOOR_DB else None for s, r in zip(levels, reference)]
+    """逐帧比参照高多少 dB；参照低于 COMPARE_FLOOR_DB 的帧为 None。"""
+    return [s - r if r >= COMPARE_FLOOR_DB else None for s, r in zip(levels, reference)]
 
 
 def sound_problems(
@@ -195,12 +261,12 @@ def sound_problems(
     gains = _gains(mix, reference)
     steady = [g for g in gains if g is not None]
     if not steady:
-        return [f"没有可比的帧（参照全低于 {FLOOR_DB} dBFS）"]
+        return [f"没有可比的帧（参照全低于 {COMPARE_FLOOR_DB} dBFS）"]
     gain = median(steady)
     problems = []
     for f in sound_frames:
-        # 配乐在这一帧正好停顿时，按 FLOOR_DB 算配乐的电平
-        rise = mix[f] - max(reference[f], FLOOR_DB) - gain
+        # 配乐在这一帧正好停顿时，按 COMPARE_FLOOR_DB 算配乐的电平
+        rise = mix[f] - max(reference[f], COMPARE_FLOOR_DB) - gain
         if rise < SOUND_DB:
             problems.append(
                 f"第 {f} 帧的音效听不出来：比配乐只高 {rise:.1f} dB，"
@@ -238,16 +304,17 @@ def unexplained_silences(
 
     参照的静音和找到的有重叠就算同一段：渲染后的编码会让边界差几毫秒。
     """
-
-    def overlaps(a: tuple[float, float], b: tuple[float, float]) -> bool:
-        return a[0] < b[1] and b[0] < a[1]
-
     return [
         silence
         for silence in found
-        if any(overlaps(silence, span) for span in within)
-        and not any(overlaps(silence, quiet) for quiet in reference)
+        if any(_overlaps(silence, span) for span in within)
+        and not any(_overlaps(silence, quiet) for quiet in reference)
     ]
+
+
+def _overlaps(a: tuple[float, float], b: tuple[float, float]) -> bool:
+    """两个区间（秒）有没有重叠。"""
+    return a[0] < b[1] and b[0] < a[1]
 
 
 def _frames(start: int, end: int) -> str:
@@ -283,8 +350,9 @@ def check_music(mp4: Path, stem: Path, timeline: dict, public_dir: Path) -> Musi
     片头片尾期间声轨是静音；配乐声轨和参照逐帧比（`music_problems`），交叉淡化处不掉音、
     不爆音，淡出照排期降下去；每段交叉淡化前后，声轨和成片里都没有参照之外的静音。
     """
-    fps, total, music = timeline["fps"], timeline["totalFrames"], timeline["music"]
-    start, end, fade_from = music["startFrame"], music["endFrame"], music["fadeFrom"]
+    fps, total = timeline["fps"], timeline["totalFrames"]
+    music = MusicSchedule.from_json(timeline["music"])
+    start, end, fade_from = music.start_frame, music.end_frame, music.fade_from
     seconds = stream_seconds(mp4)
     problems = duration_problems(
         video=seconds["video"], audio=seconds["audio"], fps=fps
@@ -296,11 +364,12 @@ def check_music(mp4: Path, stem: Path, timeline: dict, public_dir: Path) -> Musi
     reference = _pad(frame_levels(reference_wav, fps), total)
     # 声轨比视频短时（上面已经报了），缺的帧当静音
     levels = _pad(frame_levels(stem, fps), total)
-    problems += intro_problems(levels, start)
-    problems += outro_problems(levels, end)
-    problems += music_problems(levels, reference, start=start, end=end)
+    problems += bookend_silence_problems(levels, range(start), "片头期间", "就")
+    problems += bookend_silence_problems(levels, range(end, total), "片尾期间", "还")
+    gain, off = _compare_music(levels, reference, start=start, end=end)
+    problems += off
 
-    seams = [(p["fadeIn"]["from"], p["fadeIn"]["to"]) for p in music["plays"][1:]]
+    seams = [(seam.start, seam.end) for seam in music.seams]
     quiet = silences(reference_wav)
     # 淡出段本来就会变成静音，不看
     windows = [
@@ -318,20 +387,18 @@ def check_music(mp4: Path, stem: Path, timeline: dict, public_dir: Path) -> Musi
             for a, b in found
         ]
 
-    compared = [f for f in range(start, end) if reference[f] >= FLOOR_DB]
-    gain = median(levels[f] - reference[f] for f in compared) if compared else 0
     lines = []
     for a, b in seams:
         near = [
             abs(levels[f] - reference[f] - gain)
             for f in range(a, min(b, end))
-            if reference[f] >= FLOOR_DB
+            if reference[f] >= COMPARE_FLOOR_DB
         ]
-        window = (a / fps - SEAM_WINDOW_SECONDS, b / fps + SEAM_WINDOW_SECONDS)
+        (window,) = seam_windows([(a / fps, b / fps)])
         found = sum(
             1
             for silence in extra["配乐声轨"] + extra["成片"]
-            if silence[0] < window[1] and window[0] < silence[1]
+            if _overlaps(silence, window)
         )
         deviation = f"{max(near):.2f} dB" if near else "参照太轻，没法比"
         lines.append(
@@ -375,7 +442,7 @@ def frame_levels(path: Path, fps: int) -> list[float]:
 def silences(path: Path) -> list[tuple[float, float]]:
     """ffmpeg `silencedetect` 找出的静音区间（秒）；文件末尾的静音没有结束时间，算到无穷远。"""
     output = _ffmpeg_filter(
-        path, f"silencedetect=noise={SILENCE_DB}dB:d={SILENCE_SECONDS}"
+        path, f"silencedetect=noise={SILENCE_THRESHOLD_DB}dB:d={SILENCE_SECONDS}"
     )
     starts = [float(v) for v in re.findall(r"silence_start: (-?[\d.]+)", output)]
     ends = [float(v) for v in re.findall(r"silence_end: (-?[\d.]+)", output)]

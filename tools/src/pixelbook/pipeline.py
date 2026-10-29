@@ -77,18 +77,27 @@ class VoicingReport:
     """检查报告：需要人看的问题，每次配音重写进期目录里的 `report.json`。
 
     `missing_glyphs` 是字体里没有字形的字（旁白句 ID、画面 ID 或 `title`，和字）；
-    没给字体、不做缺字检查时是 `None`，`report.json` 里也没有这一项。
+    没给字体、不做缺字检查时是 `None`，`report.json` 里也没有这一项。有缺字时拒绝配音，
+    还没复核：两项复核结果是 `None`（`missing_glyphs_only`），`report.json` 里只有缺字。
     """
 
-    asr_failures: list[AsrReportEntry]
-    asr_pinyin_passes: list[AsrReportEntry]
+    asr_failures: list[AsrReportEntry] | None
+    asr_pinyin_passes: list[AsrReportEntry] | None
     missing_glyphs: list[dict[str, str]] | None = None
 
+    @classmethod
+    def missing_glyphs_only(cls, missing: list[dict[str, str]]) -> "VoicingReport":
+        """缺字拒绝配音时的报告：只有缺字，没有复核结果。"""
+        return cls(asr_failures=None, asr_pinyin_passes=None, missing_glyphs=missing)
+
     def to_json(self) -> dict[str, Any]:
-        report: dict[str, Any] = {
-            "asr_failures": [asdict(entry) for entry in self.asr_failures],
-            "asr_pinyin_passes": [asdict(entry) for entry in self.asr_pinyin_passes],
-        }
+        report: dict[str, Any] = {}
+        if self.asr_failures is not None:
+            report["asr_failures"] = [asdict(entry) for entry in self.asr_failures]
+        if self.asr_pinyin_passes is not None:
+            report["asr_pinyin_passes"] = [
+                asdict(entry) for entry in self.asr_pinyin_passes
+            ]
         if self.missing_glyphs is not None:
             report["missing_glyphs"] = self.missing_glyphs
         return report
@@ -162,7 +171,7 @@ def voice_episode(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n"
     )
     report = VoicingReport(voiced.failures, voiced.pinyin_passes, glyphs)
-    _write_report(episode.dir, report.to_json())
+    _write_report(episode.dir, report)
     _stage_audio(settings.public_dir, voiced.wavs)
     stage_episode(episode.dir, settings.public_dir)
     write_lock(book_dir, locked)
@@ -200,7 +209,7 @@ def _check_glyphs(
         texts.extend((line.id, line.text) for line in scene.lines)
     missing = missing_glyphs(texts, font)
     if missing:
-        _write_report(episode_dir, {"missing_glyphs": missing})
+        _write_report(episode_dir, VoicingReport.missing_glyphs_only(missing))
         raise PipelineError(missing_glyphs_message(script_path, missing, font))
     return missing
 
@@ -266,9 +275,10 @@ def _stage_audio(public_dir: Path, wavs: dict[str, Path]) -> None:
         shutil.copyfile(wav, public_dir / audio)
 
 
-def _write_report(episode_dir: Path, report: dict[str, Any]) -> None:
+def _write_report(episode_dir: Path, report: VoicingReport) -> None:
+    """检查报告只从这里写进 `report.json`，内容一律是 `VoicingReport.to_json`。"""
     (episode_dir / REPORT_NAME).write_text(
-        json.dumps(report, ensure_ascii=False, indent=2) + "\n"
+        json.dumps(report.to_json(), ensure_ascii=False, indent=2) + "\n"
     )
 
 

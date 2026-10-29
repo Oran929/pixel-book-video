@@ -3,7 +3,7 @@
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { exportTimeline, TIMELINE_FILE } from "./export-timeline";
-import { partsText, segmentsText } from "./rhythm";
+import { segmentsText } from "./rhythm";
 
 const USAGE =
   "用法：npm run timeline -- <期目录> [--no-storyboard] [--out <timeline.json 路径>]";
@@ -53,7 +53,7 @@ const main = (argv: string[]): number => {
     // 样片阶段只报告，不以非零码退出
     console.log(
       `总时长 ${timeline.duration.text}：${timeline.duration.verdictText}` +
-        partsText(timeline.duration),
+        timeline.duration.partsText,
     );
   } catch (error) {
     console.error((error as Error).message);

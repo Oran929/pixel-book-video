@@ -23,6 +23,7 @@ import pytest
 from pixelbook import REPO_ROOT, cli
 from pixelbook.asr import FakeAsrEngine
 from pixelbook.music_check import (
+    MusicSchedule,
     duration_problems,
     frame_levels,
     music_reference,
@@ -169,7 +170,11 @@ def test_fixed_sample_renders_with_the_computed_number_of_frames(repo, capsys):
     assert bookend_problems(mix[body_end:], outro_track[: total - body_end]) == []
     # 参照：照排期把原曲从片头结束放到正文结束。音效准时响起，第一个之前只有配乐
     reference_wav = music_reference(
-        music, total, fps, public, repo / "out" / "smoke-music-reference.wav"
+        MusicSchedule.from_json(music),
+        total,
+        fps,
+        public,
+        repo / "out" / "smoke-music-reference.wav",
     )
     reference = frame_levels(reference_wav, fps)[:body_end]
     assert sound_problems(mix[:body_end], reference, [s["frame"] for s in sounds]) == []

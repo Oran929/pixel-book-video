@@ -69,13 +69,18 @@ export type DurationReport = {
   body: PartDuration;
   /** 片尾（#51）：最后 `outroFrames` 帧；不用片尾时为 null */
   outro: PartDuration | null;
+  /**
+   * 总时长后面括号里分开写的各部分，例如「（片头 0:14，正文 4:26，片尾 0:07）」；没有片头
+   * 也没有片尾时为空字符串。Python 的 `pixelbook render` 汇总原样打印（ADR-0004）
+   */
+  partsText: string;
 };
 
 /**
  * 总时长后面括号里分开写的各部分，例如「（片头 0:14，正文 4:26，片尾 0:07）」；
- * 没有片头也没有片尾时为空。Python 的 `pixelbook render` 汇总按同样的写法打印
+ * 没有片头也没有片尾时为空
  */
-export const partsText = ({ intro, body, outro }: DurationReport): string =>
+const partsText = ({ intro, body, outro }: Pick<DurationReport, "intro" | "body" | "outro">): string =>
   intro || outro
     ? `（${[
         intro && `片头 ${intro.text}`,
@@ -104,13 +109,17 @@ export const durationReport = ({
     seconds: frames / fps,
     text: minutesSeconds(Math.floor(frames / fps)),
   });
+  const parts = {
+    intro: introFrames > 0 ? part(introFrames) : null,
+    body: part(totalFrames - introFrames - outroFrames),
+    outro: outroFrames > 0 ? part(outroFrames) : null,
+  };
   return {
     seconds,
     text: minutesSeconds(whole),
     verdict,
     verdictText: VERDICT_TEXT[verdict],
-    intro: introFrames > 0 ? part(introFrames) : null,
-    body: part(totalFrames - introFrames - outroFrames),
-    outro: outroFrames > 0 ? part(outroFrames) : null,
+    ...parts,
+    partsText: partsText(parts),
   };
 };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { durationReport, formatSegmentStart, partsText, segmentsText } from "./rhythm";
+import { durationReport, formatSegmentStart, segmentsText } from "./rhythm";
 
 describe("formatSegmentStart", () => {
   it.each([
@@ -115,18 +115,18 @@ describe("durationReport", () => {
   });
 });
 
-describe("partsText", () => {
+describe("durationReport partsText", () => {
   it("names intro, body and outro in order", () => {
     // 片头 422 帧，正文 7768 帧（4:18.9），片尾 324 帧
     const report = durationReport({ fps: 30, introFrames: 422, outroFrames: 324, totalFrames: 8514 });
-    expect(partsText(report)).toBe("（片头 0:14，正文 4:18，片尾 0:10）");
+    expect(report.partsText).toBe("（片头 0:14，正文 4:18，片尾 0:10）");
   });
 
   it("leaves out the parts a timeline does not have", () => {
     const noIntro = durationReport({ fps: 30, outroFrames: 324, totalFrames: 8514 });
-    expect(partsText(noIntro)).toBe("（正文 4:33，片尾 0:10）");
+    expect(noIntro.partsText).toBe("（正文 4:33，片尾 0:10）");
     const noOutro = durationReport({ fps: 30, introFrames: 422, totalFrames: 8514 });
-    expect(partsText(noOutro)).toBe("（片头 0:14，正文 4:29）");
-    expect(partsText(durationReport({ fps: 30, totalFrames: 8400 }))).toBe("");
+    expect(noOutro.partsText).toBe("（片头 0:14，正文 4:29）");
+    expect(durationReport({ fps: 30, totalFrames: 8400 }).partsText).toBe("");
   });
 });

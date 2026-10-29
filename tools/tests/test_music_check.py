@@ -7,6 +7,7 @@ import pytest
 
 from pixelbook.music_check import (
     SAMPLE_RATE,
+    MusicSchedule,
     check_music,
     duration_problems,
     frame_levels,
@@ -237,9 +238,14 @@ def plan(frames, start=0, end=None):
             "fadeFrom": end - 60,
             "trackFrames": 90,
             "plays": plays(start, end),
+            "crossfadeFrames": 30,
             "volumeDb": -20,
         },
     }
+
+
+def schedule(timeline):
+    return MusicSchedule.from_json(timeline["music"])
 
 
 def render(tmp_path, source, frames, extra_filter="", start=0, end=None, fade=True):
@@ -295,7 +301,7 @@ def test_the_reference_crossfades_each_loop_and_fades_out(tmp_path):
     public_dir = public(tmp_path)
     out = tmp_path / "reference.wav"
 
-    music_reference(plan(200, start=20)["music"], 200, FPS, public_dir, out)
+    music_reference(schedule(plan(200, start=20)), 200, FPS, public_dir, out)
     levels = frame_levels(out, FPS)
     track_db = np.median(frame_levels(public_dir / "music" / "track.wav", FPS))
 
@@ -318,7 +324,7 @@ def test_the_reference_places_each_play_at_a_whole_millisecond_like_remotion(tmp
     public_dir = public(tmp_path)
     out = tmp_path / "reference.wav"
 
-    music_reference(plan(200, start=1)["music"], 200, FPS, public_dir, out)
+    music_reference(schedule(plan(200, start=1)), 200, FPS, public_dir, out)
     raw = subprocess.run(
         ["ffmpeg", "-v", "error", "-i", str(out), "-f", "f32le", "-"],
         capture_output=True,
@@ -431,7 +437,7 @@ def test_remotion_like_volume_steps_slightly_out_of_line_with_the_reference_pass
     帧和参照对不齐。照这个样子造一份声轨（台阶早半帧），再整体错开 16 个采样（#50、#51 里
     旧的参照没按整毫秒放，就差这么多，淡出检查因此报了「回升」），检查应当通过。"""
     public_dir = public(tmp_path)
-    music = plan(200)["music"]
+    music = schedule(plan(200))
     reference = tmp_path / "reference.wav"
     music_reference(music, 200, FPS, public_dir, reference)
     clean = tmp_path / "clean.wav"

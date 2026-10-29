@@ -16,9 +16,10 @@ export type PcmAudio = {
 export const CANCEL_DB = 6;
 /** 重叠处整体比两侧都低（掉音）、都高（爆音）这么多 dB 算问题 */
 export const LEVEL_DB = 6;
-/** 比较抵消用的窗口（秒）；两份功率之和低于 SILENCE_DB 的窗口不比 */
+/** 比较抵消用的窗口（秒）；两份功率之和低于 COMPARE_FLOOR_DB 的窗口不比 */
 export const WINDOW_SECONDS = 0.05;
-export const SILENCE_DB = -60;
+/** 低于这个电平的窗口不比：差值全是噪声（和 Python `music_check.COMPARE_FLOOR_DB` 同名同值） */
+export const COMPARE_FLOOR_DB = -60;
 /** 和重叠处比的两侧各多长（秒） */
 export const SIDE_SECONDS = 1;
 /** 量曲子整体电平的窗口（秒），取中位数 */
@@ -81,7 +82,7 @@ export const measureCrossfade = ({ samples, channels, sampleRate }: PcmAudio): C
     for (let j = from; j < from + window; j++) expected += separate[j]!;
     const expectedDb = toDb(expected / (window * channels));
     const actualDb = toDb(mixedPower(from, from + window));
-    if (expectedDb >= SILENCE_DB && actualDb < expectedDb - CANCEL_DB) {
+    if (expectedDb >= COMPARE_FLOOR_DB && actualDb < expectedDb - CANCEL_DB) {
       problems.push(
         `掉音：重叠处第 ${(from / sampleRate).toFixed(2)} 秒起曲尾和曲首互相抵消，` +
           `${actualDb.toFixed(1)} dBFS，两份各自加起来是 ${expectedDb.toFixed(1)} dBFS`,

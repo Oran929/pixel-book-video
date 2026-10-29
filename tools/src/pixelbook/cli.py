@@ -12,7 +12,7 @@ from pixelbook.convert import CHAPTERS_DIR, ConvertError, convert_book
 from pixelbook.episode_path import EpisodePath, EpisodePathError
 from pixelbook.judge import JudgeError, prompt, record
 from pixelbook.mix import MixError, mix_timeline
-from pixelbook.music_check import check_music
+from pixelbook.music_check import MusicSchedule, check_music
 from pixelbook.outline import OutlineError, check_outline, format_warnings, unit_table
 from pixelbook.pipeline import (
     MANIFEST_NAME,
@@ -109,30 +109,15 @@ def _verifier() -> Verifier:
     )
 
 
-def _duration_parts(duration: dict[str, Any]) -> str:
-    """片头、正文、片尾分开写（时间轴导出命令算好的，#50、#51）；都没有时不写。
-
-    写法和时间轴导出命令的 `partsText` 相同。
-    """
-    intro, outro = duration.get("intro"), duration.get("outro")
-    if not intro and not outro:
-        return ""
-    parts = [
-        f"片头 {intro['text']}" if intro else None,
-        f"正文 {duration['body']['text']}",
-        f"片尾 {outro['text']}" if outro else None,
-    ]
-    return f"（{'，'.join(p for p in parts if p)}）"
-
-
 def _print_render_summary(summary: dict[str, Any]) -> None:
-    # 总时长的说明文字由时间轴导出命令写进 timeline.json，这里原样打印
+    # 总时长的说明文字和分开写的各部分（片头、正文、片尾）由时间轴导出命令写进
+    # timeline.json，这里原样打印（ADR-0004）
     duration = summary["duration"]
     print(
         f"\n成片 {summary['mp4']}\n"
         f"  帧数：视频流 {summary['frames']} 帧，时间轴 {summary['total_frames']} 帧"
         f"（{summary['fps']}fps，相差不超过一帧）\n"
-        f"  总时长 {duration['text']}：{duration['verdictText']}{_duration_parts(duration)}\n"
+        f"  总时长 {duration['text']}：{duration['verdictText']}{duration['partsText']}\n"
         f"  打点时间表 {summary['segments']}"
     )
     if passes := summary["asr_pinyin_passes"]:
@@ -460,11 +445,12 @@ def _run_music_trial(script: Path, draft: bool) -> int:
         print("这一期没有分镜（或分镜没写 music），没有配乐可查")
         return 1
     report = check_music(mp4, stem, timeline, VIDEO_PUBLIC)
-    music = timeline["music"]
+    music = MusicSchedule.from_json(timeline["music"])
+    crossfade = music.crossfade_frames / timeline["fps"]
     print(
-        f"\n配乐 {music['track']}：曲长 {music['trackFrames']} 帧，放 {len(music['plays'])} 次"
-        f"（每个接缝交叉淡化 1 秒），第 {music['fadeFrom']} 帧起淡出，"
-        f"到第 {music['endFrame']} 帧（片尾开始）放完；配乐声轨 {stem}，参照 {report.reference}"
+        f"\n配乐 {music.track}：曲长 {music.track_frames} 帧，放 {len(music.plays)} 次"
+        f"（每个接缝交叉淡化 {crossfade:g} 秒），第 {music.fade_from} 帧起淡出，"
+        f"到第 {music.end_frame} 帧（片尾开始）放完；配乐声轨 {stem}，参照 {report.reference}"
     )
     for line in report.seams:
         print(f"  {line}")
