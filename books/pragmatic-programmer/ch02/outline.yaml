@@ -9,15 +9,15 @@ episodes:
         to: ch02-¶049
     segments:
       - title: 好设计就是容易变更
-        minutes: 1.0
+        minutes: 0.75
       - title: ETC 是价值观念
-        minutes: 1.0
+        minutes: 0.75
       - title: 拿不准时怎么办
         minutes: 1.0
       - title: 程序员一直在维护
         minutes: 1.0
       - title: DRY 管的是知识
-        minutes: 1.0
+        minutes: 1.25
     points:
       - id: p01
         text: 能适应使用者的设计才是好设计，落到代码上就是要容易变更，这就是 ETC 原则
