@@ -5,8 +5,10 @@ import {
   animationFrames,
   type Cells,
   type ComponentDeclarations,
+  displayTextFields,
 } from "../components/declaration";
 import { LAYOUT } from "../style/grid";
+import { displayTextProblem, displayTextSources } from "./display-text";
 import type { EpisodeManifest } from "./manifest";
 import type { FrameSpan, PauseOverrides, Timeline } from "./timeline";
 
@@ -114,8 +116,23 @@ const storyboardSchema = (
         result.error?.issues.forEach((problem) =>
           issue(at("components", j, "props", ...problem.path), problem.message),
         );
-        const where = at("components", j, "at");
         const name = `组件 ${used.id}（${used.component}）`;
+        if (result.success && scenes.has(scene.scene)) {
+          const sources = displayTextSources(manifest, scene.scene);
+          const values = result.data as Record<string, unknown>;
+          displayTextFields(declared.props).forEach((key) => {
+            const value = values[key];
+            if (value === undefined) return;
+            const texts = Array.isArray(value)
+              ? value.map((text, k) => ({ text: String(text), path: [key, k] }))
+              : [{ text: String(value), path: [key] }];
+            texts.forEach(({ text, path }) => {
+              const problem = displayTextProblem(text, sources, scene.scene, name);
+              if (problem) issue(at("components", j, "props", ...path), problem);
+            });
+          });
+        }
+        const where = at("components", j, "at");
         if (declared.connector) {
           if (used.at) issue(where, `${name}是连线类组件，不写 at`);
           return;

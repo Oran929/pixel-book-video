@@ -20,7 +20,12 @@ const MANIFEST = {
   ],
   scenes: [
     { id: "s01-c01", segment: "s01", description: "一个方块" },
-    { id: "s02-c01", segment: "s02", description: "一个方块" },
+    // 组件上的字要出自画面说明（#36）：下面知识块用到的标签都写在这里
+    {
+      id: "s02-c01",
+      segment: "s02",
+      description: "知识块 DRY、知识和意图、数据库 Schema、一二三四五六七八九十",
+    },
   ],
   lines: [
     line("s01-l01", "s01-c01", 2),

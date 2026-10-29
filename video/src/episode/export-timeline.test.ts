@@ -24,7 +24,7 @@ const MANIFEST: EpisodeManifest = {
   ],
   scenes: [
     { id: "s01-c01", segment: "s01", description: "一个方块" },
-    { id: "s02-c01", segment: "s02", description: "一个方块" },
+    { id: "s02-c01", segment: "s02", description: "一个写着 DRY 的方块" },
   ],
   lines: [
     line("s01-l01", "s01-c01", 2.01),

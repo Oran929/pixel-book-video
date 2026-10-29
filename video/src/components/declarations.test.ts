@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { ANIMATIONS, type ComponentDeclaration } from "./declaration";
+import {
+  ANIMATIONS,
+  type ComponentDeclaration,
+  DISPLAY_TEXT,
+  displayTextFields,
+  unwrapOptional,
+} from "./declaration";
 import { COMPONENT_DECLARATIONS } from "./declarations";
 
 // 组件注册表一致性：分镜检查只依赖声明，每个组件的声明都要齐
@@ -22,9 +28,37 @@ describe.each(
     expect(ANIMATIONS).toContain(declared.exit);
   });
 
+  it("每个显示文字参数都是字符串或字符串数组", () => {
+    const isString = (schema: z.ZodType) => schema instanceof z.ZodString;
+    const wrong = displayTextFields(declared.props).filter((key) => {
+      const field = unwrapOptional(
+        (declared.props as z.ZodObject).shape[key] as z.ZodType,
+      );
+      return !(
+        isString(field) ||
+        (field instanceof z.ZodArray && isString(field.element as z.ZodType))
+      );
+    });
+    expect(wrong).toEqual([]);
+  });
+
   it("声明了占几格和是否是连线类组件", () => {
     expect(typeof declared.cells).toBe("function");
     expect(typeof declared.connector).toBe("boolean");
+  });
+});
+
+describe("显示文字参数", () => {
+  it("PixelBlock 的 label 是显示文字，Mascot 没有显示文字", () => {
+    expect(displayTextFields(COMPONENT_DECLARATIONS.PixelBlock.props)).toEqual(["label"]);
+    expect(displayTextFields(COMPONENT_DECLARATIONS.Mascot.props)).toEqual([]);
+  });
+
+  it("参数格式里有登记成显示文字、但不是字符串或字符串数组的参数时，一致性检查能发现", () => {
+    // 类型上 displayText 只收字符串和字符串数组；绕过类型直接登记一个数字参数
+    const props = z.strictObject({ count: z.number() });
+    props.shape.count.register(DISPLAY_TEXT, {});
+    expect(displayTextFields(props)).toEqual(["count"]);
   });
 });
 

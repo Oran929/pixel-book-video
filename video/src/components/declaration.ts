@@ -1,4 +1,4 @@
-import type { z } from "zod";
+import { z } from "zod";
 import type { GridPoint } from "../style/grid";
 import { MOTION } from "../style/style";
 
@@ -42,3 +42,32 @@ export type ComponentDeclarations = Readonly<Record<string, ComponentDeclaration
 export const declareComponent = <Props extends z.ZodType>(
   declaration: ComponentDeclaration<Props>,
 ): ComponentDeclaration<Props> => declaration;
+
+/**
+ * 显示文字的登记表：登记在这里的参数格式，值会显示在画面上，
+ * 分镜检查要求它出自本画面的画面说明或旁白句（#36，见 README「显示文字」）
+ */
+export const DISPLAY_TEXT = z.registry<Record<string, never>>();
+
+/**
+ * 把组件参数格式里的一项标成显示文字：字符串，或字符串数组（逐项检查）。
+ * 只认参数对象的顶层字段（外面可以再套 `.optional()`）。
+ */
+export const displayText = <Text extends z.ZodString | z.ZodArray<z.ZodString>>(
+  schema: Text,
+): Text => {
+  schema.register(DISPLAY_TEXT, {});
+  return schema;
+};
+
+/** 参数格式里标成显示文字的顶层字段名 */
+export const displayTextFields = (props: z.ZodType): string[] => {
+  if (!(props instanceof z.ZodObject)) return [];
+  return Object.entries(props.shape as Record<string, z.ZodType>)
+    .filter(([, field]) => DISPLAY_TEXT.has(unwrapOptional(field)))
+    .map(([key]) => key);
+};
+
+/** 去掉 `.optional()` 的外层 */
+export const unwrapOptional = (field: z.ZodType): z.ZodType =>
+  field instanceof z.ZodOptional ? unwrapOptional(field.unwrap() as z.ZodType) : field;

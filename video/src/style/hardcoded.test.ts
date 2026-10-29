@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { sep } from "node:path";
 import { describe, expect, it } from "vitest";
-import { findHardcodedStyle } from "./hardcoded";
+import { findFixedText, findHardcodedStyle } from "./hardcoded";
 
 describe("findHardcodedStyle", () => {
   it.each([
@@ -31,6 +31,31 @@ describe("findHardcodedStyle", () => {
   });
 });
 
+describe("findFixedText", () => {
+  it.each([
+    ["<div>ERROR</div>", "标签里的英文"],
+    ["提示</span>", "开始标签在上一行"],
+    ['<div>{"ERROR"}</div>', "花括号里的字符串"],
+    ["<b>{'错误'}</b>", "单引号"],
+    ["<b>{`错误`}</b>", "模板字符串"],
+  ])("找出写死的字：%s（%s）", (code) => {
+    expect(findFixedText(`const a = 1;\n${code}\n`)).toEqual([
+      { line: 2, text: code },
+    ]);
+  });
+
+  it.each([
+    ["<div>{label}</div>", "从参数来"],
+    ["{cues.map((cue) => <Entering cue={cue} />)}", "没有字"],
+    ['style={{ position: "absolute" }}', "样式里的字符串"],
+    ["const t = a > b && c < d;", "比较"],
+    ["// <b>ERROR</b>", "注释"],
+    ["<div> </div>", "只有空白"],
+  ])("不算写死：%s（%s）", (code) => {
+    expect(findFixedText(code)).toEqual([]);
+  });
+});
+
 // 组件（包括常驻组件字幕和主题）只能引用风格表；递归扫描，子目录里的组件也查
 const COMPONENTS_DIR = new URL("../components/", import.meta.url);
 const files = readdirSync(COMPONENTS_DIR, { recursive: true, encoding: "utf8" })
@@ -52,5 +77,12 @@ describe("组件目录里没有写死的颜色和尺寸", () => {
   it.each(files)("%s", (name) => {
     const source = readFileSync(new URL(name, COMPONENTS_DIR), "utf8");
     expect(findHardcodedStyle(source)).toEqual([]);
+  });
+});
+
+describe("组件目录里没有写死的显示文字", () => {
+  it.each(files)("%s", (name) => {
+    const source = readFileSync(new URL(name, COMPONENTS_DIR), "utf8");
+    expect(findFixedText(source)).toEqual([]);
   });
 });

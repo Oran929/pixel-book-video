@@ -387,7 +387,7 @@ uv run pixelbook terms ../books/sample/ch01/ep01/script.yaml   # 每个新术语
 
 - `scene`：合成清单里的画面 ID。`components`：本画面用的组件，`id` 是本画面里的名字，`component` 是组件名，`props` 按该组件的参数格式校验。
 - `at`：组件左上角所在的格 `[列, 行]`，从 0 开始（见下面的「网格」）。连线类组件（箭头）不写 `at`，其余组件必须写。组件占几格由组件按参数自己算，分镜只写位置。
-- 新组件要登记三处：**声明**在 `video/src/components/declarations.ts`（用 `declareComponent`，格式见 `declaration.ts`：参数格式 `props`（zod）、状态清单 `states`（第一个是初始状态）、占几格 `cells`（按参数算，`[列数, 行数]`）、入场和退场的默认动画 `enter`、`exit`、是否是连线类组件 `connector`），**实现**在 `video/src/components/registry.ts`，**样张**在 `video/src/components/samples.ts`；少登记一处，类型检查会报错。分镜检查只依赖声明，不含 JSX，时间轴导出命令在 Node 里也用它校验分镜。
+- 新组件要登记三处：**声明**在 `video/src/components/declarations.ts`（用 `declareComponent`，格式见 `declaration.ts`：参数格式 `props`（zod）、状态清单 `states`（第一个是初始状态）、占几格 `cells`（按参数算，`[列数, 行数]`）、入场和退场的默认动画 `enter`、`exit`、是否是连线类组件 `connector`；会显示在画面上的参数用 `displayText` 标出，见下面的「显示文字」），**实现**在 `video/src/components/registry.ts`，**样张**在 `video/src/components/samples.ts`；少登记一处，类型检查会报错。分镜检查只依赖声明，不含 JSX，时间轴导出命令在 Node 里也用它校验分镜。
 - **渲染接口**（`video/src/components/stage.ts`）：组件实现是 `React.FC<RenderProps<参数>>`，拿到两样东西：
 
   ```ts
@@ -437,6 +437,18 @@ uv run pixelbook terms ../books/sample/ch01/ep01/script.yaml   # 每个新术语
 - 不算字距（知识块的标签不加字距）。例：`数据库 Schema` 在字号 48 下是 3 × 48 + 6 × 4 + 39 × 4 = 324 像素。
 
 `video/src/episode/ep01-placement.test.ts` 用 ch02 ep01 的合成清单（`fixtures/ep01-episode.json`，去掉了音频路径）和一份占位分镜，把 17 个画面各摆了一遍，作为摆放的参考。
+
+#### 显示文字
+
+组件上显示的每一段字，都必须出自本画面的画面说明或旁白句，这样画面不会引入原文以外的说法（spec #16 修订 D4）。分镜检查（同一个 `planEpisode`）逐个核对：
+
+- **哪些参数是显示文字**：组件声明的参数格式里用 `displayText(...)` 标出（`video/src/components/declaration.ts`，登记在 zod 4 的 registry `DISPLAY_TEXT` 里，不另写清单）。只能标字符串或字符串数组（数组逐项检查），只认参数对象的顶层字段（外面可以套 `.optional()`）；`npm run test` 检查组件注册表里每个显示文字参数都是字符串或字符串数组。现在只有知识块的 `label`。
+- **比对口径**：两边先做 NFKC 规范化，再去掉 `，。、；` 和空白，然后看显示文字是不是**本画面的画面说明**或**本画面某个旁白句原句**（合成清单的 `text`，不是朗读文本）的子串。NFKC 会把全角的 `，`、`；` 变成半角，所以半角的 `,`、`;` 也一并去掉；`？`、`！`、引号、破折号照常比。每项单独和每一处出处比，不能跨两句拼接。片尾画面的画面说明是空串，所以只对照片尾的旁白句。
+  - 例（ep01）：`s01-c03` 里「解耦」「单一职责」通过；`s05-c05` 里「数据库 Schema」和「数据库Schema」都通过；`s02-c02` 里「更容易改，还是更难改？」和「更容易改 还是更难改？」都通过；`s01-c02` 里「提示14」（画面说明「提示14 的标题牌亮起」）通过；`s05-c02` 里「DRY——不要重复自己」报错（旁白句是「DRY，就是不要重复自己。」）。
+- 显示文字不能是空串，去掉标点和空白后是空串也报错。
+- 报错写明第几个画面、第几个组件（id 和组件名）、哪个参数（数组还写第几项）、找不到的那段字，例如 `第 1 个画面 第 1 个组件 props label: 组件 k（PixelBlock）的显示文字「DRY——不要重复自己」不在画面 s05-c02 的画面说明和旁白句里`。
+- **组件不渲染参数以外的固定文字**。比如电脑屏幕上的「ERROR」，也要作为显示文字参数传进去，并且写进画面说明或旁白句。`npm run test` 扫描组件目录里的 `.tsx`（`findFixedText`，`video/src/style/hardcoded.ts`），找出 JSX 里直接写的字（`<b>ERROR</b>`、`{"ERROR"}`）；藏在常量里再引用的字认不出来，靠代码审查。
+- **强度有限**：这条检查只能挡住原文以外的词，挡不住拼凑。几项各自出自原文的字摆在一起，照样可能拼出原文没有的意思，这要靠审分镜时人看。
 
 ### 时间轴、打点时间表与试听音轨
 

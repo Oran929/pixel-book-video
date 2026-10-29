@@ -3,7 +3,11 @@ import { layoutGrid } from "../style/grid";
 import { BLOCK_COLORS, FONT_SIZE, MASCOTS, SIZE } from "../style/style";
 import { textWidth } from "../style/text-width";
 import { VIDEO } from "../video-config";
-import { type ComponentDeclarations, declareComponent } from "./declaration";
+import {
+  type ComponentDeclarations,
+  declareComponent,
+  displayText,
+} from "./declaration";
 
 // 各组件的声明（参数格式、状态、占几格、默认动画）。单独放在不含 JSX、
 // 不引用 remotion 的文件里，这样时间轴导出命令（Node 里运行）校验分镜时
@@ -41,8 +45,8 @@ export type BlockState = (typeof BLOCK_STATES)[number];
 /** PixelBlock：一个带字的像素方块（知识块） */
 export const PixelBlockProps = z
   .strictObject({
-    /** 方块上的字，例如 "DRY"；只有一行 */
-    label: z.string().min(1),
+    /** 方块上的字，例如 "DRY"；只有一行。显示文字：要出自本画面的画面说明或旁白句 */
+    label: displayText(z.string().min(1)),
     /** 大小：决定占几格和标签的字号 */
     size: z.enum(
       Object.keys(BLOCK_SIZES) as [BlockSize, ...BlockSize[]],
