@@ -31,6 +31,18 @@ describe("segmentsText", () => {
       "00:00 开场\n00:02 原则\n00:59 例子\n1:00:00 收尾\n",
     );
   });
+
+  it("leaves out the fixed outro segment, which is the same every episode", () => {
+    const segments = [
+      { id: "s01", title: "开场", startFrame: 0, endFrame: 150 },
+      { id: "s02", title: "结尾", startFrame: 150, endFrame: 240 },
+      { id: "outro", title: "片尾", startFrame: 240, endFrame: 465 },
+    ];
+
+    expect(segmentsText({ fps: 30, segments })).toBe(
+      "00:00 开场\n00:05 结尾\n",
+    );
+  });
 });
 
 describe("durationReport", () => {

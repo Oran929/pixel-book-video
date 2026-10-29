@@ -3,6 +3,7 @@
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { exportTimeline, TIMELINE_FILE } from "./export-timeline";
+import { segmentsText } from "./rhythm";
 
 const USAGE =
   "用法：npm run timeline -- <期目录> [--no-storyboard] [--out <timeline.json 路径>]";
@@ -45,7 +46,7 @@ const main = (argv: string[]): number => {
     );
     console.log(
       segmentsFile
-        ? `已写出打点时间表 ${segmentsFile}：${timeline.segments.length} 段`
+        ? `已写出打点时间表 ${segmentsFile}：${segmentsText(timeline).split("\n").length - 1} 段`
         : "未写打点时间表（只在写到期目录里的 timeline.json 时写）",
     );
     // 样片阶段只报告，不以非零码退出

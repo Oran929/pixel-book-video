@@ -83,10 +83,10 @@ def test_fixed_sample_renders_with_the_computed_number_of_frames(repo, capsys):
     # 判断的说明文字由时间轴导出命令写进 timeline.json，汇总原样打印
     # 正文（含片尾前的停顿）8.4 秒，片尾 7.2 秒，分开写
     assert "总时长 0:15：太短（目标 4:00–6:00，只报告）（正文 0:08，片尾 0:07）" in out
+    # 打点时间表不列片尾（每期都一样）
     assert (episode / "segments.txt").read_text().splitlines() == [
         "00:00 开场",
         "00:05 结尾",
-        "00:08 片尾",
     ]
     # 锁定音色写在临时的书目录里
     assert (repo / "books" / "smoke" / "voice.lock").is_file()
