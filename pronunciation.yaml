@@ -4,3 +4,5 @@
 # yes、no、on、off、纯数字这类术语要加引号，否则 YAML 会把它读成别的类型。
 DRY: DRY
 KV Cache: KV Cache
+ETC: E T C
+Bug: Bug

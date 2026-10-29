@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from pixelbook import REPO_ROOT
+from pixelbook.episode_path import EpisodePathError
 from pixelbook.pipeline import REPORT_NAME, PipelineError, voice_episode
 from pixelbook.pronunciation import PronunciationError
 from pixelbook.script import ScriptError
@@ -44,6 +45,7 @@ def render_episode(
     public_dir: Path,
     font: Path | None = None,
     revoice: bool = False,
+    draft: bool = False,
     log: Callable[[str], None] = lambda _: None,
 ) -> dict[str, Any]:
     """把 `script_path` 这一期渲染成 `out`，返回汇总报告。
@@ -64,8 +66,15 @@ def render_episode(
             verifier,
             revoice=revoice,
             font=font,
+            draft=draft,
         )
-    except (PipelineError, ScriptError, PronunciationError, VoiceConfigError) as error:
+    except (
+        EpisodePathError,
+        PipelineError,
+        ScriptError,
+        PronunciationError,
+        VoiceConfigError,
+    ) as error:
         raise RenderError("配音", str(error)) from error
     report = json.loads((episode_dir / REPORT_NAME).read_text())
 

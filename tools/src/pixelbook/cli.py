@@ -7,8 +7,14 @@ from typing import Any
 
 from pixelbook import REPO_ROOT
 from pixelbook.audition import AuditionError, choose_voice, run_audition
+from pixelbook.check import check_script, check_unjudged, format_report
+from pixelbook.convert import CHAPTERS_DIR, ConvertError, convert_book
+from pixelbook.episode_path import EpisodePath, EpisodePathError
+from pixelbook.judge import JudgeError, prompt, record
 from pixelbook.mix import MixError, mix_timeline
+from pixelbook.outline import OutlineError, check_outline, format_warnings, unit_table
 from pixelbook.pipeline import (
+    MANIFEST_NAME,
     REPORT_NAME,
     SUBTITLE_FONT,
     PipelineError,
@@ -18,6 +24,7 @@ from pixelbook.pipeline import (
 from pixelbook.pronunciation import PronunciationError, load_pronunciation
 from pixelbook.render import RenderError, render_episode
 from pixelbook.script import ScriptError
+from pixelbook.sync_minutes import sync_minutes
 from pixelbook.term_audition import audition_terms
 from pixelbook.verification import (
     VerificationConfigError,
@@ -105,6 +112,14 @@ def _verifier() -> Verifier:
     )
 
 
+def _body_and_outro(duration: dict[str, Any]) -> str:
+    """正文和片尾分开写（时间轴导出命令算好的，ADR-0010）；没有片尾时不写。"""
+    outro = duration.get("outro")
+    if not outro:
+        return ""
+    return f"（正文 {duration['body']['text']}，片尾 {outro['text']}）"
+
+
 def _print_render_summary(summary: dict[str, Any]) -> None:
     # 总时长的说明文字由时间轴导出命令写进 timeline.json，这里原样打印
     duration = summary["duration"]
@@ -112,7 +127,7 @@ def _print_render_summary(summary: dict[str, Any]) -> None:
         f"\n成片 {summary['mp4']}\n"
         f"  帧数：视频流 {summary['frames']} 帧，时间轴 {summary['total_frames']} 帧"
         f"（{summary['fps']}fps，相差不超过一帧）\n"
-        f"  总时长 {duration['text']}：{duration['verdictText']}\n"
+        f"  总时长 {duration['text']}：{duration['verdictText']}{_body_and_outro(duration)}\n"
         f"  打点时间表 {summary['segments']}"
     )
     if passes := summary["asr_pinyin_passes"]:
@@ -129,8 +144,7 @@ def _print_render_summary(summary: dict[str, Any]) -> None:
 
 
 def _book_voice(script: Path) -> Voice:
-    # 旁白稿在 books/<书>/<章>/<期>/script.yaml
-    return resolve_book_voice(script.parents[2], REPO_ROOT)
+    return resolve_book_voice(EpisodePath.from_script(script).book_dir, REPO_ROOT)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -156,6 +170,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="音色和书的锁定音色不一致时，确认整本书用新音色重新配音（更新锁定）",
     )
+    voice.add_argument(
+        "--draft",
+        action="store_true",
+        help="给 `status: draft`（没有定稿）的旁白稿配音",
+    )
 
     render = commands.add_parser(
         "render",
@@ -169,6 +188,11 @@ def main(argv: list[str] | None = None) -> int:
         "--revoice",
         action="store_true",
         help="同 `voice --revoice`：确认整本书用新音色重新配音（更新锁定）",
+    )
+    render.add_argument(
+        "--draft",
+        action="store_true",
+        help="同 `voice --draft`：给没有定稿的旁白稿出片",
     )
 
     terms = commands.add_parser(
@@ -197,6 +221,65 @@ def main(argv: list[str] | None = None) -> int:
         help="试听音轨写到哪里，默认 out/mix/<书>-<章>-<期>.wav",
     )
 
+    convert = commands.add_parser(
+        "convert",
+        help="把书目录里的 source.epub 转成每章一份带段落编号的 Markdown（chapters/）",
+    )
+    convert.add_argument("book", type=Path, help="books/<书>/")
+
+    outline = commands.add_parser(
+        "outline",
+        help="检查一章的大纲：格式、ID 唯一、段数、时长、出处（只检查，不生成）",
+    )
+    outline.add_argument("outline", type=Path, help="books/<书>/chNN/outline.yaml")
+
+    units = commands.add_parser(
+        "units",
+        help="写大纲前看的单元表：每个单元的首尾段落编号、段数、正文字数、提示框和小标题",
+    )
+    units.add_argument("chapter", type=Path, help="books/<书>/chapters/chNN.md")
+
+    check = commands.add_parser(
+        "check",
+        help="旁白稿的全部机械检查：格式、出处、估算时长……报错和警告分开列出",
+    )
+    check.add_argument("script", type=Path, help="books/<书>/<章>/<期>/script.yaml")
+    check.add_argument(
+        "--episode",
+        type=Path,
+        help="books/<书>/<章>/<期>/：script 是这一期旁白稿的草稿副本（放在别处），"
+        "按这一期的大纲和原文检查，不查 factcheck.yaml",
+    )
+
+    minutes = commands.add_parser(
+        "sync-minutes",
+        help="把旁白稿每段的估算分钟数（取到 0.25）写回大纲里这一期的 segments[].minutes",
+    )
+    minutes.add_argument("script", type=Path, help="books/<书>/<章>/<期>/script.yaml")
+
+    factcheck_prompt = commands.add_parser(
+        "factcheck-prompt",
+        help="打印给语义核对裁判的完整 prompt：说明、引用的原文段落、旁白句和校验码（旁白稿要先通过检查）",
+    )
+    factcheck_prompt.add_argument("episode", type=Path, help="books/<书>/<章>/<期>/")
+
+    factcheck_record = commands.add_parser(
+        "factcheck-record",
+        help="把裁判的回答对照旁白稿记进 factcheck.yaml，算出第几轮，列出不支持和部分支持的句子",
+    )
+    factcheck_record.add_argument("episode", type=Path, help="books/<书>/<章>/<期>/")
+    factcheck_record.add_argument(
+        "answer",
+        type=Path,
+        help="裁判返回的 YAML（packet：校验码；lines：id、verdict、reason）",
+    )
+    factcheck_record.add_argument(
+        "--user-edited",
+        action="store_true",
+        help="和上一轮相比不只是拆句（改写、新增、删除），而且是用户改的或用户同意的；"
+        "只有用户能授权",
+    )
+
     args = parser.parse_args(argv)
     try:
         if args.command == "audition":
@@ -207,8 +290,42 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "choose-voice":
             chosen = choose_voice(args.audition_dir, args.name, REPO_ROOT)
             print(f"已写入 {REPO_ROOT / 'voice.yaml'}：{chosen}")
+        elif args.command == "convert":
+            book = args.book.resolve()
+            written = convert_book(book)
+            names = "、".join(path.stem for path in written)
+            print(f"{len(written)} 章（{names}），写到 {book / CHAPTERS_DIR}")
+        elif args.command == "outline":
+            checked, warnings = check_outline(args.outline.resolve())
+            if warnings:
+                print(format_warnings(warnings))
+            ids = "、".join(episode.id for episode in checked.episodes)
+            print(f"大纲检查通过：{len(checked.episodes)} 期（{ids}）")
+        elif args.command == "units":
+            print(unit_table(args.chapter.resolve()))
+        elif args.command == "check":
+            script = args.script.resolve()
+            report = (
+                check_unjudged(script, EpisodePath(args.episode.resolve()))
+                if args.episode
+                else check_script(script)
+            )
+            print(format_report(script, report))
+            return 0 if report.passed else 1
+        elif args.command == "sync-minutes":
+            print(sync_minutes(args.script.resolve()))
+        elif args.command == "factcheck-prompt":
+            print(prompt(EpisodePath(args.episode.resolve())).text, end="")
+        elif args.command == "factcheck-record":
+            print(
+                record(
+                    EpisodePath(args.episode.resolve()),
+                    args.answer.resolve(),
+                    user_edited=args.user_edited,
+                )
+            )
         elif args.command == "render":
-            return _render(args.script.resolve(), args.out, args.revoice)
+            return _render(args.script.resolve(), args.out, args.revoice, args.draft)
         elif args.command == "voice":
             from pixelbook.qwen_tts import QwenTtsEngine
 
@@ -222,11 +339,12 @@ def main(argv: list[str] | None = None) -> int:
                 _verifier(),
                 revoice=args.revoice,
                 font=VIDEO_PUBLIC / SUBTITLE_FONT,
+                draft=args.draft,
             )
             total = sum(line["seconds"] for line in manifest["lines"])
             print(
                 f"{len(manifest['lines'])} 句，配音共 {total:.1f} 秒（不含停顿）；"
-                f"合成清单 {args.script.parent / 'episode.json'}，"
+                f"合成清单 {args.script.parent / MANIFEST_NAME}，"
                 f"已复制到 {VIDEO_PUBLIC / 'episode'}"
             )
             _print_asr_report(script.parent / REPORT_NAME)
@@ -252,13 +370,10 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"听完把读法写进 {PRONUNCIATION}（读法不变就写成 `术语: 术语`）")
         elif args.command == "mix":
             timeline = args.timeline.resolve()
-            # timeline.json 默认在期目录 books/<书>/<章>/<期>/ 里
+            # timeline.json 在期目录里
             out = (
                 args.out
-                or REPO_ROOT
-                / "out"
-                / "mix"
-                / ("-".join(timeline.parent.parts[-3:]) + ".wav")
+                or REPO_ROOT / "out" / "mix" / f"{EpisodePath(timeline.parent).id}.wav"
             ).resolve()
             seconds = mix_timeline(timeline, VIDEO_PUBLIC, out)
             print(f"试听音轨 {out}：{seconds:.2f} 秒")
@@ -267,7 +382,11 @@ def main(argv: list[str] | None = None) -> int:
             print(f"已复制到 {VIDEO_PUBLIC / 'episode'}")
     except (
         AuditionError,
+        ConvertError,
+        EpisodePathError,
+        JudgeError,
         MixError,
+        OutlineError,
         ScriptError,
         PipelineError,
         PronunciationError,
@@ -279,10 +398,9 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def _render(script: Path, out: Path | None, revoice: bool) -> int:
-    # 旁白稿在 books/<书>/<章>/<期>/script.yaml
+def _render(script: Path, out: Path | None, revoice: bool, draft: bool) -> int:
     out = (
-        out or REPO_ROOT / "out" / ("-".join(script.parent.parts[-3:]) + ".mp4")
+        out or REPO_ROOT / "out" / f"{EpisodePath.from_script(script).id}.mp4"
     ).resolve()
     try:
         try:
@@ -308,6 +426,7 @@ def _render(script: Path, out: Path | None, revoice: bool) -> int:
             public_dir=VIDEO_PUBLIC,
             font=VIDEO_PUBLIC / SUBTITLE_FONT,
             revoice=revoice,
+            draft=draft,
             log=print,
         )
     except RenderError as error:

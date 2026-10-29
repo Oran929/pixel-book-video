@@ -10,9 +10,11 @@ from pathlib import Path
 from typing import Any
 
 from pixelbook.audio import wav_seconds
+from pixelbook.episode_path import EpisodePath
 from pixelbook.glyphs import missing_glyphs
+from pixelbook.outro import OutroError, with_outro
 from pixelbook.pronunciation import find_new_terms, spoken_text
-from pixelbook.script import load_script
+from pixelbook.script import DRAFT, load_script
 from pixelbook.tts import TtsEngine
 from pixelbook.tts_cache import TtsCache
 from pixelbook.verification import Verifier
@@ -43,27 +45,43 @@ def voice_episode(
     verifier: Verifier,
     revoice: bool = False,
     font: Path | None = None,
+    draft: bool = False,
 ) -> dict[str, Any]:
     """为 `script_path` 这一期逐句配音，写出期目录里的合成清单并返回它。
+
+    旁白稿后面接上固定片尾（`outro.with_outro`）：合成清单的最后一段是片尾。
 
     `voice` 是这本书解析出的音色（`voice_lock.resolve_book_voice`）。配音前守卫
     比较它和书的锁定音色，不一致就拒绝，除非 `revoice`；配音完成后写入锁定。
     朗读文本按读音表 `pronunciation` 生成（手写的 `speech` 优先）。
 
+    旁白稿是 `status: draft`（还没定稿）时拒绝配音，除非 `draft`。
+
     每句配音经 `verifier` 的语音识别复核，和朗读文本对比；重试后仍不通过的
     句子照常使用，并列进期目录里的检查报告 `report.json`（每次运行都列出）；
     字符对比不通过、靠拼音对比通过的句子（多半是同音字）也列进报告，单独一项。
 
-    给了字幕字体 `font` 时，配音前先做缺字检查：字幕文本和书名/主题名 `title`
+    给了字幕字体 `font` 时，配音前先做缺字检查：字幕文本和主题 `title`
     里字体没有字形的字列进报告的 `missing_glyphs`（旁白句 ID 或 `title`，和字）。
     有缺字就抛出 `PipelineError`，报告里只有这一项；不配音，也不碰合成清单、
     Remotion 静态目录和锁定音色。不给字体就不检查，报告里也没有这一项。
     """
+    episode = EpisodePath.from_script(script_path)
     script = load_script(script_path)
+    if script.status == DRAFT and not draft:
+        raise PipelineError(
+            f"{script_path}: 旁白稿还是 `status: {DRAFT}`（没有定稿），不配音；"
+            "确实要给草稿配音，加 `--draft`"
+        )
+    # 固定片尾接在旁白稿后面，和正文一样缺字检查、配音、复核，进合成清单（ADR-0010）
+    try:
+        script = with_outro(script)
+    except OutroError as error:
+        raise PipelineError(f"{script_path}: {error}") from error
     if terms := find_new_terms(script, pronunciation):
         raise PipelineError(new_terms_message(script_path, terms))
-    # 旁白稿在 books/<书>/<章>/<期>/script.yaml，配音缓存和锁定音色放在书的目录下
-    book_dir = script_path.parents[2]
+    # 配音缓存和锁定音色放在书的目录下
+    book_dir = episode.book_dir
     try:
         locked = lock_record(voice)
         cache = TtsCache(book_dir / "cache" / "tts", engine, voice, verifier)
@@ -75,19 +93,13 @@ def voice_episode(
         raise PipelineError(f"字幕字体 {font} 不存在，无法做缺字检查")
     glyphs: dict[str, Any] = {}
     if font is not None:
-        # 左上角的书名/主题名也用像素字体显示，报告里的 ID 记作 `title`
+        # 左上角的主题也用像素字体显示，报告里的 ID 记作 `title`
         glyphs["missing_glyphs"] = missing_glyphs(
-            [("title", script.title)]
-            + [
-                (line.id, line.text)
-                for segment in script.segments
-                for scene in segment.scenes
-                for line in scene.lines
-            ],
+            [("title", script.title)] + [(line.id, line.text) for line in script.lines],
             font,
         )
         if glyphs["missing_glyphs"]:
-            _write_report(script_path.parent, glyphs)
+            _write_report(episode.dir, glyphs)
             raise PipelineError(
                 missing_glyphs_message(script_path, glyphs["missing_glyphs"], font)
             )
@@ -140,12 +152,12 @@ def voice_episode(
         "scenes": scenes,
         "lines": lines,
     }
-    (script_path.parent / MANIFEST_NAME).write_text(
+    (episode.dir / MANIFEST_NAME).write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n"
     )
 
     _write_report(
-        script_path.parent,
+        episode.dir,
         {"asr_failures": failures, "asr_pinyin_passes": pinyin_passes, **glyphs},
     )
 
@@ -155,7 +167,7 @@ def voice_episode(
     stage.mkdir(parents=True)
     for audio, wav in wavs.items():
         shutil.copyfile(wav, public_dir / audio)
-    stage_episode(script_path.parent, public_dir)
+    stage_episode(episode.dir, public_dir)
     write_lock(book_dir, locked)
     return manifest
 
@@ -176,7 +188,7 @@ def missing_glyphs_message(
     return (
         f"{script_path}: 字幕里有 {len(missing)} 个字在像素字体里没有字形"
         f"（会显示成系统字体），拒绝配音：\n{listing}\n"
-        "改写这些旁白句的字幕（`title` 是左上角的书名/主题名），"
+        "改写这些旁白句的字幕（`title` 是左上角的主题），"
         f"或换一款有这些字的字体（{font.name}）。"
     )
 

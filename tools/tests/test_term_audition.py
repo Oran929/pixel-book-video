@@ -12,6 +12,7 @@ TABLE = {"DRY": "DRY", "KV Cache": "KV Cache"}
 
 SCRIPT = """\
 title: 示例书
+status: final
 segments:
   - id: s01
     title: 开场

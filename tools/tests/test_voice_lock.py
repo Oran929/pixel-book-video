@@ -65,6 +65,7 @@ def test_bad_book_config_is_rejected_naming_the_file(repo, content, problem):
 
 SCRIPT = """\
 title: 示例书
+status: final
 segments:
   - id: s01
     title: 开场
