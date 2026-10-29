@@ -93,6 +93,21 @@ def render_episode(
     }
 
 
+def render_music_stem(out: Path, public_dir: Path) -> None:
+    """只渲染配乐（Remotion 的 EpisodeMusic 合成，和 Episode 同一份排期）成 wav。
+
+    全长试验（#39）用它单独检查配乐的循环接缝和淡出。要在 `render_episode` 之后运行：
+    用的是那一步放进 `public_dir` 的合成清单和分镜。
+    """
+    out.parent.mkdir(parents=True, exist_ok=True)
+    _run(
+        "渲染",
+        ["npx", "remotion", "render", "EpisodeMusic", str(out), "--codec", "wav"]
+        + ["--public-dir", str(public_dir), "--log", "error"],
+        cwd=VIDEO_DIR,
+    )
+
+
 def check_frames(mp4: Path, timeline_path: Path) -> tuple[int, int]:
     """MP4 视频流的帧数和时间轴的总帧数相差不超过一帧，返回（帧数，总帧数）。
 

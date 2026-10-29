@@ -57,6 +57,7 @@ const STORYBOARD = {
       ],
     },
   ],
+  music: "pixel-sprinter",
   pauses: [{ after: "s01-l01", seconds: 1.2 }],
 };
 
@@ -127,6 +128,7 @@ const lampScene = (...triggers: Trigger[]) => ({
       })),
     },
   ],
+  music: "pixel-sprinter",
   pauses: [],
 });
 const plan = (...triggers: Trigger[]) =>
@@ -313,6 +315,7 @@ const boxScene = (boxes: Box[], triggers: Trigger[]) => ({
       triggers: triggers.map((trigger) => ({ line: "s02-l01", ...trigger })),
     },
   ],
+  music: "pixel-sprinter",
   pauses: [],
 });
 const enterAt = (target: string, offset = 0) => ({
@@ -433,6 +436,7 @@ const blockScene = (props: Record<string, unknown>, triggers: Trigger[] = []) =>
       ],
     },
   ],
+  music: "pixel-sprinter",
   pauses: [],
 });
 const planBlock = (props: Record<string, unknown>, triggers: Trigger[] = []) =>
@@ -655,6 +659,7 @@ describe("planEpisode: sound effects", () => {
           ],
         },
       ],
+      music: "pixel-sprinter",
       pauses: [],
     };
     expect(planEpisode(MANIFEST, storyboard, NOISY).sounds).toEqual([]);
@@ -682,6 +687,7 @@ describe("planEpisode: sound effects", () => {
           ],
         },
       ],
+      music: "pixel-sprinter",
       pauses: [],
     };
     expect(planEpisode(MANIFEST, storyboard, NOISY).sounds).toEqual([
@@ -711,6 +717,7 @@ describe("planEpisode: sound effects", () => {
           ],
         },
       ],
+      music: "pixel-sprinter",
       pauses: [],
     };
     expect(planEpisode(MANIFEST, storyboard, NOISY).sounds).toEqual([
@@ -721,5 +728,48 @@ describe("planEpisode: sound effects", () => {
 
   it("without a storyboard plays no sounds", () => {
     expect(planEpisode(MANIFEST, null).sounds).toEqual([]);
+  });
+});
+
+describe("planEpisode: music", () => {
+  // MANIFEST 用默认停顿共 213 帧（30fps）
+  const scored = (music: unknown) => ({ ...lampScene({ action: "enter", offset: 0 }), music });
+
+  it("plays the storyboard's track and fades it out over the last 2 seconds", () => {
+    expect(planEpisode(MANIFEST, scored("pixel-sprinter"), DECLARATIONS).music).toEqual({
+      track: "pixel-sprinter",
+      fadeFrom: 153,
+    });
+  });
+
+  it("rejects a track that is not in the music library and lists the registered ones", () => {
+    expect(() => planEpisode(MANIFEST, scored("nope"), DECLARATIONS)).toThrow(
+      /music: 配乐 nope 没有登记，登记过的配乐：.*pixel-sprinter/,
+    );
+  });
+
+  it("rejects a storyboard without music", () => {
+    const silent: Record<string, unknown> = scored("pixel-sprinter");
+    delete silent.music;
+    expect(() => planEpisode(MANIFEST, silent, DECLARATIONS)).toThrow(
+      /music: 有分镜时要写 music：配乐登记表里的曲子 ID/,
+    );
+  });
+
+  it("fades from the first frame when the episode is shorter than 2 seconds", () => {
+    // 只有一句 1.5 秒 = 45 帧，不到淡出的 60 帧
+    const short = {
+      ...MANIFEST,
+      segments: [MANIFEST.segments[1]],
+      scenes: [MANIFEST.scenes[1]],
+      lines: [line("s02-l01", "s02-c01", 1.5)],
+    };
+    const plan = planEpisode(short, scored("pixel-sprinter"), DECLARATIONS);
+    expect(plan.timeline.totalFrames).toBe(45);
+    expect(plan.music?.fadeFrom).toBe(0);
+  });
+
+  it("plays no music without a storyboard (subtitles only)", () => {
+    expect(planEpisode(MANIFEST, null).music).toBeNull();
   });
 });

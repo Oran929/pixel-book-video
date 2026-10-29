@@ -1,6 +1,7 @@
 """命令行入口：`uv run pixelbook <命令>`。"""
 
 import argparse
+import json
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +12,7 @@ from pixelbook.convert import CHAPTERS_DIR, ConvertError, convert_book
 from pixelbook.episode_path import EpisodePath, EpisodePathError
 from pixelbook.judge import JudgeError, prompt, record
 from pixelbook.mix import MixError, mix_timeline
+from pixelbook.music_check import check_music
 from pixelbook.outline import OutlineError, check_outline, format_warnings, unit_table
 from pixelbook.pipeline import (
     MANIFEST_NAME,
@@ -24,7 +26,7 @@ from pixelbook.pipeline import (
     voice_episode,
 )
 from pixelbook.pronunciation import PronunciationError, load_pronunciation
-from pixelbook.render import RenderError, render_episode
+from pixelbook.render import RenderError, render_episode, render_music_stem
 from pixelbook.script import ScriptError
 from pixelbook.sync_minutes import sync_minutes
 from pixelbook.term_audition import audition_terms
@@ -205,6 +207,18 @@ def main(argv: list[str] | None = None) -> int:
         help="同 `voice --draft`：给没有定稿的旁白稿出片",
     )
 
+    trial = commands.add_parser(
+        "music-trial",
+        help="全长音频试验（#39）：出片，再单独渲染配乐声轨，检查循环接缝、静音和淡出",
+    )
+    trial.add_argument("script", type=Path, help="books/<书>/<章>/<期>/script.yaml")
+    trial.add_argument("--draft", action="store_true", help="同 `render --draft`")
+    trial.add_argument(
+        "--storyboard",
+        type=Path,
+        help="试验用的分镜：出片期间临时放成期目录里的 storyboard.json，结束后恢复原样",
+    )
+
     terms = commands.add_parser(
         "terms", help="为一期旁白稿的每个新术语生成一段试听音频（书的音色）"
     )
@@ -336,6 +350,8 @@ def main(argv: list[str] | None = None) -> int:
             )
         elif args.command == "render":
             return _render(args.script.resolve(), args.out, args.revoice, args.draft)
+        elif args.command == "music-trial":
+            return _music_trial(args.script.resolve(), args.draft, args.storyboard)
         elif args.command == "voice":
             script = args.script.resolve()
             voiced = voice_episode(
@@ -396,6 +412,60 @@ def main(argv: list[str] | None = None) -> int:
     ) as error:
         print(error)
         return 1
+    return 0
+
+
+def _music_trial(script: Path, draft: bool, storyboard: Path | None) -> int:
+    """出片到 out/<期>.mp4，配乐声轨到 out/<期>-music.wav，然后检查配乐。
+
+    给了 `storyboard` 时，出片期间临时换上这份分镜，结束后把期目录里的分镜恢复原样
+    （原来没有就删掉）。
+    """
+    if storyboard is None:
+        return _run_music_trial(script, draft)
+    target = script.parent / "storyboard.json"
+    original = target.read_bytes() if target.exists() else None
+    target.write_bytes(storyboard.read_bytes())
+    try:
+        return _run_music_trial(script, draft)
+    finally:
+        if original is None:
+            target.unlink()
+        else:
+            target.write_bytes(original)
+
+
+def _run_music_trial(script: Path, draft: bool) -> int:
+    episode_id = EpisodePath.from_script(script).id
+    mp4 = REPO_ROOT / "out" / f"{episode_id}.mp4"
+    stem = REPO_ROOT / "out" / f"{episode_id}-music.wav"
+    if _render(script, mp4, revoice=False, draft=draft) != 0:
+        return 1
+    try:
+        render_music_stem(stem, VIDEO_PUBLIC)
+    except RenderError as error:
+        print(error)
+        return 1
+    timeline = json.loads((script.parent / "timeline.json").read_text())
+    if timeline.get("music") is None:
+        print("这一期没有分镜（或分镜没写 music），没有配乐可查")
+        return 1
+    report = check_music(mp4, stem, timeline, VIDEO_PUBLIC)
+    music = timeline["music"]
+    print(
+        f"\n配乐 {music['track']}：循环 {music['loopFrames']} 帧，"
+        f"第 {music['fadeFrom']} 帧起淡出；配乐声轨 {stem}"
+    )
+    for line in report.seams:
+        print(f"  {line}")
+    if report.problems:
+        print(f"配乐检查未通过：{len(report.problems)} 处")
+        for problem in report.problems:
+            print(f"  {problem}")
+        return 1
+    print(
+        "配乐检查通过：音频流和视频流一样长，接缝没有跳变和多出来的静音，淡出单调下降"
+    )
     return 0
 
 

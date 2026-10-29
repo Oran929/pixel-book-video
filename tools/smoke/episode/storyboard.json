@@ -28,5 +28,6 @@
       ]
     }
   ],
+  "music": "starlight-city",
   "pauses": [{ "after": "s01-l01", "seconds": 0.5 }]
 }

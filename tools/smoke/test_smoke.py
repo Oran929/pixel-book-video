@@ -1,8 +1,11 @@
 """冒烟测试：用固定小样例，经一键命令 `pixelbook render` 真实渲染一次 MP4（票 11）。
 
 慢（要打包并渲染 Remotion），不在 `make check` 里；单独运行 `make smoke`。
-旁白是静音，成片里的声音只有音效：顺带用 silencedetect 检查每个音效都在它的帧响起、
-三个方块同时入场、各放一个音效时不削波（#37）。
+旁白是静音，成片里的声音只有配乐和音效。配乐（#39）选的是 48 kHz 的曲子（旁白、音效是
+别的采样率，顺带验证混音时的重采样）。检查办法是拿原曲首尾相接当参照逐帧比电平：
+第一个音效之前和参照一样，每个音效在它的帧比配乐高出一截（#37 原来用 silencedetect，
+有了配乐之后静音段没有了，改成这样，见 #39 的评论）；成片里没有参照之外的静音；
+三个方块同时入场、各放一个音效时不削波。
 真实 TTS 和语音识别换成假引擎（静音 wav），不加载任何模型；验证的是渲染管线和
 时长，不是音质。仓库根目录、Remotion 静态目录都换成临时目录：旁白稿、配音缓存、
 锁定音色和 MP4 都在里面，不碰 `books/`、`video/public/episode/` 和 `out/`。
@@ -18,6 +21,14 @@ import pytest
 
 from pixelbook import REPO_ROOT, cli
 from pixelbook.asr import FakeAsrEngine
+from pixelbook.music_check import (
+    duration_problems,
+    frame_levels,
+    silences,
+    sound_problems,
+    stream_seconds,
+    unexplained_silences,
+)
 from pixelbook.pipeline import STAGE_DIR
 from pixelbook.tts import FakeTtsEngine
 from pixelbook.voice import Voice, save_voice_config
@@ -59,27 +70,6 @@ def video_frames(mp4: Path) -> int:
         check=True,
     )
     return int(result.stdout.strip())
-
-
-# 静音判定：低于 -50 dBFS、持续 20 毫秒以上算静音。假 TTS 的旁白是静音，所以成片里的声音只有音效
-SILENCE_DB = -50
-SILENCE_SECONDS = 0.02
-
-
-def silences(mp4: Path) -> list[tuple[float, float]]:
-    """ffmpeg silencedetect 找出的静音区间（秒）；文件末尾的静音没有结束时间，算到无穷远。"""
-    result = subprocess.run(
-        ["ffmpeg", "-hide_banner", "-nostats", "-i", str(mp4), "-vn"]
-        + ["-af", f"silencedetect=noise={SILENCE_DB}dB:d={SILENCE_SECONDS}"]
-        + ["-f", "null", "-"],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    starts = [float(v) for v in re.findall(r"silence_start: (-?[\d.]+)", result.stderr)]
-    ends = [float(v) for v in re.findall(r"silence_end: (-?[\d.]+)", result.stderr)]
-    ends += [float("inf")] * (len(starts) - len(ends))
-    return list(zip(starts, ends, strict=True))
 
 
 def peak_db(mp4: Path) -> float:
@@ -124,9 +114,7 @@ def test_fixed_sample_renders_with_the_computed_number_of_frames(repo, capsys):
         "00:00 开场",
         "00:05 结尾",
     ]
-    # 音效（#37）：时间轴列出每个音效的帧，登记过的 7 个音效都用到了。成片里每个音效帧之后
-    # 半帧到一帧半之间都有声音（不落在任何静音区间里）；第一声之前是静音，并且在第一声的帧
-    # 附近（±1 帧）结束，说明音效准时响起
+    # 音效（#37）：时间轴列出每个音效的帧，登记过的 7 个音效都用到了
     fps = timeline["fps"]
     sounds = timeline["sounds"]
     # 一个方块落下、高亮、改过、淡出；三个方块同时入场（各放一个不同的音效），
@@ -141,14 +129,30 @@ def test_fixed_sample_renders_with_the_computed_number_of_frames(repo, capsys):
         "ding",
         "crash",
     ]
-    quiet = silences(mp4)
-    for sound in sounds:
-        t = sound["frame"] / fps
-        heard = (t + 0.5 / fps, t + 1.5 / fps)
-        assert not any(a <= heard[0] and heard[1] <= b for a, b in quiet), sound
-    first = sounds[0]["frame"] / fps
-    assert quiet[0][0] == pytest.approx(0, abs=0.01)
-    assert quiet[0][1] == pytest.approx(first, abs=1 / fps)
+    # 配乐（#39）：48 kHz 的 Starlight City，最后 60 帧淡出；音频流和视频流一样长
+    music = timeline["music"]
+    total = timeline["totalFrames"]
+    assert music["track"] == "starlight-city"
+    assert music["fadeFrom"] == total - 60
+    seconds = stream_seconds(mp4)
+    assert (
+        duration_problems(video=seconds["video"], audio=seconds["audio"], fps=fps) == []
+    )
+    # 参照：原曲首尾相接到整期长度。音效准时响起，第一个之前只有配乐
+    track = repo / "public" / music["file"]
+    reference = frame_levels(track, fps, loop_frames=total)
+    mix = frame_levels(mp4, fps)[:total]
+    assert sound_problems(mix, reference, [s["frame"] for s in sounds]) == []
+    # 淡出之前，成片里的静音都是曲子自己的停顿（配乐从头放到尾）
+    loop_seconds = total / fps
+    assert (
+        unexplained_silences(
+            silences(mp4),
+            silences(track, loop_seconds=loop_seconds, gain_db=music["volumeDb"]),
+            within=[(0, music["fadeFrom"] / fps)],
+        )
+        == []
+    )
     # 三个不同的音效同时响起，叠加也不削波（留 1 dB 余量）
     assert peak_db(mp4) < -1
     # 锁定音色写在临时的书目录里

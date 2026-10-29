@@ -2,6 +2,7 @@ import { Composition } from "remotion";
 import {
   calculateEpisodeMetadata,
   Episode,
+  EpisodeMusicOnly,
   type EpisodeProps,
 } from "./episode/Episode";
 // 像素字体在第一帧之前加载完（模块加载时挡住渲染）
@@ -18,9 +19,22 @@ export const RemotionRoot: React.FC = () => (
       component={Episode}
       calculateMetadata={calculateEpisodeMetadata}
       defaultProps={
-        { title: "", timeline: null, cues: [], sounds: [] } satisfies EpisodeProps
+        { title: "", timeline: null, cues: [], sounds: [], music: null } satisfies EpisodeProps
       }
       // 占位值：实际总帧数由 calculateMetadata 从时间轴算出
+      durationInFrames={1}
+      fps={VIDEO.fps}
+      width={VIDEO.width}
+      height={VIDEO.height}
+    />
+    {/* 只有配乐的声轨：全长试验用它检查循环接缝和淡出（#39） */}
+    <Composition
+      id="EpisodeMusic"
+      component={EpisodeMusicOnly}
+      calculateMetadata={calculateEpisodeMetadata}
+      defaultProps={
+        { title: "", timeline: null, cues: [], sounds: [], music: null } satisfies EpisodeProps
+      }
       durationInFrames={1}
       fps={VIDEO.fps}
       width={VIDEO.width}

@@ -13,6 +13,7 @@ import {
   soundCues,
 } from "./storyboard";
 import type { SoundCue } from "../sound/sounds";
+import type { MusicId } from "../music/tracks";
 import { computeTimeline, DEFAULT_PAUSES, type Timeline } from "./timeline";
 
 export type EpisodePlan = {
@@ -22,7 +23,15 @@ export type EpisodePlan = {
   cues: Cue[];
   /** 要放的音效（帧、音效 ID），按帧排序；没有分镜时为空 */
   sounds: SoundCue[];
+  /** 配乐；没有分镜（字幕版）时为 null */
+  music: MusicPlan | null;
 };
+
+/** 配乐：循环播放 `track` 覆盖整期（含片尾），从第 `fadeFrom` 帧起淡出到最后一帧 */
+export type MusicPlan = { track: MusicId; fadeFrom: number };
+
+/** 配乐最后淡出的秒数 */
+export const MUSIC_FADE_SECONDS = 2;
 
 /**
  * 校验合成清单和分镜（`storyboardData` 为 null 表示没有分镜，只渲染字幕），
@@ -47,5 +56,11 @@ export const planEpisode = (
     storyboard ? pauseOverrides(storyboard) : {},
   );
   const cues = storyboard ? scheduleCues(storyboard, timeline, components) : [];
-  return { manifest, timeline, cues, sounds: soundCues(cues) };
+  const music = storyboard
+    ? {
+        track: storyboard.music as MusicId,
+        fadeFrom: Math.max(0, timeline.totalFrames - MUSIC_FADE_SECONDS * VIDEO.fps),
+      }
+    : null;
+  return { manifest, timeline, cues, sounds: soundCues(cues), music };
 };

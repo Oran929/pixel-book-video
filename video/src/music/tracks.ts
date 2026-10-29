@@ -140,3 +140,7 @@ export const MUSIC = defineMusicLibrary({
 export type MusicId = keyof typeof MUSIC;
 
 export const isMusicId = (id: string): id is MusicId => Object.hasOwn(MUSIC, id);
+
+/** 曲子循环一次有几帧（登记表保证是整数） */
+export const loopFrames = (id: MusicId): number =>
+  MUSIC[id].sampleCount / samplesPerFrame(MUSIC[id].sampleRate);

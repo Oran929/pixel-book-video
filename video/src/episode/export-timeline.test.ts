@@ -51,6 +51,7 @@ const STORYBOARD = {
       ],
     },
   ],
+  music: "pixel-sprinter",
   pauses: [{ after: "s01-l01", seconds: 1.2 }],
 };
 
@@ -81,8 +82,9 @@ describe("exportTimeline", () => {
         body: { seconds: 214 / 30, text: "0:07" },
         outro: null,
       },
-      // 没有分镜：不放音效
+      // 没有分镜：不放音效，也不放配乐
       sounds: [],
+      music: null,
     });
   });
 
@@ -94,6 +96,24 @@ describe("exportTimeline", () => {
     // s02-l01 从第 166 帧开始，知识块在 0.5 秒（15 帧）后入场，默认音效 drop
     expect(read(join(episode, "timeline.json"))).toMatchObject({
       sounds: [{ frame: 181, sound: "drop" }],
+    });
+  });
+
+  it("names the storyboard's music and the frame its fade-out starts", () => {
+    write("storyboard.json", STORYBOARD);
+
+    exportTimeline(episode);
+
+    // 共 61 + 36 + 45 + 24 + 75 = 241 帧，最后 60 帧淡出；
+    // 文件、循环长度（Pixel Sprinter 34.3 秒 = 1029 帧）和音量供全长试验找接缝、做参照
+    expect(read(join(episode, "timeline.json"))).toMatchObject({
+      music: {
+        track: "pixel-sprinter",
+        fadeFrom: 181,
+        file: "music/pixel-sprinter.ogg",
+        loopFrames: 1029,
+        volumeDb: -20,
+      },
     });
   });
 
@@ -141,6 +161,7 @@ describe("exportTimeline", () => {
   it("rejects an invalid storyboard instead of silently using default pauses", () => {
     write("storyboard.json", {
       ...STORYBOARD,
+      music: "pixel-sprinter",
       pauses: [{ after: "s09-l01", seconds: 1 }],
     });
 

@@ -13,7 +13,8 @@ import { EpisodeTitle } from "../components/resident/EpisodeTitle";
 import { Subtitle } from "../components/resident/Subtitle";
 import { COLOR } from "../style/style";
 import { VOLUME } from "../style/volume";
-import { planEpisode } from "./episode-plan";
+import { EpisodeMusic } from "../music/EpisodeMusic";
+import { type MusicPlan, planEpisode } from "./episode-plan";
 import type { Cue } from "./storyboard";
 import { lineAt, type Timeline } from "./timeline";
 
@@ -28,6 +29,8 @@ export type EpisodeProps = {
   cues: Cue[];
   /** 要放的音效（帧、音效 ID） */
   sounds: SoundCue[];
+  /** 配乐；没有分镜（字幕版）时为 null，不放配乐 */
+  music: MusicPlan | null;
 };
 
 const readJson = async (file: string, signal: AbortSignal) => {
@@ -51,13 +54,13 @@ export const calculateEpisodeMetadata: CalculateMetadataFunction<
     );
   }
   const storyboardData = await readJson(STORYBOARD_FILE, abortSignal);
-  const { manifest, timeline, cues, sounds } = planEpisode(
+  const { manifest, timeline, cues, sounds, music } = planEpisode(
     manifestData,
     storyboardData,
   );
   return {
     durationInFrames: timeline.totalFrames,
-    props: { title: manifest.title, timeline, cues, sounds },
+    props: { title: manifest.title, timeline, cues, sounds, music },
   };
 };
 
@@ -72,6 +75,7 @@ export const Episode: React.FC<EpisodeProps> = ({
   timeline,
   cues,
   sounds,
+  music,
 }) => (
   <AbsoluteFill style={{ backgroundColor: COLOR.background }}>
     {title ? <EpisodeTitle title={title} /> : null}
@@ -88,6 +92,18 @@ export const Episode: React.FC<EpisodeProps> = ({
       </Sequence>
     ))}
     <SoundCues sounds={sounds} />
+    {music && timeline ? (
+      <EpisodeMusic music={music} totalFrames={timeline.totalFrames} />
+    ) : null}
     {timeline ? <CurrentSubtitle timeline={timeline} /> : null}
   </AbsoluteFill>
 );
+
+/**
+ * 只有配乐的声轨：和 Episode 同一份排期，不放旁白和音效。
+ * 全长试验（#39）渲染它来单独检查配乐的循环接缝和淡出，免得旁白混在里面。
+ */
+export const EpisodeMusicOnly: React.FC<EpisodeProps> = ({ timeline, music }) =>
+  music && timeline ? (
+    <EpisodeMusic music={music} totalFrames={timeline.totalFrames} />
+  ) : null;

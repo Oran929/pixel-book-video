@@ -31,5 +31,6 @@
       ]
     }
   ],
+  "music": "pixel-sprinter",
   "pauses": [{ "after": "s01-l04", "seconds": 1.2 }]
 }

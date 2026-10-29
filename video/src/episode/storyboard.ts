@@ -8,6 +8,7 @@ import {
   displayTextFields,
 } from "../components/declaration";
 import { isSoundId, type Sound, type SoundCue, SOUNDS, type SoundId } from "../sound/sounds";
+import { isMusicId, MUSIC } from "../music/tracks";
 import { LAYOUT } from "../style/grid";
 import { displayTextProblem, displayTextSources } from "./display-text";
 import type { EpisodeManifest } from "./manifest";
@@ -72,6 +73,8 @@ const StoryboardShape = z.strictObject({
       triggers: z.array(TriggerShape),
     }),
   ),
+  /** 配乐登记表（`music/tracks.ts`）里的曲子 ID：全期循环播放，最后 2 秒淡出 */
+  music: z.string({ error: "有分镜时要写 music：配乐登记表里的曲子 ID" }),
   /** 个别位置的停顿覆盖：`after` 这句之后停顿 `seconds` 秒 */
   pauses: z.array(
     z.strictObject({ after: z.string(), seconds: z.number().min(0) }),
@@ -210,6 +213,13 @@ const storyboardSchema = (
         }
       });
     });
+
+    if (!isMusicId(storyboard.music)) {
+      issue(
+        ["music"],
+        `配乐 ${storyboard.music} 没有登记，登记过的配乐：${Object.keys(MUSIC).join("、")}`,
+      );
+    }
 
     const paused = new Set<string>();
     storyboard.pauses.forEach((pause, i) => {

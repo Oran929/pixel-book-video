@@ -38,6 +38,7 @@ const lamp = (triggers: Record<string, unknown>[]) => {
           triggers: triggers.map((t) => ({ target: "lamp", line: "s01-l01", ...t })),
         },
       ],
+      music: "pixel-sprinter",
       pauses: [],
     },
     DECLARATIONS,
