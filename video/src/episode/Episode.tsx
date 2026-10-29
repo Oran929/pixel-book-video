@@ -14,9 +14,10 @@ import { Subtitle } from "../components/resident/Subtitle";
 import { COLOR } from "../style/style";
 import { VOLUME } from "../style/volume";
 import { EpisodeMusic } from "../music/EpisodeMusic";
+import { IntroWithAudio } from "../intro/IntroWithAudio";
 import { type MusicPlan, planEpisode } from "./episode-plan";
 import type { Cue } from "./storyboard";
-import { lineAt, type Timeline } from "./timeline";
+import { lineAt, showsResidents, type Timeline } from "./timeline";
 
 // 合成清单和分镜由 `pixelbook voice` / `pixelbook stage` 复制到 video/public/episode/
 const MANIFEST_FILE = "episode/episode.json";
@@ -64,7 +65,18 @@ export const calculateEpisodeMetadata: CalculateMetadataFunction<
   };
 };
 
-/** 当前这句旁白的字幕（两句之间的停顿里继续显示上一句） */
+/** 主题：片头期间不显示（spec #16 修订二） */
+const CurrentTitle: React.FC<{ title: string; timeline: Timeline | null }> = ({
+  title,
+  timeline,
+}) => {
+  const frame = useCurrentFrame();
+  if (!title) return null;
+  if (timeline && !showsResidents(timeline, frame)) return null;
+  return <EpisodeTitle title={title} />;
+};
+
+/** 当前这句旁白的字幕（两句之间的停顿里继续显示上一句；片头期间还没有旁白，不显示） */
 export const CurrentSubtitle: React.FC<{ timeline: Timeline }> = ({ timeline }) => {
   const line = lineAt(timeline, useCurrentFrame());
   return line ? <Subtitle text={line.text} /> : null;
@@ -78,7 +90,7 @@ export const Episode: React.FC<EpisodeProps> = ({
   music,
 }) => (
   <AbsoluteFill style={{ backgroundColor: COLOR.background }}>
-    {title ? <EpisodeTitle title={title} /> : null}
+    <CurrentTitle title={title} timeline={timeline} />
     <StagedCues cues={cues} />
     {timeline?.lines.map((line) => (
       // 每句的音频单独放置，不拼接成一条音轨（ADR-0003）
@@ -96,6 +108,8 @@ export const Episode: React.FC<EpisodeProps> = ({
       <EpisodeMusic music={music} totalFrames={timeline.totalFrames} />
     ) : null}
     {timeline ? <CurrentSubtitle timeline={timeline} /> : null}
+    {/* 片头盖在最上面；它期间没有字幕、主题和组件，正文从片头结束后开始 */}
+    {timeline && timeline.introFrames > 0 ? <IntroWithAudio /> : null}
   </AbsoluteFill>
 );
 

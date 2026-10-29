@@ -1,7 +1,7 @@
 """冒烟测试：用固定小样例，经一键命令 `pixelbook render` 真实渲染一次 MP4（票 11）。
 
 慢（要打包并渲染 Remotion），不在 `make check` 里；单独运行 `make smoke`。
-旁白是静音，成片里的声音只有配乐和音效。配乐（#39）选的是 48 kHz 的曲子（旁白、音效是
+旁白是静音，成片里的声音只有片头音轨、配乐和音效。配乐（#39）选的是 48 kHz 的曲子（旁白、音效是
 别的采样率，顺带验证混音时的重采样）。检查办法是拿原曲首尾相接当参照逐帧比电平：
 第一个音效之前和参照一样，每个音效在它的帧比配乐高出一截（#37 原来用 silencedetect，
 有了配乐之后静音段没有了，改成这样，见 #39 的评论）；成片里没有参照之外的静音；
@@ -72,10 +72,19 @@ def video_frames(mp4: Path) -> int:
     return int(result.stdout.strip())
 
 
-def peak_db(mp4: Path) -> float:
-    """ffmpeg volumedetect 量出的音轨峰值（dBFS）。"""
+def intro_problems(mix: list[float], intro: list[float]) -> list[str]:
+    """片头期间成片和片头音轨逐帧比：响的帧（-40 dBFS 以上）相差不超过 1 dB。"""
+    return [
+        f"第 {f} 帧：成片 {m:.1f} dBFS，片头音轨 {i:.1f} dBFS"
+        for f, (m, i) in enumerate(zip(mix, intro, strict=True))
+        if i > -40 and abs(m - i) > 1
+    ]
+
+
+def peak_db(mp4: Path, start: float = 0) -> float:
+    """ffmpeg volumedetect 量出的音轨从第 `start` 秒起的峰值（dBFS）。"""
     result = subprocess.run(
-        ["ffmpeg", "-hide_banner", "-nostats", "-i", str(mp4), "-vn"]
+        ["ffmpeg", "-hide_banner", "-nostats", "-ss", f"{start}", "-i", str(mp4), "-vn"]
         + ["-af", "volumedetect", "-f", "null", "-"],
         capture_output=True,
         text=True,
@@ -94,25 +103,33 @@ def test_fixed_sample_renders_with_the_computed_number_of_frames(repo, capsys):
     assert f"成片 {mp4}" in out
     assert "复核未通过：无" in out
     timeline = json.loads((episode / "timeline.json").read_text())
+    # 最前面是片头（#50），固定 422 帧。
     # 假 TTS 每字 0.2 秒：正文 4 句共 30 字 = 6 秒；停顿 0.5（分镜覆盖）+ 0.3（同画面）
     # + 0.8（换画面）= 1.6 秒；正文 7.6 秒。片尾（票 #15）前换画面停 0.8 秒，
     # 3 句共 33 字 = 6.6 秒，句间 2 × 0.3 秒；共 15.6 秒，30fps 约 468 帧（逐句取整到整帧）
-    assert 465 <= timeline["totalFrames"] <= 472
+    intro = timeline["introFrames"]
+    assert intro == 422
+    assert 465 <= timeline["totalFrames"] - intro <= 472
+    assert timeline["lines"][0]["startFrame"] == intro
     assert [line["id"] for line in timeline["lines"][-3:]] == [
         "outro-l01",
         "outro-l02",
         "outro-l03",
     ]
     assert abs(video_frames(mp4) - timeline["totalFrames"]) <= 1
-    # 约 16 秒的样例必然"太短"：只报告，不让命令失败
+    # 约 30 秒的样例必然"太短"：只报告，不让命令失败
     assert timeline["duration"]["verdict"] == "too-short"
     # 判断的说明文字由时间轴导出命令写进 timeline.json，汇总原样打印
-    # 正文（含片尾前的停顿）8.4 秒，片尾 7.2 秒，分开写
-    assert "总时长 0:15：太短（目标 4:00–6:00，只报告）（正文 0:08，片尾 0:07）" in out
-    # 打点时间表不列片尾（每期都一样）
+    # 片头 14.07 秒，正文（含片尾前的停顿）8.4 秒，片尾 7.2 秒，分开写
+    assert (
+        "总时长 0:29：太短（目标 4:00–6:00，只报告）（片头 0:14，正文 0:08，片尾 0:07）"
+        in out
+    )
+    # 打点时间表从 00:00 的片头开始，不列片尾（每期都一样）
     assert (episode / "segments.txt").read_text().splitlines() == [
-        "00:00 开场",
-        "00:05 结尾",
+        "00:00 片头",
+        "00:14 开场",
+        "00:19 结尾",
     ]
     # 音效（#37）：时间轴列出每个音效的帧，登记过的 7 个音效都用到了
     fps = timeline["fps"]
@@ -129,31 +146,44 @@ def test_fixed_sample_renders_with_the_computed_number_of_frames(repo, capsys):
         "ding",
         "crash",
     ]
-    # 配乐（#39）：48 kHz 的 Starlight City，最后 60 帧淡出；音频流和视频流一样长
+    # 配乐（#39）：48 kHz 的 Starlight City，片头结束后才开始（#50），最后 60 帧淡出；
+    # 音频流和视频流一样长
     music = timeline["music"]
     total = timeline["totalFrames"]
     assert music["track"] == "starlight-city"
+    assert music["startFrame"] == intro
     assert music["fadeFrom"] == total - 60
     seconds = stream_seconds(mp4)
     assert (
         duration_problems(video=seconds["video"], audio=seconds["audio"], fps=fps) == []
     )
-    # 参照：原曲首尾相接到整期长度。音效准时响起，第一个之前只有配乐
-    track = repo / "public" / music["file"]
-    reference = frame_levels(track, fps, loop_frames=total)
+    # 片头期间成片里只有片头自带的音轨：逐帧电平和它一样（没有配乐叠上去）
     mix = frame_levels(mp4, fps)[:total]
+    intro_track = frame_levels(repo / "public" / "intro" / "intro-audio.wav", fps)
+    assert intro_problems(mix[:intro], intro_track[:intro]) == []
+    # 参照：片头之后原曲首尾相接到整期结束。音效准时响起，第一个之前只有配乐
+    track = repo / "public" / music["file"]
+    reference = [float("-inf")] * intro + frame_levels(
+        track, fps, loop_frames=total - intro
+    )
     assert sound_problems(mix, reference, [s["frame"] for s in sounds]) == []
-    # 淡出之前，成片里的静音都是曲子自己的停顿（配乐从头放到尾）
-    loop_seconds = total / fps
+    # 片头之后、淡出之前，成片里的静音都是曲子自己的停顿（配乐一直放到最后）
+    start = intro / fps
     assert (
         unexplained_silences(
             silences(mp4),
-            silences(track, loop_seconds=loop_seconds, gain_db=music["volumeDb"]),
-            within=[(0, music["fadeFrom"] / fps)],
+            [
+                (a + start, b + start)
+                for a, b in silences(
+                    track, loop_seconds=total / fps - start, gain_db=music["volumeDb"]
+                )
+            ],
+            within=[(start, music["fadeFrom"] / fps)],
         )
         == []
     )
-    # 三个不同的音效同时响起，叠加也不削波（留 1 dB 余量）
-    assert peak_db(mp4) < -1
+    # 三个不同的音效同时响起，叠加也不削波（留 1 dB 余量）。只量片头之后：
+    # 片头音轨本身压到约 -1 dBFS，AAC 编码后约 -0.7 dBFS，不归这条管
+    assert peak_db(mp4, start) < -1
     # 锁定音色写在临时的书目录里
     assert (repo / "books" / "smoke" / "voice.lock").is_file()

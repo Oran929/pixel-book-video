@@ -565,8 +565,8 @@ export const COMPONENT_SAMPLES: Record<ComponentName, ComponentSample> = {
   },
 };
 
-/** 样张的排期（和成片同一个 `planEpisode`） */
+/** 样张的排期（和成片同一个 `planEpisode`；样张页不放片头） */
 export const samplePlan = (name: ComponentName): EpisodePlan => {
   const { manifest, storyboard } = sampleEpisode(COMPONENT_SAMPLES[name]);
-  return planEpisode(manifest, storyboard);
+  return planEpisode(manifest, storyboard, undefined, { intro: false });
 };

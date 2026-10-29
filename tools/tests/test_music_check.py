@@ -196,14 +196,18 @@ def sine_with(path, expr, seconds):
     return path
 
 
-def render(tmp_path, source, frames, extra_filter=""):
-    """像 Remotion 那样把曲子循环到 `frames` 帧，音量 -20 dB，最后 60 帧线性淡出到 0。"""
+def render(tmp_path, source, frames, extra_filter="", start=0):
+    """像 Remotion 那样从第 `start` 帧（片头结束）起把曲子循环到 `frames` 帧，
+    音量 -20 dB，最后 60 帧线性淡出到 0；`start` 之前是静音。"""
     seconds = frames / FPS
-    fade = f"afade=t=out:st={seconds - 2}:d=2:curve=tri"
+    music_seconds = (frames - start) / FPS
+    fade = f"afade=t=out:st={music_seconds - 2}:d=2:curve=tri"
+    delay = f",adelay={round(start / FPS * 1000)}:all=1" if start else ""
     stem = tmp_path / "stem.wav"
     subprocess.run(
-        ["ffmpeg", "-v", "error", "-y", "-stream_loop", "-1", "-i", str(source)]
-        + ["-t", f"{seconds}", "-af", f"volume=-20dB,{fade}{extra_filter}", str(stem)],
+        ["ffmpeg", "-v", "error", "-y", "-stream_loop", "-1"]
+        + ["-t", f"{music_seconds}", "-i", str(source)]
+        + ["-af", f"volume=-20dB,{fade}{delay}{extra_filter}", str(stem)],
         check=True,
     )
     mp4 = tmp_path / "episode.mp4"
@@ -216,13 +220,14 @@ def render(tmp_path, source, frames, extra_filter=""):
     return mp4, stem
 
 
-def plan(frames):
+def plan(frames, start=0):
     return {
         "fps": FPS,
         "totalFrames": frames,
         "music": {
             "track": "t",
             "file": "music/track.wav",
+            "startFrame": start,
             "fadeFrom": frames - 60,
             "loopFrames": 15,
             "volumeDb": -20,
@@ -269,3 +274,29 @@ def test_music_shorter_than_the_video_is_reported(tmp_path):
     report = check_music(mp4, stem, plan(120), public_dir)
 
     assert any(problem.startswith("音频流 3.0") for problem in report.problems)
+
+
+def test_music_starting_after_the_intro_passes(tmp_path):
+    # 片头（#50）占前 30 帧，配乐从第 30 帧起循环，接缝跟着后移
+    public_dir = public(tmp_path)
+    mp4, stem = render(tmp_path, public_dir / "music" / "track.wav", 150, start=30)
+
+    report = check_music(mp4, stem, plan(150, start=30), public_dir)
+
+    assert report.problems == []
+    assert [line.split("（")[0] for line in report.seams] == [
+        f"接缝第 {f} 帧" for f in range(45, 150, 15)
+    ]
+
+
+def test_music_playing_during_the_intro_is_reported(tmp_path):
+    # 排期说配乐从第 30 帧开始，渲染出来却从第 0 帧就有
+    public_dir = public(tmp_path)
+    mp4, stem = render(tmp_path, public_dir / "music" / "track.wav", 150)
+
+    report = check_music(mp4, stem, plan(150, start=30), public_dir)
+
+    assert any(
+        problem.startswith("片头期间（第 0–29 帧）配乐声轨就有声音")
+        for problem in report.problems
+    )

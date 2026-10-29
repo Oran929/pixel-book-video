@@ -20,7 +20,10 @@ export type TimedLine = EpisodeManifest["lines"][number] & FrameSpan;
 
 export type Timeline = {
   fps: number;
+  /** 片头加正文的总帧数 */
   totalFrames: number;
+  /** 片头占的帧数（#50）：正文从这一帧开始；不放片头时为 0 */
+  introFrames: number;
   /** 每句音频占据的帧（不含之后的停顿） */
   lines: TimedLine[];
   /** 从第一句开始到下一个画面开始（最后一个画面到总帧数） */
@@ -37,9 +40,11 @@ export const computeTimeline = (
   pauses: Pauses,
   fps: number,
   overrides: PauseOverrides = {},
+  introFrames = 0,
 ): Timeline => {
   const lines: TimedLine[] = [];
-  let cursor = 0;
+  // 正文接在片头后面
+  let cursor = introFrames;
   manifest.lines.forEach((line, index) => {
     const previous = manifest.lines[index - 1];
     if (previous) {
@@ -78,9 +83,13 @@ export const computeTimeline = (
     const scene = scenes.find((s) => s.segment === segment.id);
     return scene && lines.find((line) => line.scene === scene.id);
   });
-  return { fps, totalFrames, lines, scenes, segments };
+  return { fps, totalFrames, introFrames, lines, scenes, segments };
 };
 
 /** 第 `frame` 帧时字幕框显示的旁白句：配音开始时出现，到下一句开始时切换 */
 export const lineAt = (timeline: Timeline, frame: number): TimedLine | undefined =>
   timeline.lines.findLast((line) => line.startFrame <= frame);
+
+/** 第 `frame` 帧时显示常驻组件（字幕和主题）吗：片头期间不显示（spec #16 修订二） */
+export const showsResidents = (timeline: Timeline, frame: number): boolean =>
+  frame >= timeline.introFrames;

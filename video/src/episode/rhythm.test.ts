@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { durationReport, formatSegmentStart, segmentsText } from "./rhythm";
+import { durationReport, formatSegmentStart, partsText, segmentsText } from "./rhythm";
 
 describe("formatSegmentStart", () => {
   it.each([
@@ -41,6 +41,18 @@ describe("segmentsText", () => {
 
     expect(segmentsText({ fps: 30, segments })).toBe(
       "00:00 开场\n00:05 结尾\n",
+    );
+  });
+
+  it("starts with the intro at 00:00, so the list can still be pasted as chapters", () => {
+    // 片头 422 帧（#50）：视频平台的分段要从 00:00 开始，正文各段是真实的开始时间
+    const segments = [
+      { id: "s01", title: "开场", startFrame: 422, endFrame: 600 },
+      { id: "s02", title: "结尾", startFrame: 600, endFrame: 700 },
+    ];
+
+    expect(segmentsText({ fps: 30, introFrames: 422, segments })).toBe(
+      "00:00 片头\n00:14 开场\n00:20 结尾\n",
     );
   });
 });
@@ -111,10 +123,54 @@ describe("durationReport", () => {
     });
   });
 
+  it("reports the intro separately too; the verdict counts it in", () => {
+    // 片头 422 帧，正文 3:46，片尾 7.5 秒：只算正文和片尾是 3:53（太短），算上片头 4:07
+    const report = durationReport({
+      fps: 30,
+      introFrames: 422,
+      totalFrames: 422 + (3 * 60 + 46) * 30 + 225,
+      segments: [
+        { id: "s01", title: "开场", startFrame: 422, endFrame: 7202 },
+        { id: "outro", title: "片尾", startFrame: 7202, endFrame: 7427 },
+      ],
+    });
+
+    expect(report).toMatchObject({
+      text: "4:07",
+      verdict: "within",
+      intro: { seconds: 422 / 30, text: "0:14" },
+      body: { seconds: 226, text: "3:46" },
+      outro: { seconds: 7.5, text: "0:07" },
+    });
+  });
+
+  it("has no intro part for a timeline without the intro", () => {
+    expect(at30fps(5 * 60).intro).toBeNull();
+  });
+
   it("has no outro part for a timeline without the outro segment", () => {
     expect(at30fps(5 * 60)).toMatchObject({
       body: { seconds: 300, text: "5:00" },
       outro: null,
     });
+  });
+});
+
+describe("partsText", () => {
+  const segments = (outro: number | null) => [
+    { id: "s01", title: "开场", startFrame: 422, endFrame: outro ?? 8400 },
+    ...(outro ? [{ id: "outro", title: "片尾", startFrame: outro, endFrame: 8400 }] : []),
+  ];
+
+  it("names intro, body and outro in order", () => {
+    // 片头 422 帧，正文到第 8190 帧（4:18.9），片尾 210 帧
+    const report = durationReport({ fps: 30, introFrames: 422, totalFrames: 8400, segments: segments(8190) });
+    expect(partsText(report)).toBe("（片头 0:14，正文 4:18，片尾 0:07）");
+  });
+
+  it("leaves out the parts a timeline does not have", () => {
+    const noIntro = durationReport({ fps: 30, totalFrames: 8400, segments: segments(8190) });
+    expect(partsText(noIntro)).toBe("（正文 4:33，片尾 0:07）");
+    expect(partsText(durationReport({ fps: 30, totalFrames: 8400, segments: [] }))).toBe("");
   });
 });

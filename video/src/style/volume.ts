@@ -11,6 +11,8 @@ export const VOLUME_DB = {
    * 一次循环）Remotion 会取整到 1/97 的整数倍，0.1 变成 10/97（约 -19.7 dB），见 #39
    */
   music: -20,
+  /** 片头自带的音轨（#50）原样放：用户做好时已经压过峰值（约 -1 dBFS），到关口 3 再调 */
+  intro: 0,
 } as const;
 
 /** dB → 线性增益：0 dB 是 1，-20 dB 是 0.1 */
@@ -21,4 +23,5 @@ export const VOLUME = {
   narration: decibelsToGain(VOLUME_DB.narration),
   sfx: decibelsToGain(VOLUME_DB.sfx),
   music: decibelsToGain(VOLUME_DB.music),
+  intro: decibelsToGain(VOLUME_DB.intro),
 } as const;

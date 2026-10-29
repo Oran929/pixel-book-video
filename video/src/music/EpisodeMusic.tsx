@@ -4,7 +4,8 @@ import { VOLUME } from "../style/volume";
 import { loopFrames, MUSIC } from "./tracks";
 
 /**
- * 配乐：整期循环播放，从 `fadeFrom` 帧起线性淡出，最后一帧之后归零。
+ * 配乐：从 `startFrame`（片头结束）起循环播放到最后一帧，从 `fadeFrom` 帧起线性淡出，
+ * 最后一帧之后归零。片头自带音轨，配乐不覆盖片头（#50）。
  *
  * 循环不用 Html5Audio 的 `loop`：实测（#39 全长试验）它在每个接缝处有约一帧的静音，
  * 曲子还会每循环一次往后错约 3 毫秒。改成每次循环一个 Sequence，各放一份曲子；
@@ -27,8 +28,8 @@ export const EpisodeMusic: React.FC<{ music: MusicPlan; totalFrames: number }> =
   );
   const length = loopFrames(music.track);
   const starts = Array.from(
-    { length: Math.ceil(totalFrames / length) },
-    (_, i) => i * length,
+    { length: Math.ceil((totalFrames - music.startFrame) / length) },
+    (_, i) => music.startFrame + i * length,
   );
   return (
     <>

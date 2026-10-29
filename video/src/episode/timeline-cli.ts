@@ -3,7 +3,7 @@
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { exportTimeline, TIMELINE_FILE } from "./export-timeline";
-import { segmentsText } from "./rhythm";
+import { partsText, segmentsText } from "./rhythm";
 
 const USAGE =
   "用法：npm run timeline -- <期目录> [--no-storyboard] [--out <timeline.json 路径>]";
@@ -50,10 +50,9 @@ const main = (argv: string[]): number => {
         : "未写打点时间表（只在写到期目录里的 timeline.json 时写）",
     );
     // 样片阶段只报告，不以非零码退出
-    const { body, outro } = timeline.duration;
     console.log(
       `总时长 ${timeline.duration.text}：${timeline.duration.verdictText}` +
-        (outro ? `（正文 ${body.text}，片尾 ${outro.text}）` : ""),
+        partsText(timeline.duration),
     );
   } catch (error) {
     console.error((error as Error).message);

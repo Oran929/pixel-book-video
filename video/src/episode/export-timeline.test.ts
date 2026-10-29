@@ -7,6 +7,9 @@ import { exportTimeline } from "./export-timeline";
 import type { EpisodeManifest } from "./manifest";
 import { computeTimeline, DEFAULT_PAUSES } from "./timeline";
 
+// 成片最前面的片头（#50）：导出的时间轴和渲染一样，正文接在它后面
+const INTRO_FRAMES = 422;
+
 const line = (id: string, scene: string, seconds: number) => ({
   id,
   scene,
@@ -70,14 +73,15 @@ describe("exportTimeline", () => {
   it("writes timeline.json equal to computing the timeline directly, plus the duration report", () => {
     exportTimeline(episode);
 
-    // 61 + 9（句间）+ 45 + 24（换画面）+ 75 = 214 帧 ≈ 7.13 秒
+    // 片头 422 帧（#50），正文 61 + 9（句间）+ 45 + 24（换画面）+ 75 = 214 帧 ≈ 7.13 秒
     expect(read(join(episode, "timeline.json"))).toEqual({
-      ...computeTimeline(MANIFEST, DEFAULT_PAUSES, VIDEO.fps),
+      ...computeTimeline(MANIFEST, DEFAULT_PAUSES, VIDEO.fps, {}, INTRO_FRAMES),
       duration: {
-        seconds: 214 / 30,
-        text: "0:07",
+        seconds: (422 + 214) / 30,
+        text: "0:21",
         verdict: "too-short",
         verdictText: "太短（目标 4:00–6:00，只报告）",
+        intro: { seconds: 422 / 30, text: "0:14" },
         // 这份合成清单没有片尾这一段
         body: { seconds: 214 / 30, text: "0:07" },
         outro: null,
@@ -93,9 +97,9 @@ describe("exportTimeline", () => {
 
     exportTimeline(episode);
 
-    // s02-l01 从第 166 帧开始，知识块在 0.5 秒（15 帧）后入场，默认音效 drop
+    // s02-l01 从片头后的第 166 帧（422 + 166 = 588）开始，知识块在 0.5 秒（15 帧）后入场，默认音效 drop
     expect(read(join(episode, "timeline.json"))).toMatchObject({
-      sounds: [{ frame: 181, sound: "drop" }],
+      sounds: [{ frame: 603, sound: "drop" }],
     });
   });
 
@@ -104,12 +108,13 @@ describe("exportTimeline", () => {
 
     exportTimeline(episode);
 
-    // 共 61 + 36 + 45 + 24 + 75 = 241 帧，最后 60 帧淡出；
+    // 片头 422 帧之后才放配乐；共 422 + 61 + 36 + 45 + 24 + 75 = 663 帧，最后 60 帧淡出；
     // 文件、循环长度（Pixel Sprinter 34.3 秒 = 1029 帧）和音量供全长试验找接缝、做参照
     expect(read(join(episode, "timeline.json"))).toMatchObject({
       music: {
         track: "pixel-sprinter",
-        fadeFrom: 181,
+        startFrame: 422,
+        fadeFrom: 603,
         file: "music/pixel-sprinter.ogg",
         loopFrames: 1029,
         volumeDb: -20,
@@ -122,10 +127,11 @@ describe("exportTimeline", () => {
 
     const { segmentsFile } = exportTimeline(episode);
 
-    // s02 从 61 + 36（覆盖的 1.2 秒）+ 45 + 24 = 166 帧 ≈ 5.53 秒开始
+    // 正文在片头 422 帧（≈ 14.07 秒）后开始；s02 从 422 + 61 + 36（覆盖的 1.2 秒）+ 45 + 24
+    // = 588 帧 ≈ 19.6 秒开始
     expect(segmentsFile).toBe(join(episode, "segments.txt"));
     expect(readFileSync(join(episode, "segments.txt"), "utf8")).toBe(
-      "00:00 开场\n00:05 原则\n",
+      "00:00 片头\n00:14 开场\n00:19 原则\n",
     );
   });
 
@@ -135,7 +141,7 @@ describe("exportTimeline", () => {
     exportTimeline(episode);
 
     expect(read(join(episode, "timeline.json"))).toMatchObject(
-      computeTimeline(MANIFEST, DEFAULT_PAUSES, VIDEO.fps, { "s01-l01": 1.2 }),
+      computeTimeline(MANIFEST, DEFAULT_PAUSES, VIDEO.fps, { "s01-l01": 1.2 }, INTRO_FRAMES),
     );
   });
 
@@ -149,7 +155,7 @@ describe("exportTimeline", () => {
     });
 
     expect(read(out)).toMatchObject(
-      computeTimeline(MANIFEST, DEFAULT_PAUSES, VIDEO.fps),
+      computeTimeline(MANIFEST, DEFAULT_PAUSES, VIDEO.fps, {}, INTRO_FRAMES),
     );
     expect(existsSync(join(episode, "timeline.json"))).toBe(false);
     // 打点时间表只跟期目录里的 timeline.json 一起写，试听用的时间轴不写

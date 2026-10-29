@@ -16,7 +16,7 @@ dependencies = [
 pixelbook = "pixelbook.cli:main"
 
 [dependency-groups]
-dev = ["pytest", "ruff"]
+dev = ["numpy>=2", "pytest", "ruff"]
 
 [build-system]
 requires = ["hatchling"]

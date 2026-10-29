@@ -310,6 +310,17 @@ npm run render -- ../out/sample-ch01-ep01.mp4                  # 渲染 MP4
 - `voice`（和 `render` 的配音一步）把它接在旁白稿后面：和正文一样做缺字检查、用这本书的锁定音色配音、走配音缓存和语音识别复核（复核未通过的片尾句照常列进报告），在合成清单里是最后一段——段 `outro`（标题「片尾」）、画面 `outro-c01`（画面说明是空串）、旁白句 `outro-l01`……。这些 ID 是保留的，旁白稿里用了就拒绝配音。
 - 之后照普通的段处理：字幕照常显示，时间轴、帧数核对、总时长都算上片尾；打点时间表不列片尾（每期都一样）；分镜可以给 `outro-c01` 放组件，也可以覆盖片尾前的停顿。总时长报告另外分开写正文（到片尾开始为止，含片尾前的停顿）和片尾的时长。
 
+### 片头
+
+每期最前面是一段固定片头（spec #16「修订二」，#45 拷问、#50 实现），所有期、所有书都一样：用户自己做好的 Remotion 动画加合成音轨，422 帧（30fps，约 14.07 秒）：终端打出 `LOAD "PIXEL BOOK"` → 选角色 → 四个角色亮相 → 闪白 → PIXEL BOOK 标题和 PRESS START → CRT 关机。
+
+- **文件**：`video/src/intro/`：动画 `Intro.tsx`、`sprites.tsx`，时间点 `timing.json`（帧数 `total` 就是片头的长度），音轨脚本 `make_audio.py`；`intro-config.ts` 给时间轴用（帧数和音轨路径，不引用 React）；`IntroWithAudio.tsx` 把动画和音轨放在一起。生成的音轨 `video/public/intro/intro-audio.wav` 提交（44.1 kHz 双声道 16 位，音乐和音效一体）。字体和四张角色图用 `video/public/` 里原有的（和用户原工程逐字节相同）。
+- **用户的作品，不按组件规则改**：`Intro.tsx` 是用户定稿的，搬进来时只为 `make check` 的类型检查加了非空断言（`noUncheckedIndexedAccess`），配色、尺寸、时间点都没动。它不在 `video/src/components/` 里，不受「组件只引用风格表」「组件不写死显示文字」两项检查约束（这两项只扫组件目录）：片头是一段固定动画，不是分镜里摆放的组件。
+- **改片头**：改了 `timing.json` 或 `make_audio.py` 之后重新生成音轨：`tools/.venv/bin/python video/src/intro/make_audio.py video/src/intro/timing.json video/public/intro/intro-audio.wav`（需要 numpy，`make install` 已装进 `tools/.venv`）。`make check` 里的 `tools/tests/test_intro_audio.py` 重新生成一遍和提交的文件比（格式、长度相同，每个采样相差不超过 1），忘了重新生成会失败。
+- **进时间轴**：在 Remotion 一侧加入，Python 不知道片头的内容。`planEpisode` 默认在最前面放片头：时间轴的 `introFrames` 是 422，正文第一句从第 422 帧开始，组件的触发帧、音效帧整体后移，`totalFrames` 是片头加正文（含片尾），帧数核对和总时长判断都算上片头。组件样张页不放片头（`planEpisode(…, { intro: false })`）。
+- **画面和声音**：片头期间不显示字幕和主题（`showsResidents`），也没有组件和旁白。片头自带的音轨原样放（`VOLUME.intro`，0 dB）；配乐从片头结束后才开始（`music.startFrame`），不覆盖片头，最后 2 秒淡出不变。
+- **预览和对比**：Studio 里的 `Intro` 合成单独放片头（带音轨），`npx remotion render Intro ../out/intro.mp4` 渲染出来可以和用户的参考成片比（#50 的评论里有 PSNR/SSIM 结果）。
+
 每句配音缓存在 `books/<书>/cache/tts/<指纹>.wav`（不提交），指纹由朗读文本和音色指纹算出；音色指纹包括模型、参考音频的**文件内容**、参考文本、生成参数和引擎自身的设置（如参考音频补的静音），不包括随机种子。所以再次运行时只有改过的句子会重新生成，改了音色设置或换了参考音频的内容就全部重新生成。每个 wav 旁边的 `<指纹>.json` 记录生成信息。缓存可以随时删掉，删了就整期重新生成。
 
 ### 语音识别复核
@@ -415,7 +426,7 @@ uv run pixelbook terms ../books/sample/ch01/ep01/script.yaml   # 每个新术语
 - `animation` 的取值（入场和退场通用）：`fade` 淡入 / 淡出，`slide` 从上方落下 / 向上升起，各播 0.4 秒（风格表 `MOTION.animationSeconds`）；`none` 瞬间出现 / 消失，不播动画（也不放音效），用来把同一个东西接到下一个画面。组件还可以有**自己的特殊效果**：在声明的 `effects` 里登记效果名和秒数（秒数取自风格表 `MOTION`），可以作为它的默认动画，分镜的 `animation` 也可以写这个名字，只有这个组件能用（写了组件没有的动画报错，并列出它能用的动画）；退场动画是否在画面结束前播完、重叠检查的区间，都按登记的时长算。现在只有提示牌的 `light`（亮起，0.8 秒）。
 - 每个组件恰好一次 `enter`、最多一次 `exit`、任意次 `state`。帧顺序必须是 **入场 ≤ 切换状态 < 退场**；同一帧切两次状态、切到组件当前已经是的状态都报错。没有 `exit` 的组件显示到画面结束（下一个画面的第一句开始）；有 `exit` 的，显示到退场动画播完，退场动画必须在画面结束前播完，否则报错。
 - `line` 必须是本画面的旁白句。触发帧 = 这句的开始帧 + `offset` 秒 × 帧率，四舍五入到整帧；`offset` 可以为负，但触发帧必须落在本画面之内，否则渲染前报错。画面从它的第一句开始，所以**负偏移不能挂在画面的第一句上**：上例里 `s01-l04`（`s01-c02` 的第二句）的 `-0.3` 表示在上一句 `s01-l03` 快结束时高亮；要是写成 `{ "line": "s01-l03", "offset": -0.3 }`（`s01-l03` 是这个画面的第一句），触发帧就早于画面开始，报「触发帧 … 早于画面 s01-c02 的开始帧 …」。想在画面一开始就出现，写第一句、`offset: 0`。
-- `music`（必填）：配乐登记表里的曲子 ID，全期循环播放，最后 2 秒淡出（见下面的「配乐」）。没登记的 ID 报错，并列出登记过的。
+- `music`（必填）：配乐登记表里的曲子 ID，从片头结束后循环播放到最后，最后 2 秒淡出（见下面的「配乐」）。没登记的 ID 报错，并列出登记过的。
 - `pauses`：覆盖 `after` 这句之后的停顿（秒，≥ 0），优先于默认规则（句间 0.3 秒、换画面 0.8 秒）。
 
 分镜在 Remotion 读取时和 `npm run timeline` 里校验（同一个 `planEpisode`），出错时报出第几个画面、第几个组件或触发、哪个字段。
@@ -496,9 +507,9 @@ uv run pixelbook terms ../books/sample/ch01/ep01/script.yaml   # 每个新术语
 
   把打印出的采样率、采样数抄进登记表。入库命令对每首：解码 → 按需去掉首尾静音（`trimSilence`，只有 arcade background music 用：源文件曲首约 46 毫秒、曲尾约 1.7 秒是静音）→ **按周期重采样**把采样数对齐到一帧的整数倍（`video/src/music/stretch.ts`：把曲子当成首尾相接的环，用 Blackman 窗 sinc 插值整体拉长或缩短，快慢变化不到 0.05%；不裁剪也不补零，所以接缝处仍是曲尾接曲首）→ oggenc 编码 → 用 ffprobe 的 `duration_ts` 核对编码后的采样数（不用 `format=duration`）。源文件有 wav 时用 wav；只有 OGG 的（Lasso Lady、Delayed Chiptune）从 OGG 解码再编码一次。
 - **接缝检查**：`npm run music:seams` 解码登记表里的每首曲子，把曲尾接回曲首（`video/src/music/seam.ts` 的 `measureSeam`），量两样：接缝处的采样差（超过 0.01，并且超过接缝两侧各 10 毫秒里相邻采样最大差的 2 倍，算断开），接缝两侧各 50 毫秒的 RMS（跳变超过 10 dB，或一侧低于 -60 dBFS，算不无缝）。量出来的结果和登记表的 `seamless` 不一致时以非零码退出。它只能挡住咔哒声和空档，挡不住节拍接错，听感留到人工关口 3。
-- **播放**：分镜顶层的 `music` 写曲子 ID（必填，没登记的报错）。`planEpisode` 输出 `music`：曲子 ID `track` 和淡出起始帧 `fadeFrom`（总帧数 − 60，即最后 2 秒；总帧数不到 60 时为 0）；没有分镜（字幕版）时为 `null`，不放配乐。Episode 在合成顶层放配乐（`video/src/music/EpisodeMusic.tsx`），覆盖整期（含片尾），音量 `VOLUME.music`（-20 dB），从 `fadeFrom` 到最后一帧线性降到 0。循环**不用 Html5Audio 的 `loop`**：全长试验里它在每个接缝处有约一帧（约 1600 个采样）的数字静音，曲子还每循环一次往后错约 139 个采样（约 3 毫秒）；改成每次循环一个 `Sequence`（长度是登记表算出的整数帧 `loopFrames`），各放一份曲子，首尾正好相接。音量用 `useCurrentFrame` 加 `interpolate` 在顶层算成数值再传进去，**不用 `volume` 回调**：回调拿到的是 Sequence 里的帧数，每次循环都归零，淡出会落在错误的位置。一份音频在它的时间段里音量有变化时，Remotion 渲染时把音量取整到 1/97 的整数倍（`@remotion/renderer` 的 `roundVolumeToAvoidStackOverflow`，ffmpeg 表达式深度的限制）：最后一次循环带着淡出，它的 0.1 被取成 10/97（约 -19.7 dB），比前面几次循环响约 0.26 dB；淡出是约 10 级台阶（每级约 6 帧），最后约 3 帧是 0。时间轴导出命令把 `music`（外加文件 `file`、循环一次的帧数 `loopFrames`、音量 `volumeDb`）写进 `timeline.json`，没有配乐时是 `null`。
+- **播放**：分镜顶层的 `music` 写曲子 ID（必填，没登记的报错）。`planEpisode` 输出 `music`：曲子 ID `track`、开始帧 `startFrame`（片头结束的那一帧，即 422；不放片头时为 0）和淡出起始帧 `fadeFrom`（总帧数 − 60，即最后 2 秒；总帧数不到 60 时为 0）；没有分镜（字幕版）时为 `null`，不放配乐。Episode 在合成顶层放配乐（`video/src/music/EpisodeMusic.tsx`），从片头结束放到最后一帧（含片尾），不覆盖片头（#50），音量 `VOLUME.music`（-20 dB），从 `fadeFrom` 到最后一帧线性降到 0。循环**不用 Html5Audio 的 `loop`**：全长试验里它在每个接缝处有约一帧（约 1600 个采样）的数字静音，曲子还每循环一次往后错约 139 个采样（约 3 毫秒）；改成每次循环一个 `Sequence`（长度是登记表算出的整数帧 `loopFrames`），各放一份曲子，首尾正好相接。音量用 `useCurrentFrame` 加 `interpolate` 在顶层算成数值再传进去，**不用 `volume` 回调**：回调拿到的是 Sequence 里的帧数，每次循环都归零，淡出会落在错误的位置。一份音频在它的时间段里音量有变化时，Remotion 渲染时把音量取整到 1/97 的整数倍（`@remotion/renderer` 的 `roundVolumeToAvoidStackOverflow`，ffmpeg 表达式深度的限制）：最后一次循环带着淡出，它的 0.1 被取成 10/97（约 -19.7 dB），比前面几次循环响约 0.26 dB；淡出是约 10 级台阶（每级约 6 帧），最后约 3 帧是 0。时间轴导出命令把 `music`（外加文件 `file`、循环一次的帧数 `loopFrames`、音量 `volumeDb`）写进 `timeline.json`，没有配乐时是 `null`。
 - **只有配乐的声轨**：Studio 里另有一个合成 `EpisodeMusic`，和 Episode 用同一份排期，只放配乐，不放旁白和音效，用来单独检查循环接缝和淡出。
-- **全长试验**（#39）：`cd tools && uv run pixelbook music-trial ../books/<书>/<章>/<期>/script.yaml [--storyboard 试验分镜.json]` 先像 `pixelbook render` 一样出片到 `out/<书>-<章>-<期>.mp4`，再把 `EpisodeMusic` 渲染成 `out/<书>-<章>-<期>-music.wav`，然后检查（`tools/src/pixelbook/music_check.py` 的 `check_music`）：音频流和视频流一样长（相差不超过一帧）；拿原曲首尾相接、调到同样音量当参照（ffmpeg `-stream_loop`），和配乐声轨逐帧比 RMS（`astats`），淡出之前每帧和整体音量相差不超过 ±1 dB（接缝不跳变、不掉帧），淡出段逐帧不回升（允许 0.3 dB 测量误差）、最后至少降 20 dB；每个循环接缝前后 1 秒，声轨和成片里都没有参照之外的静音（`silencedetect`，低于 -50 dBFS、20 毫秒以上；8-bit 曲子音符之间本来就有短暂的静音，所以要和参照比）。每个接缝打印一行，有问题时以非零码退出。`--storyboard` 在出片期间临时换上这份分镜，结束后把期目录里的分镜恢复原样（原来没有就删掉）；ch02 ep01 的试验分镜是 `video/src/episode/fixtures/ep01-music-trial.storyboard.json`（几个知识块，配乐 Pixel Sprinter，`npm run test` 检查它能排期）。
+- **全长试验**（#39）：`cd tools && uv run pixelbook music-trial ../books/<书>/<章>/<期>/script.yaml [--storyboard 试验分镜.json]` 先像 `pixelbook render` 一样出片到 `out/<书>-<章>-<期>.mp4`，再把 `EpisodeMusic` 渲染成 `out/<书>-<章>-<期>-music.wav`，然后检查（`tools/src/pixelbook/music_check.py` 的 `check_music`）：音频流和视频流一样长（相差不超过一帧）；配乐声轨在 `startFrame` 之前（片头期间）每帧都低于 -50 dBFS；拿原曲从 `startFrame` 起首尾相接、调到同样音量当参照（ffmpeg `-stream_loop`），和配乐声轨逐帧比 RMS（`astats`），淡出之前每帧和整体音量相差不超过 ±1 dB（接缝不跳变、不掉帧），淡出段逐帧不回升（允许 0.3 dB 测量误差）、最后至少降 20 dB；每个循环接缝前后 1 秒，声轨和成片里都没有参照之外的静音（`silencedetect`，低于 -50 dBFS、20 毫秒以上；8-bit 曲子音符之间本来就有短暂的静音，所以要和参照比）。每个接缝打印一行，有问题时以非零码退出。`--storyboard` 在出片期间临时换上这份分镜，结束后把期目录里的分镜恢复原样（原来没有就删掉）；ch02 ep01 的试验分镜是 `video/src/episode/fixtures/ep01-music-trial.storyboard.json`（几个知识块，配乐 Pixel Sprinter，`npm run test` 检查它能排期）。
 - `npm run test` 检查：登记的每首曲子的文件都在 `music/` 里、文件名就是 ID；许可是 CC0，记了核对日期和作品页；文件是 OGG/Vorbis，采样率和采样数（读 OGG 最后一页的 granule position）与登记表一致，采样数是一帧采样数的整数倍；`music/` 里没有没登记的文件；许可不是 CC0、采样数没对齐时 `defineMusicLibrary` 报错。
 
 ### 组件目录
@@ -652,11 +663,11 @@ cd ../tools
 uv run pixelbook mix ../books/sample/ch01/ep01/timeline.json   # 拼到 out/mix/sample-ch01-ep01.wav
 ```
 
-- `npm run timeline` 读期目录里的合成清单 `episode.json`，有分镜时也读分镜（取它的停顿覆盖，分镜不合格就报错），用和 Remotion 渲染时同一个时间轴函数算出 `timeline.json`（不提交）：帧率 `fps`、总帧数 `totalFrames`，每个旁白句（`lines`）、画面（`scenes`）、段（`segments`）的 `startFrame`（含）和 `endFrame`（不含）。旁白句的 `endFrame` 是音频结束、不含之后的停顿；总帧数到最后一句音频结束为止。
-- 同一个命令还写出期目录里的打点时间表 `segments.txt`（不提交）：每段一行 `00:00 段标题`，时间是该段开始帧换算成秒后向下取整，不到 1 小时用 `mm:ss`，超过用 `h:mm:ss`，可以直接贴到视频平台的分段设置。固定片尾（段 `outro`）每期都一样，不列。用 `--out` 写到期目录以外时不写打点时间表，免得试听用的时间轴覆盖正式的。
-- 命令最后打印总时长（`m:ss`，含停顿，向下取整到秒）和 4:00–6:00 的判断（在范围内 / 太短 / 太长，两端都算在范围内，按显示的整秒判断）；判断也写进 `timeline.json` 的 `duration` 字段（`seconds`、`text`、`verdict`：`within` / `too-short` / `too-long`，`verdictText`：判断的说明文字，`pixelbook render` 的汇总原样打印它；`body`、`outro`：正文和片尾各自的 `seconds`、`text`，没有片尾时 `outro` 是 `null`）。判断按含片尾的总时长；命令和 `pixelbook render` 的汇总在总时长后面写「（正文 m:ss，片尾 m:ss）」。样片阶段只报告，不以非零码退出。
+- `npm run timeline` 读期目录里的合成清单 `episode.json`，有分镜时也读分镜（取它的停顿覆盖，分镜不合格就报错），用和 Remotion 渲染时同一个 `planEpisode` 算出 `timeline.json`（不提交）：帧率 `fps`、总帧数 `totalFrames`（含片头）、片头的帧数 `introFrames`（正文从这一帧开始，见「片头」），每个旁白句（`lines`）、画面（`scenes`）、段（`segments`）的 `startFrame`（含）和 `endFrame`（不含）。旁白句的 `endFrame` 是音频结束、不含之后的停顿；总帧数到最后一句音频结束为止。
+- 同一个命令还写出期目录里的打点时间表 `segments.txt`（不提交）：每段一行 `00:00 段标题`，时间是该段开始帧换算成秒后向下取整，不到 1 小时用 `mm:ss`，超过用 `h:mm:ss`，可以直接贴到视频平台的分段设置。第一行是 `00:00 片头`（平台的分段要从 00:00 开始），正文各段写真实的开始时间（片头之后）。固定片尾（段 `outro`）每期都一样，不列。用 `--out` 写到期目录以外时不写打点时间表，免得试听用的时间轴覆盖正式的。
+- 命令最后打印总时长（`m:ss`，含停顿，向下取整到秒）和 4:00–6:00 的判断（在范围内 / 太短 / 太长，两端都算在范围内，按显示的整秒判断）；判断也写进 `timeline.json` 的 `duration` 字段（`seconds`、`text`、`verdict`：`within` / `too-short` / `too-long`，`verdictText`：判断的说明文字，`pixelbook render` 的汇总原样打印它；`intro`、`body`、`outro`：片头、正文和片尾各自的 `seconds`、`text`，没有片头时 `intro` 是 `null`，没有片尾时 `outro` 是 `null`；正文从片头结束到片尾开始）。判断按含片头和片尾的总时长；命令和 `pixelbook render` 的汇总在总时长后面写「（片头 m:ss，正文 m:ss，片尾 m:ss）」。样片阶段只报告，不以非零码退出。
 - 只想听默认停顿、不要分镜里的覆盖时，加 `--no-storyboard`，再用 `--out` 写到别处，免得覆盖期目录里的 `timeline.json`：`npm run timeline -- ../books/sample/ch01/ep01 --no-storyboard --out ../out/mix/sample-ch01-ep01-default-pauses.timeline.json`，然后 `uv run pixelbook mix ../out/mix/sample-ch01-ep01-default-pauses.timeline.json --out ../out/mix/sample-ch01-ep01-default-pauses.wav`。
-- 试听音轨只有旁白，不含音效（音效只在 Remotion 渲染时放）。
+- 试听音轨只有旁白，不含片头音轨和音效（只在 Remotion 渲染时放）；时间轴里正文从片头之后开始，所以试听音轨开头有片头长度（约 14 秒）的静音。
 - `pixelbook mix` 只读 `timeline.json`，不知道停顿是多少秒：每句的 wav（`audio`，以 `video/public/` 为起点）从"开始帧 ÷ 帧率"秒处开始，其余是静音，补到时间轴的总时长。拼完测量音轨，和时间轴总时长相差超过一帧就报错。`timeline.json` 格式不对时逐个写明字段位置。它用的是 `video/public/episode/` 里的 wav，所以要在 `pixelbook voice` 之后、对同一期导出时间轴；重新配音后要重新导出。
 
 ## 风格表、字体与频道形象
@@ -688,7 +699,7 @@ GitHub Actions（`.github/workflows/check.yml`）在每个 PR 和推送到 main 
 make smoke
 ```
 
-它用 `tools/smoke/episode/` 里的固定小样例（4 句、带分镜和 `title`），把真实 TTS 和语音识别换成假引擎（静音 wav，不加载任何模型），在临时目录里经 `pixelbook render` 走完四步，再用 ffprobe 解码数出 MP4 视频流的帧数，和 `timeline.json` 的总帧数比，相差不超过一帧。样例的配乐是 48 kHz 的 Starlight City（旁白、音效是别的采样率，顺带验证混音时的重采样），所以成片里的声音是配乐和音效（假旁白是静音）。它拿原曲首尾相接当参照，逐帧比 RMS（ffmpeg `astats`），检查分镜里的每个音效（样例用到了全部 7 个）在它的帧比配乐高出 3 dB 以上、第一个音效之前只有配乐；淡出之前成片里没有参照之外的静音（`silencedetect`）；音频流和视频流一样长；三个不同的音效同时响起时峰值低于 -1 dBFS。它验证的是渲染管线、时长和声音的时机，不是音质。配音缓存、锁定音色、Remotion 静态目录和 MP4 都在临时目录里，不碰 `books/`、`video/public/episode/` 和 `out/`。改了配音流水线、时间轴或 Remotion 之后跑一次。
+它用 `tools/smoke/episode/` 里的固定小样例（4 句、带分镜和 `title`），把真实 TTS 和语音识别换成假引擎（静音 wav，不加载任何模型），在临时目录里经 `pixelbook render` 走完四步，再用 ffprobe 解码数出 MP4 视频流的帧数，和 `timeline.json` 的总帧数比，相差不超过一帧。样例的配乐是 48 kHz 的 Starlight City（旁白、音效是别的采样率，顺带验证混音时的重采样），所以成片里的声音是片头音轨、配乐和音效（假旁白是静音）。它先查片头（#50）：时间轴的 `introFrames` 是 422、第一句从第 422 帧开始、配乐的 `startFrame` 是 422，片头期间成片的逐帧电平和片头音轨一样（响的帧相差不超过 1 dB，没有配乐叠上去），打点时间表从 `00:00 片头` 开始。再拿原曲从片头结束起首尾相接当参照，逐帧比 RMS（ffmpeg `astats`），检查分镜里的每个音效（样例用到了全部 7 个）在它的帧比配乐高出 3 dB 以上、第一个音效之前只有配乐；片头之后、淡出之前成片里没有参照之外的静音（`silencedetect`）；音频流和视频流一样长；三个不同的音效同时响起时峰值低于 -1 dBFS（只量片头之后，片头音轨本身约 -1 dBFS）。它验证的是渲染管线、时长和声音的时机，不是音质。配音缓存、锁定音色、Remotion 静态目录和 MP4 都在临时目录里，不碰 `books/`、`video/public/episode/` 和 `out/`。改了配音流水线、时间轴或 Remotion 之后跑一次。
 
 ## 预览
 
@@ -698,4 +709,4 @@ make smoke
 cd video && npm run studio
 ```
 
-在 Studio 里打开 `Episode` 合成。`StyleSheet` 合成是风格样张（调色板、用途色、字体、描边和阴影、字幕框），`Sample-<组件名>` 是各组件的样张（见「分镜」），都只在 Studio 里看，渲染命令只渲染 `Episode`；要导出成图片：`npx remotion still StyleSheet ../out/style-sheet.png`。
+在 Studio 里打开 `Episode` 合成。`Intro` 合成单独放片头（见「片头」）。`StyleSheet` 合成是风格样张（调色板、用途色、字体、描边和阴影、字幕框），`Sample-<组件名>` 是各组件的样张（见「分镜」），都只在 Studio 里看，渲染命令只渲染 `Episode`；要导出成图片：`npx remotion still StyleSheet ../out/style-sheet.png`。

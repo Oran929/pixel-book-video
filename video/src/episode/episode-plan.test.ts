@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { declareComponent } from "../components/declaration";
-import { planEpisode } from "./episode-plan";
+import { planEpisode as planWithIntro } from "./episode-plan";
+import { lineAt, showsResidents } from "./timeline";
+
+// 除了最后的「片头」一组，这里的测试只看正文：不放片头，帧数从 0 算起
+const planEpisode = (...[manifest, storyboard, components]: Parameters<typeof planWithIntro>) =>
+  planWithIntro(manifest, storyboard, components, { intro: false });
 
 const line = (id: string, scene: string, seconds: number) => ({
   id,
@@ -738,6 +743,7 @@ describe("planEpisode: music", () => {
   it("plays the storyboard's track and fades it out over the last 2 seconds", () => {
     expect(planEpisode(MANIFEST, scored("pixel-sprinter"), DECLARATIONS).music).toEqual({
       track: "pixel-sprinter",
+      startFrame: 0,
       fadeFrom: 153,
     });
   });
@@ -1487,5 +1493,76 @@ describe("planEpisode: the mascot", () => {
     [{ character: "robot" }, /props character/],
   ])("rejects %j", (bad, message) => {
     expect(() => mascot({ character: "reader", ...bad })).toThrow(message);
+  });
+});
+
+// 片头（#50，spec #16 修订二）：每期最前面固定 422 帧，正文、组件、音效整体后移，
+// 配乐从片头结束后开始。下面的期望值按「不放片头时」的帧数（上面各条测试的口径）加 422 写
+describe("planEpisode: intro", () => {
+  const INTRO_FRAMES = 422;
+  const withIntro = (storyboard: unknown) =>
+    planWithIntro(MANIFEST, storyboard, DECLARATIONS);
+  const scored = lampScene(
+    { action: "enter", offset: 0 },
+    { action: "exit", offset: 1 },
+  );
+
+  it("puts the 422-frame intro first: total frames are intro plus body", () => {
+    // 正文用默认停顿共 213 帧
+    const plan = withIntro(scored);
+    expect(plan.timeline.introFrames).toBe(INTRO_FRAMES);
+    expect(plan.timeline.totalFrames).toBe(INTRO_FRAMES + 213);
+  });
+
+  it("starts the first line, scene and segment right after the intro", () => {
+    const { timeline } = withIntro(scored);
+    expect(timeline.lines[0]).toMatchObject({ startFrame: 422, endFrame: 482 });
+    expect(timeline.scenes[0]!.startFrame).toBe(422);
+    expect(timeline.segments.map((s) => s.startFrame)).toEqual([422, 560]);
+  });
+
+  it("shifts trigger frames and sound frames by 422", () => {
+    // 不放片头时：入场第 138 帧、退场第 168 帧，到第 180 帧
+    const [cue] = withIntro(scored).cues;
+    expect(cue).toMatchObject({
+      startFrame: 560,
+      endFrame: 602,
+      enter: { frame: 560 },
+      exit: { frame: 590 },
+    });
+    const sounded = planWithIntro(
+      MANIFEST,
+      lampScene(
+        { action: "enter", offset: 0 },
+        { action: "state", offset: 1, state: "broken" },
+      ),
+      NOISY,
+    );
+    // 不放片头时：入场第 138 帧、切换到 broken 第 168 帧
+    expect(sounded.sounds.map((s) => s.frame)).toEqual([560, 590]);
+  });
+
+  it("starts the music when the intro ends and still fades over the last 2 seconds", () => {
+    expect(withIntro(scored).music).toEqual({
+      track: "pixel-sprinter",
+      startFrame: 422,
+      fadeFrom: 422 + 213 - 60,
+    });
+  });
+
+  it("shows no subtitle and no title during the intro", () => {
+    const { timeline } = withIntro(scored);
+    expect(lineAt(timeline, 0)).toBeUndefined();
+    expect(lineAt(timeline, 421)).toBeUndefined();
+    expect(lineAt(timeline, 422)?.id).toBe("s01-l01");
+    expect(showsResidents(timeline, 421)).toBe(false);
+    expect(showsResidents(timeline, 422)).toBe(true);
+  });
+
+  it("can be left out (component sample pages have no intro)", () => {
+    const plan = planWithIntro(MANIFEST, scored, DECLARATIONS, { intro: false });
+    expect(plan.timeline.introFrames).toBe(0);
+    expect(plan.timeline.totalFrames).toBe(213);
+    expect(plan.music?.startFrame).toBe(0);
   });
 });

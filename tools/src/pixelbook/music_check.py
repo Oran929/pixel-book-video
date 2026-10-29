@@ -87,6 +87,17 @@ def _fade_problems(gains: list[float | None], gain: float, fade_from: int) -> li
     return problems
 
 
+def intro_problems(stem: list[float], start: int) -> list[str]:
+    """配乐声轨在第 `start` 帧（片头结束）之前应当是静音：配乐不覆盖片头（#50）。"""
+    loud = [f for f, level in enumerate(stem[:start]) if level > SILENCE_DB]
+    if not loud:
+        return []
+    span = _frames(loud[0], loud[-1])
+    return [
+        f"片头期间（第 0–{start - 1} 帧）配乐声轨就有声音：{span}高于 {SILENCE_DB} dBFS"
+    ]
+
+
 def duration_problems(*, video: float, audio: float, fps: int) -> list[str]:
     """音频流和视频流一样长（相差不超过一帧）：配乐覆盖整期，音频不会比视频短。"""
     if abs(video - audio) <= 1 / fps:
@@ -185,27 +196,38 @@ class MusicCheck:
 def check_music(mp4: Path, stem: Path, timeline: dict, public_dir: Path) -> MusicCheck:
     """检查成片 `mp4` 和只有配乐的声轨 `stem`（Remotion 的 EpisodeMusic 合成）。
 
-    `timeline` 是 `timeline.json` 的内容；曲子文件在 `public_dir` 下。查四样：
-    音频流和视频流一样长；配乐声轨和参照逐帧比，淡出之前音量处处一样（接缝不跳变）、
-    淡出段单调下降；每个接缝前后，声轨和成片里都没有参照之外的静音。
+    `timeline` 是 `timeline.json` 的内容；曲子文件在 `public_dir` 下。查五样：
+    音频流和视频流一样长；配乐从 `startFrame`（片头结束，#50）才开始，之前声轨是静音；
+    配乐声轨和参照逐帧比，淡出之前音量处处一样（接缝不跳变）、淡出段单调下降；
+    每个接缝前后，声轨和成片里都没有参照之外的静音。
     """
     fps, total, music = timeline["fps"], timeline["totalFrames"], timeline["music"]
-    fade_from = music["fadeFrom"]
+    fade_from, start = music["fadeFrom"], music.get("startFrame", 0)
     track = public_dir / music["file"]
     seconds = stream_seconds(mp4)
     problems = duration_problems(
         video=seconds["video"], audio=seconds["audio"], fps=fps
     )
 
-    reference = frame_levels(track, fps, loop_frames=total)
+    # 参照：片头期间是静音（比 FLOOR_DB 低，不参与比较），之后原曲首尾相接
+    reference = [float("-inf")] * start + frame_levels(
+        track, fps, loop_frames=total - start
+    )
     levels = frame_levels(stem, fps)[:total]
+    problems += intro_problems(levels, start)
     problems += music_problems(levels, reference, fade_from=fade_from)
 
-    seams = list(range(music["loopFrames"], total, music["loopFrames"]))
-    quiet = silences(track, loop_seconds=total / fps, gain_db=music["volumeDb"])
+    seams = list(range(start + music["loopFrames"], total, music["loopFrames"]))
+    # 曲子自己的停顿（后移到配乐开始的位置），外加片头期间本来就没有配乐
+    quiet = [
+        (a + start / fps, b + start / fps)
+        for a, b in silences(
+            track, loop_seconds=(total - start) / fps, gain_db=music["volumeDb"]
+        )
+    ] + ([(0.0, start / fps)] if start else [])
     # 淡出段本来就会变成静音，不看
     windows = [
-        (a, min(b, fade_from / fps))
+        (max(a, start / fps), min(b, fade_from / fps))
         for a, b in seam_windows([f / fps for f in seams])
         if a < fade_from / fps
     ]

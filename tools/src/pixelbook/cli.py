@@ -109,12 +109,20 @@ def _verifier() -> Verifier:
     )
 
 
-def _body_and_outro(duration: dict[str, Any]) -> str:
-    """正文和片尾分开写（时间轴导出命令算好的，ADR-0010）；没有片尾时不写。"""
-    outro = duration.get("outro")
-    if not outro:
+def _duration_parts(duration: dict[str, Any]) -> str:
+    """片头、正文、片尾分开写（时间轴导出命令算好的，ADR-0010、#50）；都没有时不写。
+
+    写法和时间轴导出命令的 `partsText` 相同。
+    """
+    intro, outro = duration.get("intro"), duration.get("outro")
+    if not intro and not outro:
         return ""
-    return f"（正文 {duration['body']['text']}，片尾 {outro['text']}）"
+    parts = [
+        f"片头 {intro['text']}" if intro else None,
+        f"正文 {duration['body']['text']}",
+        f"片尾 {outro['text']}" if outro else None,
+    ]
+    return f"（{'，'.join(p for p in parts if p)}）"
 
 
 def _print_render_summary(summary: dict[str, Any]) -> None:
@@ -124,7 +132,7 @@ def _print_render_summary(summary: dict[str, Any]) -> None:
         f"\n成片 {summary['mp4']}\n"
         f"  帧数：视频流 {summary['frames']} 帧，时间轴 {summary['total_frames']} 帧"
         f"（{summary['fps']}fps，相差不超过一帧）\n"
-        f"  总时长 {duration['text']}：{duration['verdictText']}{_body_and_outro(duration)}\n"
+        f"  总时长 {duration['text']}：{duration['verdictText']}{_duration_parts(duration)}\n"
         f"  打点时间表 {summary['segments']}"
     )
     if passes := summary["asr_pinyin_passes"]:

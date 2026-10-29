@@ -16,9 +16,10 @@ describe("ep01 全长音频试验的分镜", () => {
     read("ep01-music-trial.storyboard.json"),
   );
 
-  it("用 Pixel Sprinter 垫满全长，最后 60 帧淡出", () => {
+  it("用 Pixel Sprinter 从片头结束垫到最后，最后 60 帧淡出", () => {
     expect(plan.music).toEqual({
       track: "pixel-sprinter",
+      startFrame: 422,
       fadeFrom: plan.timeline.totalFrames - 60,
     });
     // 全长约 4 分半，比 Pixel Sprinter 的一次循环（1029 帧）长得多

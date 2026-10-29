@@ -12,6 +12,8 @@ import { ComponentSample } from "./stylesheet/ComponentSample";
 import { ComponentSamples, componentSamplesFrames } from "./stylesheet/ComponentSamples";
 import { STYLE_SHEET, StyleSheet } from "./stylesheet/StyleSheet";
 import { VIDEO } from "./video-config";
+import { IntroWithAudio } from "./intro/IntroWithAudio";
+import { INTRO } from "./intro/intro-config";
 
 export const RemotionRoot: React.FC = () => (
   <>
@@ -37,6 +39,15 @@ export const RemotionRoot: React.FC = () => (
         { title: "", timeline: null, cues: [], sounds: [], music: null } satisfies EpisodeProps
       }
       durationInFrames={1}
+      fps={VIDEO.fps}
+      width={VIDEO.width}
+      height={VIDEO.height}
+    />
+    {/* 片头（#50）：用户做好的动画，单独渲染出来和参考成片对比；成片里它接在每期最前面 */}
+    <Composition
+      id="Intro"
+      component={IntroWithAudio}
+      durationInFrames={INTRO.frames}
       fps={VIDEO.fps}
       width={VIDEO.width}
       height={VIDEO.height}
