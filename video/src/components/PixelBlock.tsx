@@ -1,7 +1,7 @@
 import { AbsoluteFill } from "remotion";
 import type { z } from "zod";
 import { border, COLOR, hardShadow, pixelText, SIZE } from "../style/style";
-import type { PixelBlockProps } from "./schemas";
+import type { PixelBlockProps } from "./declarations";
 
 // 样片用的简单组件：一个带字的像素方块。
 export const PixelBlock: React.FC<z.infer<typeof PixelBlockProps>> = ({

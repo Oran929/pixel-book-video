@@ -1,6 +1,6 @@
 // 风格表（票 09）：颜色、像素网格、像素字体、描边和阴影规则。
 // 组件（包括常驻组件字幕框和主题）里的颜色、尺寸只能从这里取（style/hardcoded.test.ts 检查）。
-// 纯 .ts、不引用 React/remotion：components/schemas.ts 和 Node 里的命令也可以引用。
+// 纯 .ts、不引用 React/remotion：components/declarations.ts 和 Node 里的命令也可以引用。
 
 /**
  * 像素字体：Fusion Pixel 12px，比例宽度，简体（OFL 1.1，来源见 public/fonts/SOURCE.txt）。
@@ -140,8 +140,8 @@ export const snapToGrid = (value: number) => Math.round(value / GRID) * GRID;
 
 /** 动画 */
 export const MOTION = {
-  /** 组件出现（淡入或落下）用的秒数 */
-  enterSeconds: 0.4,
+  /** 组件入场或退场的通用动画（淡入淡出、落下升起）播多少秒；`none` 不播 */
+  animationSeconds: 0.4,
 } as const;
 
 /**

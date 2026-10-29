@@ -2,7 +2,7 @@ import { AbsoluteFill } from "remotion";
 import type { z } from "zod";
 import { Mascot } from "../components/Mascot";
 import { PixelBlock } from "../components/PixelBlock";
-import type { MascotProps } from "../components/schemas";
+import type { MascotProps } from "../components/declarations";
 import { Subtitle } from "../components/resident/Subtitle";
 import {
   border,

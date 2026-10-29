@@ -6,7 +6,7 @@ import {
   staticFile,
   useCurrentFrame,
 } from "remotion";
-import { Entering } from "../components/Entering";
+import { Staged } from "../components/Staged";
 import { EpisodeTitle } from "../components/resident/EpisodeTitle";
 import { Subtitle } from "../components/resident/Subtitle";
 import { COLOR } from "../style/style";
@@ -70,7 +70,7 @@ export const Episode: React.FC<EpisodeProps> = ({ title, timeline, cues }) => (
         from={cue.startFrame}
         durationInFrames={cue.endFrame - cue.startFrame}
       >
-        <Entering cue={cue} />
+        <Staged cue={cue} />
       </Sequence>
     ))}
     {timeline?.lines.map((line) => (

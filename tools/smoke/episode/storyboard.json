@@ -6,7 +6,8 @@
         { "id": "rule", "component": "PixelBlock", "props": { "label": "一" } }
       ],
       "triggers": [
-        { "target": "rule", "line": "s01-l03", "offset": 0.4, "action": "enter", "animation": "slide" }
+        { "target": "rule", "line": "s01-l03", "offset": 0.4, "action": "enter", "animation": "slide" },
+        { "target": "rule", "line": "s01-l03", "offset": 1.2, "action": "exit", "animation": "fade" }
       ]
     },
     {
@@ -15,7 +16,7 @@
         { "id": "once", "component": "PixelBlock", "props": { "label": "一次" } }
       ],
       "triggers": [
-        { "target": "once", "line": "s02-l01", "offset": 0.2, "action": "enter", "animation": "fade" }
+        { "target": "once", "line": "s02-l01", "offset": 0.2, "action": "enter" }
       ]
     }
   ],

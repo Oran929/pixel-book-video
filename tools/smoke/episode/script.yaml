@@ -14,7 +14,7 @@ segments:
             text: 今天读一本书。
             cite: ch01-¶001
       - id: s01-c02
-        description: 一个方块落下
+        description: 一个方块落下，又淡出
         lines:
           - id: s01-l02
             text: 第一条原则。

@@ -1,7 +1,7 @@
 import { AbsoluteFill, Img, staticFile } from "remotion";
 import type { z } from "zod";
 import { MASCOTS, SIZE } from "../style/style";
-import type { MascotProps } from "./schemas";
+import type { MascotProps } from "./declarations";
 
 // 站位 → 小人在画面底部的水平位置（左右两边离画面边缘 `SIZE.mascotInset`）
 const PLACEMENT = {

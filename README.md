@@ -373,7 +373,8 @@ uv run pixelbook terms ../books/sample/ch01/ep01/script.yaml   # 每个新术语
       "scene": "s01-c02",
       "components": [{ "id": "dry", "component": "PixelBlock", "props": { "label": "DRY" } }],
       "triggers": [
-        { "target": "dry", "line": "s01-l03", "offset": 1.2, "action": "enter", "animation": "slide" }
+        { "target": "dry", "line": "s01-l03", "offset": 1.2, "action": "enter", "animation": "slide" },
+        { "target": "dry", "line": "s01-l04", "offset": 0.5, "action": "exit" }
       ]
     }
   ],
@@ -381,11 +382,17 @@ uv run pixelbook terms ../books/sample/ch01/ep01/script.yaml   # 每个新术语
 }
 ```
 
-- `scene`：合成清单里的画面 ID。`components`：本画面用的组件，`id` 是本画面里的名字，`component` 是组件名，`props` 按该组件的参数格式校验。新组件要登记两处：参数格式在 `video/src/components/schemas.ts`（不含 JSX，时间轴导出命令在 Node 里也要用它校验分镜），实现在 `video/src/components/registry.ts`；少登记一处，类型检查会报错。
-- `triggers`：每个组件恰好一个 `enter`，`animation` 是 `fade`（淡入）或 `slide`（落下）。`line` 必须是本画面的旁白句。触发帧 = 这句的开始帧 + `offset` 秒 × 帧率，四舍五入到整帧；`offset` 可以为负，但触发帧必须落在本画面之内，否则渲染前报错。组件从触发帧显示到画面结束（下一个画面的第一句开始）。
+- `scene`：合成清单里的画面 ID。`components`：本画面用的组件，`id` 是本画面里的名字，`component` 是组件名，`props` 按该组件的参数格式校验。
+- 新组件要登记两处：**声明**在 `video/src/components/declarations.ts`（用 `declareComponent`，格式见 `declaration.ts`：参数格式 `props`（zod）、状态清单 `states`（第一个是初始状态）、占几格 `cells`（按参数算，`[列数, 行数]`）、入场和退场的默认动画 `enter`、`exit`、是否是连线类组件 `connector`），**实现**在 `video/src/components/registry.ts`；少登记一处，类型检查会报错。分镜检查只依赖声明，不含 JSX，时间轴导出命令在 Node 里也用它校验分镜。
+- `triggers`：每条触发让 `target` 组件在 `line` 这句开始后偏移 `offset` 秒做一个动作（ADR-0011），`action` 三选一：
+  - `enter` 入场、`exit` 退场：可选 `animation`，不写就用组件声明的默认动画。
+  - `state` 切换状态：必须写 `state: <状态名>`，状态名必须是组件声明过的；组件入场时是初始状态。
+- `animation` 的取值（入场和退场通用）：`fade` 淡入 / 淡出，`slide` 从上方落下 / 向上升起，各播 0.4 秒（风格表 `MOTION.animationSeconds`）；`none` 瞬间出现 / 消失，不播动画（也不放音效），用来把同一个东西接到下一个画面。组件自己的特殊效果以后作为它的默认动画登记。
+- 每个组件恰好一次 `enter`、最多一次 `exit`、任意次 `state`。帧顺序必须是 **入场 ≤ 切换状态 < 退场**；同一帧切两次状态、切到组件当前已经是的状态都报错。没有 `exit` 的组件显示到画面结束（下一个画面的第一句开始）；有 `exit` 的，显示到退场动画播完，退场动画必须在画面结束前播完，否则报错。
+- `line` 必须是本画面的旁白句。触发帧 = 这句的开始帧 + `offset` 秒 × 帧率，四舍五入到整帧；`offset` 可以为负，但触发帧必须落在本画面之内，否则渲染前报错。
 - `pauses`：覆盖 `after` 这句之后的停顿（秒，≥ 0），优先于默认规则（句间 0.3 秒、换画面 0.8 秒）。
 
-分镜在 Remotion 读取时校验，出错时报出第几个画面、第几个组件或触发、哪个字段。
+分镜在 Remotion 读取时和 `npm run timeline` 里校验（同一个 `planEpisode`），出错时报出第几个画面、第几个组件或触发、哪个字段。
 
 ### 时间轴、打点时间表与试听音轨
 

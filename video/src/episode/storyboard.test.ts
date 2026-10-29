@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
+import { declareComponent } from "../components/declaration";
 import type { EpisodeManifest } from "./manifest";
 import { parseStoryboard, pauseOverrides, scheduleCues } from "./storyboard";
 import { computeTimeline, DEFAULT_PAUSES } from "./timeline";
@@ -28,8 +29,17 @@ const MANIFEST: EpisodeManifest = {
   ],
 };
 
-// 假的组件注册表：只关心组件名和参数格式
-const COMPONENTS = { Box: z.object({ label: z.string() }) };
+// 假的组件声明：只关心组件名和参数格式
+const COMPONENTS = {
+  Box: declareComponent({
+    props: z.object({ label: z.string() }),
+    states: ["normal"],
+    cells: () => [1, 1],
+    enter: "fade",
+    exit: "fade",
+    connector: false,
+  }),
+};
 
 const STORYBOARD = {
   scenes: [
@@ -166,12 +176,14 @@ describe("scheduleCues", () => {
     });
 
   it("shows the component from its line's start until the scene ends", () => {
-    expect(scheduleCues(enteringOn("s01-l04", 0), timeline)).toEqual([
+    expect(scheduleCues(enteringOn("s01-l04", 0), timeline, COMPONENTS)).toEqual([
       {
         key: "s01-c02/dry",
         component: "Box",
         props: { label: "DRY" },
-        animation: "slide",
+        enter: { frame: 177, animation: "slide" },
+        exit: null,
+        states: [],
         startFrame: 177,
         endFrame: 237,
       },
@@ -179,33 +191,33 @@ describe("scheduleCues", () => {
   });
 
   it("lets a negative offset enter before its line starts", () => {
-    const [cue] = scheduleCues(enteringOn("s01-l04", -0.5), timeline);
+    const [cue] = scheduleCues(enteringOn("s01-l04", -0.5), timeline, COMPONENTS);
 
     expect(cue!.startFrame).toBe(162);
   });
 
   it("rounds the trigger to the nearest frame", () => {
     // 177 + 0.517 × 30 = 192.51
-    const [cue] = scheduleCues(enteringOn("s01-l04", 0.517), timeline);
+    const [cue] = scheduleCues(enteringOn("s01-l04", 0.517), timeline, COMPONENTS);
 
     expect(cue!.startFrame).toBe(193);
   });
 
   it("allows a trigger exactly on the scene start", () => {
-    const [cue] = scheduleCues(enteringOn("s01-l04", -1.3), timeline);
+    const [cue] = scheduleCues(enteringOn("s01-l04", -1.3), timeline, COMPONENTS);
 
     expect(cue!.startFrame).toBe(138);
   });
 
   it("refuses a trigger before its scene starts instead of clipping it", () => {
     // 177 − 1.5 × 30 = 132，早于画面开始帧 138
-    expect(() => scheduleCues(enteringOn("s01-l04", -1.5), timeline)).toThrow(
+    expect(() => scheduleCues(enteringOn("s01-l04", -1.5), timeline, COMPONENTS)).toThrow(
       /第 1 个画面 第 1 个触发.*触发帧 132 早于画面 s01-c02 的开始帧 138/,
     );
   });
 
   it("refuses a trigger after its scene ends", () => {
-    expect(() => scheduleCues(enteringOn("s01-l04", 2), timeline)).toThrow(
+    expect(() => scheduleCues(enteringOn("s01-l04", 2), timeline, COMPONENTS)).toThrow(
       /第 1 个画面 第 1 个触发.*触发帧 237 不早于画面 s01-c02 的结束帧 237/,
     );
   });
