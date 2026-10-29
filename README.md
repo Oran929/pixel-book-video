@@ -165,7 +165,9 @@ uv run pixelbook check ../books/pragmatic-programmer/ch02/ep01/script.yaml
 - 按 250 字/分钟估算的时长不在 4:00–6:00 内（含两端）。字数口径和字幕相同：只数 `text`、去掉空白，`speech` 不算；
 - 找不到大纲、大纲格式不对（先用 `pixelbook outline` 修好），或大纲里没有这一期；这时下面几条对照大纲的检查不跑；
 - `title` 不等于大纲里这一期的 `topic`；
+- 段和大纲里这一期的段不是一一对应：个数、顺序、标题要都相同（大纲的 `segments` 就是旁白稿的段）；
 - 本期大纲里有观点没被任何画面的 `points` 讲到，或某个画面的 `points` 引用了本期大纲里没有的观点（包括别的期的观点）。
+- 期目录里有 `factcheck.yaml`（见下文「语义核对」）时：它格式不对（报第一处，记在「旁白稿」下），或旁白稿里有句子没有判定、核对之后改过字幕或出处（记在那一句下），或它判定了旁白稿里没有的句子（记在它写的句子 ID 下）。没有 `factcheck.yaml` 时不检查。
 
 警告（不影响退出码）：
 
@@ -173,6 +175,34 @@ uv run pixelbook check ../books/pragmatic-programmer/ch02/ep01/script.yaml
 - 照搬原文：字幕 `text` 和它 `cite` 引用的任一文字段，两边都去掉空白和标点后，有 12 个字以上连续相同。警告里写出相同的片段。
 
 章目录名必须是 `chNN`，转换结果不存在时先跑 `pixelbook convert`。样例旁白稿的出处不指向真实原文（样例书没有转换结果），不用 `check` 检查。
+
+### 语义核对
+
+机械检查通过后，`/factcheck <期目录>` 让一个独立的 subagent（裁判）只看每个旁白句和它 `cite` 引用的全部原文段落（不看大纲、画面说明和写稿思路），逐句判定原文是否支持，结果写进期目录里的 `factcheck.yaml`（提交）。`/script <期目录>` 写完稿会自动调用它；手改旁白稿之后也可以单独跑。两个 skill 在 `.claude/skills/script/`、`.claude/skills/factcheck/`，判定标准和防编造规则以 skill 为准（ADR-0008）。能机械判断的部分都在下面两条命令和 `pixelbook check` 里，skill 只跑命令、写稿和判定。
+
+```sh
+cd tools
+# 1. 给裁判的材料：按顺序列出每个旁白句的字幕和它引用的原文段落，没有别的
+uv run pixelbook factcheck-packet ../books/pragmatic-programmer/ch02/ep01
+# 2. 把裁判的回答（只有 lines：id、verdict、reason）记进 factcheck.yaml
+uv run pixelbook factcheck-record ../books/pragmatic-programmer/ch02/ep01 <裁判的回答.yaml>
+```
+
+- **`factcheck-packet`**：旁白稿除 `factcheck.yaml` 以外还有任何报错（即 `check` 的报错去掉核对结果那几条）时拒绝，打印检查报告、退出码 1。旧的 `factcheck.yaml` 对不上不拦，这一轮就是要重新核对。材料里没有主题、段标题、画面说明、`points` 和 `speech`。
+- **`factcheck-record`**：裁判的回答要和旁白稿逐句对应（同样的句子 ID、同样的顺序、不多不少），否则报出第一处对不上的位置、不写文件，要把同一份材料交给新的裁判。对得上时整份覆盖 `factcheck.yaml`：`round` 是旧文件的 `round` + 1（没有旧文件时为 1），每句抄下当前的字幕和出处。最后打印汇报：各判定的句数，先列不支持、再列部分支持的句子（ID、字幕、理由）；有不支持的句子时写明还能再核对几轮（`/script` 最多 3 轮，`judge.MAX_ROUNDS`），或轮次已用完。旧文件格式不对时拒绝，算不出轮次；从头核对就先删掉它。
+
+```yaml
+round: 1                         # 第几轮核对，正整数，从 1 起
+lines:                           # 每个旁白句一条，按旁白稿顺序
+  - id: s01-l01                  # 旁白句 ID
+    text: 第一条原则叫 DRY。       # 核对时的字幕，由 factcheck-record 抄下
+    cite: [ch02-¶040]            # 核对时的出处，同上
+    verdict: supported           # supported（支持）/ partial（部分支持）/ unsupported（不支持）
+    reason: ¶040 给出了 DRY 的定义，旁白是它的压缩复述。   # 一句话理由
+```
+
+- 只认这五个字段和顶层的 `round`、`lines`；多出或缺少字段、`verdict` 取值不对、同一句出现两次，都是格式错误。
+- `pixelbook check` 核对格式和逐句对应，并比较每句的 `text`、`cite` 和旁白稿当前的是否相同：核对之后改过的句子报错，要重新跑 `/factcheck`。判定结果不影响退出码，有 `unsupported` 也照样通过；判定由 `/script` 汇报，你在关口 2 审。
 
 ### 完整步骤
 

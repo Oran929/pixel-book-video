@@ -1,8 +1,9 @@
-"""旁白稿检查：`pixelbook check <旁白稿>`（票 #8、#9）。
+"""旁白稿检查：`pixelbook check <旁白稿>`（票 #8、#9、#11）。
 
 转换结果用夹具手写成 `books/demo/chapters/ch01.md`，格式和 `pixelbook convert` 的输出相同；
-大纲是 `books/demo/ch01/outline.yaml`，旁白稿是 `books/demo/ch01/ep01/script.yaml`。
-每个用例从 `script()`、`outline()` 出发改一处再写出。
+大纲是 `books/demo/ch01/outline.yaml`，旁白稿是 `books/demo/ch01/ep01/script.yaml`，
+语义核对结果是同一期目录里的 `factcheck.yaml`（给出时才写）。
+每个用例从 `script()`、`outline()`、`factcheck()` 出发改一处再写出。
 """
 
 import pytest
@@ -49,9 +50,8 @@ def outline() -> dict:
                 "id": "ep01",
                 "topic": "第一单元",
                 "units": [1],
-                "segments": [
-                    {"title": f"第 {n} 段", "minutes": 1} for n in range(1, 6)
-                ],
+                # `check` 只读大纲的格式，不管段数；段标题要和旁白稿的段一致
+                "segments": [{"title": "开场", "minutes": 5}],
                 "points": [{"id": "p01", "text": "第一条观点", "cite": "ch01-¶001"}],
             }
         ],
@@ -89,24 +89,66 @@ def script(lines: int = 60) -> dict:
     }
 
 
+def factcheck(data: dict) -> dict:
+    """对 `data` 这份旁白稿的一份完整的核对结果：第 1 轮，每句都判定为支持。"""
+    return {
+        "round": 1,
+        "lines": [
+            {
+                "id": line["id"],
+                "text": line["text"],
+                "cite": line["cite"],
+                "verdict": "supported",
+                "reason": "原文这样说",
+            }
+            for segment in data["segments"]
+            for scene in segment["scenes"]
+            for line in scene["lines"]
+        ],
+    }
+
+
 @pytest.fixture
-def check(tmp_path, capsys):
-    """写出旁白稿并运行 `pixelbook check`，返回退出码和输出。"""
+def episode(tmp_path):
+    """写出转换结果和大纲，返回期目录 `books/demo/ch01/ep01/`（已建好，旁白稿未写）。"""
     chapters = tmp_path / "books" / "demo" / "chapters"
     chapters.mkdir(parents=True)
     (chapters / "ch01.md").write_text(CHAPTER)
-    path = tmp_path / "books" / "demo" / "ch01" / "ep01" / "script.yaml"
-    path.parent.mkdir(parents=True)
-    outline_path = path.parent.parent / "outline.yaml"
-    _dump(outline_path, outline())
+    directory = tmp_path / "books" / "demo" / "ch01" / "ep01"
+    directory.mkdir(parents=True)
+    _dump(directory.parent / "outline.yaml", outline())
+    return directory
 
-    def run(data: dict, outline: dict | None = None) -> tuple[int, str]:
-        """`outline` 给出时先改写大纲。"""
+
+@pytest.fixture
+def pixelbook(episode, capsys):
+    """写出旁白稿（和可选的大纲、核对结果）后运行一条 `pixelbook` 命令，返回退出码和输出。"""
+
+    def run(
+        argv: list[str],
+        data: dict,
+        outline: dict | None = None,
+        factcheck: dict | None = None,
+    ) -> tuple[int, str]:
+        """`outline` 给出时先改写大纲；`factcheck` 给出时写出 `factcheck.yaml`。"""
         if outline is not None:
-            _dump(outline_path, outline)
-        path.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False))
-        code = cli.main(["check", str(path)])
+            _dump(episode.parent / "outline.yaml", outline)
+        if factcheck is not None:
+            _dump(episode / "factcheck.yaml", factcheck)
+        _dump(episode / "script.yaml", data)
+        code = cli.main(argv)
         return code, capsys.readouterr().out
+
+    return run
+
+
+@pytest.fixture
+def check(pixelbook, episode):
+    """写出旁白稿并运行 `pixelbook check`。"""
+
+    def run(data: dict, outline: dict | None = None, factcheck: dict | None = None):
+        argv = ["check", str(episode / "script.yaml")]
+        return pixelbook(argv, data, outline, factcheck)
 
     return run
 
@@ -423,3 +465,294 @@ def test_copying_is_only_compared_with_the_cited_paragraphs(check):
     _line(data, 3)["cite"] = "ch01-¶001"
 
     assert "警告：无" in check(data)[1]
+
+
+def test_a_factcheck_missing_a_line_is_an_error_naming_that_line(check):
+    data = script()
+    report = factcheck(data)
+    del report["lines"][2]
+
+    code, out = check(data, factcheck=report)
+
+    assert code == 1
+    assert "s01-l03：`factcheck.yaml` 里没有这一句的判定" in _errors(out)
+
+
+def test_a_factcheck_judging_a_line_not_in_the_script_is_an_error(check):
+    data = script()
+    report = factcheck(data)
+    report["lines"].append(
+        {
+            "id": "s09-l01",
+            "text": "旧句",
+            "cite": "ch01-¶001",
+            "verdict": "partial",
+            "reason": "旧句",
+        }
+    )
+
+    code, out = check(data, factcheck=report)
+
+    assert code == 1
+    assert "s09-l01：`factcheck.yaml` 里有这一句的判定，但旁白稿里没有这一句" in (
+        _errors(out)
+    )
+
+
+def _bad_verdict(report: dict) -> None:
+    report["lines"][0]["verdict"] = "maybe"
+
+
+def _no_reason(report: dict) -> None:
+    del report["lines"][1]["reason"]
+
+
+def _no_round(report: dict) -> None:
+    del report["round"]
+
+
+def _round_zero(report: dict) -> None:
+    report["round"] = 0
+
+
+def _duplicate(report: dict) -> None:
+    report["lines"].append(dict(report["lines"][0]))
+
+
+@pytest.mark.parametrize(
+    ("damage", "problem"),
+    [
+        (
+            _bad_verdict,
+            "第 1 条（s01-l01）：`verdict` 必须是 supported / partial / unsupported 之一",
+        ),
+        (_no_reason, "第 2 条：`reason` 缺失"),
+        (_no_round, "核对结果：`round` 缺失"),
+        (_round_zero, "核对结果：`round` 必须是正整数"),
+        (_duplicate, "第 61 条（s01-l01）：`id` 重复"),
+    ],
+    ids=["unknown verdict", "missing reason", "missing round", "round 0", "repeat"],
+)
+def test_a_malformed_factcheck_is_an_error(check, damage, problem):
+    data = script()
+    report = factcheck(data)
+    damage(report)
+
+    code, out = check(data, factcheck=report)
+
+    assert code == 1
+    assert f"旁白稿：`factcheck.yaml` 格式不对：{problem}" in _errors(out)
+
+
+def test_a_complete_factcheck_passes_whatever_the_verdicts(check):
+    data = script()
+    report = factcheck(data)
+    report["round"] = 3
+    report["lines"][0]["verdict"] = "unsupported"
+    report["lines"][1]["verdict"] = "partial"
+
+    code, out = check(data, factcheck=report)
+
+    assert code == 0
+    assert "报错：无" in out
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("text", "核对之后改过的字幕"), ("cite", ["ch01-¶001", "ch01-¶003"])],
+)
+def test_a_line_changed_after_the_factcheck_is_an_error(check, field, value):
+    data = script()
+    report = factcheck(data)
+    _line(data, 4)[field] = value
+
+    code, out = check(data, factcheck=report)
+
+    assert code == 1
+    assert (
+        "s01-l04：字幕或出处和 `factcheck.yaml` 里核对过的不同，核对之后改过这一句"
+        in _errors(out)
+    )
+
+
+def test_segment_titles_that_differ_from_the_outline_are_an_error(check):
+    data = script()
+    data["segments"][0]["title"] = "开头"
+    plan = outline()
+    plan["episodes"][0]["segments"].append({"title": "收尾", "minutes": 1})
+
+    code, out = check(data, plan)
+
+    assert code == 1
+    assert (
+        "旁白稿：段标题依次是「开头」，但大纲里 ep01 的段依次是「开场」「收尾」"
+        in _errors(out)
+    )
+
+
+def test_the_packet_gives_each_line_with_only_its_cited_paragraphs(pixelbook, episode):
+    code, out = pixelbook(["factcheck-packet", str(episode)], script())
+
+    # 没有主题、段标题、画面说明和观点，只有旁白句和原文
+    assert code == 0
+    assert out.count("## ") == 60
+    assert "第一单元" not in out
+    assert "开场" not in out
+    assert "一个方块" not in out
+    assert "p01" not in out
+    assert out.startswith(
+        f"## s01-l01\n\n旁白：{LINE_TEXT}\n\n原文：\n\nch01-¶001 第一段正文。\n\n"
+        f"## s01-l02\n\n旁白：{LINE_TEXT}\n\n原文：\n\n"
+        "ch01-¶002 > 一段引文。\nch01-¶004 [图 images/00001.jpeg]\n\n"
+    )
+
+
+def test_the_packet_is_refused_while_the_script_has_errors(pixelbook, episode):
+    data = script()
+    _line(data, 3)["cite"] = "ch01-¶099"
+
+    code, out = pixelbook(["factcheck-packet", str(episode)], data)
+
+    assert code == 1
+    assert "s01-l03：`cite` 里的 ch01-¶099 在 ch01.md 里不存在" in out
+    assert "旁白：" not in out
+
+
+def test_the_packet_ignores_a_factcheck_from_an_earlier_version(pixelbook, episode):
+    data = script()
+    report = factcheck(data)
+    _line(data, 1)["text"] = "改过的字幕"
+
+    code, out = pixelbook(["factcheck-packet", str(episode)], data, factcheck=report)
+
+    assert code == 0
+    assert out.startswith("## s01-l01\n\n旁白：改过的字幕\n")
+
+
+def verdicts(data: dict) -> dict:
+    """裁判对 `data` 的回答：每句一条，全部支持。"""
+    return {
+        "lines": [
+            {"id": line["id"], "verdict": "supported", "reason": "原文这样说"}
+            for line in data["segments"][0]["scenes"][0]["lines"]
+        ]
+    }
+
+
+@pytest.fixture
+def record(pixelbook, episode, tmp_path):
+    """写出旁白稿和裁判的回答，运行 `pixelbook factcheck-record`。"""
+
+    def run(data: dict, answer: dict, factcheck: dict | None = None):
+        answer_path = tmp_path / "verdicts.yaml"
+        _dump(answer_path, answer)
+        argv = ["factcheck-record", str(episode), str(answer_path)]
+        return pixelbook(argv, data, factcheck=factcheck)
+
+    return run
+
+
+def test_recording_the_first_round_writes_a_factcheck_that_passes_check(
+    record, check, episode
+):
+    data = script()
+
+    code, _ = record(data, verdicts(data))
+
+    assert code == 0
+    written = yaml.safe_load((episode / "factcheck.yaml").read_text())
+    assert written["round"] == 1
+    assert written["lines"][1] == {
+        "id": "s01-l02",
+        "text": LINE_TEXT,
+        "cite": ["ch01-¶002", "ch01-¶004"],
+        "verdict": "supported",
+        "reason": "原文这样说",
+    }
+    assert check(data)[0] == 0
+
+
+def test_recording_again_counts_the_next_round(record, episode):
+    data = script()
+    earlier = factcheck(data)
+    earlier["round"] = 2
+
+    record(data, verdicts(data), factcheck=earlier)
+
+    assert yaml.safe_load((episode / "factcheck.yaml").read_text())["round"] == 3
+
+
+def _drop_second(answer: dict) -> None:
+    del answer["lines"][1]
+
+
+def _add_unknown(answer: dict) -> None:
+    answer["lines"].append({"id": "s09-l01", "verdict": "supported", "reason": "无"})
+
+
+def _swap(answer: dict) -> None:
+    lines = answer["lines"]
+    lines[0], lines[1] = lines[1], lines[0]
+
+
+def _bad_verdict(answer: dict) -> None:
+    answer["lines"][0]["verdict"] = "yes"
+
+
+@pytest.mark.parametrize(
+    ("damage", "problem"),
+    [
+        (_drop_second, "第 2 条应该是 s01-l02，实际是 s01-l03"),
+        (_add_unknown, "第 61 条应该没有（旁白稿只有 60 句），实际是 s09-l01"),
+        (_swap, "第 1 条应该是 s01-l01，实际是 s01-l02"),
+        (
+            _bad_verdict,
+            "第 1 条（s01-l01）：`verdict` 必须是 supported / partial / unsupported",
+        ),
+    ],
+    ids=["missing", "extra", "out of order", "unknown verdict"],
+)
+def test_an_answer_that_does_not_match_the_script_is_refused(
+    record, episode, damage, problem
+):
+    data = script()
+    answer = verdicts(data)
+    damage(answer)
+
+    code, out = record(data, answer)
+
+    assert code == 1
+    assert problem in out
+    assert not (episode / "factcheck.yaml").exists()
+
+
+def test_the_summary_pins_unsupported_lines_above_partial_ones(record):
+    data = script()
+    _line(data, 5)["text"] = "这句原文里没有"
+    answer = verdicts(data)
+    answer["lines"][1]["verdict"] = "partial"
+    answer["lines"][1]["reason"] = "多了一个例子"
+    answer["lines"][4]["verdict"] = "unsupported"
+    answer["lines"][4]["reason"] = "原文没有这个结论"
+
+    code, out = record(data, answer)
+
+    assert code == 0
+    assert out.index("不支持（1 句）") < out.index("部分支持（1 句）")
+    assert "  s01-l05「这句原文里没有」：原文没有这个结论" in out
+    assert f"  s01-l02「{LINE_TEXT}」：多了一个例子" in out
+    assert "第 1 轮：支持 58 句，部分支持 1 句，不支持 1 句" in out
+    assert "还可以改写后再核对 2 轮" in out
+
+
+def test_the_summary_says_when_the_rounds_are_used_up(record):
+    data = script()
+    earlier = factcheck(data)
+    earlier["round"] = 2
+    answer = verdicts(data)
+    answer["lines"][0]["verdict"] = "unsupported"
+
+    code, out = record(data, answer, factcheck=earlier)
+
+    assert code == 0
+    assert "已核对 3 轮，轮次用完" in out

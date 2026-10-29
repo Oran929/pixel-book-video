@@ -12,7 +12,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from pixelbook.convert import Chapter, read_chapter
-from pixelbook.episode_path import EpisodePath
+from pixelbook.episode_path import FACTCHECK_NAME, EpisodePath
+from pixelbook.factcheck import FactcheckError, load_factcheck
 from pixelbook.outline import SECONDS, Episode, OutlineError, clock, load_outline
 from pixelbook.script import Script, ScriptError, load_script, text_length
 
@@ -121,6 +122,29 @@ def title_is_topic(context: Context) -> list[Finding]:
     ]
 
 
+def segments_follow_outline(context: Context) -> list[Finding]:
+    """段和大纲里这一期的段一一对应：个数、顺序、标题都相同。"""
+    outline = context.outline
+    if outline is None:
+        return []
+    ours = [segment.title for segment in context.script.segments]
+    planned = [segment.title for segment in outline.segments]
+    if ours == planned:
+        return []
+    return [
+        Finding(
+            ERROR,
+            WHOLE_SCRIPT,
+            f"段标题依次是{_quoted(ours)}，但大纲里 {outline.id} 的段依次是"
+            f"{_quoted(planned)}",
+        )
+    ]
+
+
+def _quoted(titles: list[str]) -> str:
+    return "".join(f"「{title}」" for title in titles)
+
+
 def points_covered(context: Context) -> list[Finding]:
     """本期大纲的每条观点至少被一个画面讲到；画面只能引用本期的观点。"""
     outline = context.outline
@@ -197,19 +221,64 @@ def not_copied(context: Context) -> list[Finding]:
     return findings
 
 
+def factcheck_matches(context: Context) -> list[Finding]:
+    """`factcheck.yaml` 存在时，格式要对，并且和旁白稿逐句对应：每句一条判定，不多不少，
+    每句的字幕和出处与核对时相同（核对之后改过的句子要重新核对）。
+
+    格式错误只报第一处，不再对照。核对结果不存在时不检查（还没跑 `/factcheck`）。
+    """
+    path = context.episode.factcheck
+    if not path.is_file():
+        return []
+    try:
+        report = load_factcheck(path)
+    except FactcheckError as error:
+        return [Finding(ERROR, WHOLE_SCRIPT, f"`{FACTCHECK_NAME}` 格式不对：{error}")]
+    judged = {verdict.id: verdict for verdict in report.lines}
+    lines = {line.id for line in context.script.lines}
+    findings = []
+    for line in context.script.lines:
+        verdict = judged.get(line.id)
+        if verdict is None:
+            findings.append(
+                Finding(ERROR, line.id, f"`{FACTCHECK_NAME}` 里没有这一句的判定")
+            )
+        elif (verdict.text, verdict.cite) != (line.text, line.cite):
+            findings.append(
+                Finding(
+                    ERROR,
+                    line.id,
+                    f"字幕或出处和 `{FACTCHECK_NAME}` 里核对过的不同，"
+                    "核对之后改过这一句",
+                )
+            )
+    findings += [
+        Finding(
+            ERROR,
+            verdict.id,
+            f"`{FACTCHECK_NAME}` 里有这一句的判定，但旁白稿里没有这一句",
+        )
+        for verdict in judged.values()
+        if verdict.id not in lines
+    ]
+    return findings
+
+
 RULES: list[Rule] = [
     cite_exists,
     cite_has_text,
     estimated_duration,
     title_is_topic,
+    segments_follow_outline,
     points_covered,
     cite_in_scope,
     not_copied,
+    factcheck_matches,
 ]
 
 
-def check_script(path: Path) -> Report:
-    """检查 `path` 这份旁白稿。期目录布局不对、转换结果不存在时抛出异常，不出报告。"""
+def check_script(path: Path, rules: list[Rule] = RULES) -> Report:
+    """用 `rules` 检查 `path` 这份旁白稿。期目录布局不对、转换结果不存在时抛出异常，不出报告。"""
     episode = EpisodePath.from_script(path)
     converted = episode.chapter.converted
     if not converted.is_file():
@@ -227,7 +296,7 @@ def check_script(path: Path) -> Report:
     context = Context(
         path, episode, script, read_chapter(converted), converted.name, outline
     )
-    findings += [finding for rule in RULES for finding in rule(context)]
+    findings += [finding for rule in rules for finding in rule(context)]
     return Report(
         errors=[f for f in findings if f.level == ERROR],
         warnings=[f for f in findings if f.level == WARNING],
