@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { layoutGrid } from "../style/grid";
 import { MASCOTS, type MascotName, SIZE } from "../style/style";
 import { VIDEO } from "../video-config";
-import { mascotGroup } from "./declarations";
+import { mascotGroup } from "./mascot-declaration";
 import { mascotPlacement } from "./mascot-look";
 
 // 小人和头顶符号（#42）都画在组件自己的格子里，不压到旁边的组件

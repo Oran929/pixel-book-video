@@ -2,7 +2,7 @@ import { AbsoluteFill } from "remotion";
 import type { z } from "zod";
 import type { Rect } from "../style/grid";
 import { border, COLOR, hardShadow, pixelText, SIZE } from "../style/style";
-import { TIMELINE_FONT, type TimelineProps, timelineLayout } from "./declarations";
+import { TIMELINE_FONT, type TimelineProps, timelineLayout } from "./timeline-declaration";
 import type { RenderProps } from "./stage";
 import { timelineLook } from "./timeline-look";
 

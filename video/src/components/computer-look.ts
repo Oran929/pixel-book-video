@@ -2,7 +2,7 @@
 // 纯 .ts：Computer.tsx 里不写 0、1 以外的数字（style/hardcoded.test.ts），时间和位置的算法放在这里。
 import { COLOR, MOTION, SIZE } from "../style/style";
 import { VIDEO } from "../video-config";
-import type { ComputerState } from "./declarations";
+import type { ComputerState } from "./computer-declaration";
 import type { Stage } from "./stage";
 
 const frames = (seconds: number) => Math.max(1, Math.round(seconds * VIDEO.fps));

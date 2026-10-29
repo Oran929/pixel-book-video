@@ -2,7 +2,7 @@
 // 纯 .ts：Timeline.tsx 里不写 0、1 以外的数字（style/hardcoded.test.ts）。
 import { MOTION, snapToGrid } from "../style/style";
 import { VIDEO } from "../video-config";
-import { timelineLitOf } from "./declarations";
+import { timelineLitOf } from "./timeline-declaration";
 import type { Stage } from "./stage";
 
 export type TimelineLook = {

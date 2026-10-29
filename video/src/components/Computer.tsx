@@ -3,7 +3,7 @@ import type { z } from "zod";
 import type { Rect } from "../style/grid";
 import { border, COLOR, hardShadow, pixelText, SIZE, snapToGrid } from "../style/style";
 import { computerLook, lineOffset } from "./computer-look";
-import { COMPUTER_FONT, type ComputerProps, computerLayout } from "./declarations";
+import { COMPUTER_FONT, type ComputerProps, computerLayout } from "./computer-declaration";
 import type { RenderProps } from "./stage";
 
 const LAYOUT = computerLayout();

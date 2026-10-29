@@ -6,6 +6,7 @@ import {
   type ComponentDeclaration,
   DISPLAY_TEXT,
   displayTextFields,
+  isConnector,
   unwrapOptional,
 } from "./declaration";
 import { COMPONENT_DECLARATIONS } from "./declarations";
@@ -67,8 +68,11 @@ describe.each(
   });
 
   it("声明了占几格和是否是连线类组件", () => {
-    expect(typeof declared.cells).toBe("function");
+    // 连线类组件不按格子摆放，不声明占几格
     expect(typeof declared.connector).toBe("boolean");
+    expect(typeof Reflect.get(declared, "cells")).toBe(
+      isConnector(declared) ? "undefined" : "function",
+    );
   });
 });
 

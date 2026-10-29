@@ -6,6 +6,7 @@ import {
   type Cells,
   type ComponentDeclarations,
   displayTextFields,
+  isConnector,
 } from "../components/declaration";
 import { isSoundId, type Sound, type SoundCue, SOUNDS, type SoundId } from "../sound/sounds";
 import { isMusicId, MUSIC } from "../music/tracks";
@@ -91,6 +92,46 @@ export type Storyboard = z.infer<typeof StoryboardShape>;
 const declarationOf = (components: ComponentDeclarations, name: string) =>
   Object.hasOwn(components, name) ? components[name] : undefined;
 
+type UsedComponent = Storyboard["scenes"][number]["components"][number];
+
+/**
+ * 连线类组件在分镜里的写法有没有问题：不写 `at`、`parent`；`from`、`to` 都要写，
+ * 各指向本画面里一个按格子摆放的组件，两端不同。路径相对这个组件。
+ */
+const connectorIssues = (
+  used: UsedComponent,
+  inScene: UsedComponent[],
+  components: ComponentDeclarations,
+  name: string,
+): { path: PropertyKey[]; message: string }[] => {
+  const issues: { path: PropertyKey[]; message: string }[] = [];
+  if (used.at) issues.push({ path: ["at"], message: `${name}是连线类组件，不写 at` });
+  if (used.parent !== undefined) {
+    issues.push({ path: ["parent"], message: `${name}是连线类组件，不写 parent` });
+  }
+  (["from", "to"] as const).forEach((end) => {
+    const target = used[end];
+    const path = [end];
+    if (target === undefined) {
+      issues.push({ path, message: `${name}是连线类组件，要写 ${end}：本画面里一个组件的 id` });
+      return;
+    }
+    const other = inScene.find((c) => c.id === target);
+    if (!other) {
+      issues.push({ path, message: `${name}指向的 ${target} 不是本画面的组件` });
+    } else if (isConnector(declarationOf(components, other.component))) {
+      issues.push({
+        path,
+        message: `${name}指向的 ${target} 是连线类组件，箭头只能连按格子摆放的组件`,
+      });
+    }
+  });
+  if (used.from !== undefined && used.from === used.to) {
+    issues.push({ path: ["to"], message: `${name}的 from 和 to 都是 ${used.to}` });
+  }
+  return issues;
+};
+
 const storyboardSchema = (
   manifest: EpisodeManifest,
   components: ComponentDeclarations,
@@ -146,31 +187,13 @@ const storyboardSchema = (
             });
           });
         }
-        const where = at("components", j, "at");
-        if (declared.connector) {
-          if (used.at) issue(where, `${name}是连线类组件，不写 at`);
-          if (used.parent !== undefined) {
-            issue(at("components", j, "parent"), `${name}是连线类组件，不写 parent`);
-          }
-          (["from", "to"] as const).forEach((end) => {
-            const target = used[end];
-            const path = at("components", j, end);
-            if (target === undefined) {
-              issue(path, `${name}是连线类组件，要写 ${end}：本画面里一个组件的 id`);
-              return;
-            }
-            const other = scene.components.find((c) => c.id === target);
-            if (!other) {
-              issue(path, `${name}指向的 ${target} 不是本画面的组件`);
-            } else if (declarationOf(components, other.component)?.connector) {
-              issue(path, `${name}指向的 ${target} 是连线类组件，箭头只能连按格子摆放的组件`);
-            }
-          });
-          if (used.from !== undefined && used.from === used.to) {
-            issue(at("components", j, "to"), `${name}的 from 和 to 都是 ${used.to}`);
-          }
+        if (isConnector(declared)) {
+          connectorIssues(used, scene.components, components, name).forEach(
+            ({ path, message }) => issue(at("components", j, ...path), message),
+          );
           return;
         }
+        const where = at("components", j, "at");
         (["from", "to"] as const).forEach((end) => {
           if (used[end] !== undefined) {
             issue(at("components", j, end), `${name}不是连线类组件，不写 ${end}`);
@@ -184,7 +207,7 @@ const storyboardSchema = (
             issue(path, `${name}不能是自己的父组件`);
           } else if (!parent) {
             issue(path, `${name}的父组件 ${used.parent} 不是本画面的组件`);
-          } else if (declarationOf(components, parent.component)?.connector) {
+          } else if (isConnector(declarationOf(components, parent.component))) {
             issue(path, `${name}的父组件 ${used.parent} 是连线类组件，不能当父组件`);
           } else if (k >= j) {
             // 后写的画在上面：父组件先写，子组件才不会被它盖住（也排除了环）
@@ -519,9 +542,10 @@ export const scheduleCues = (
             declared.sounds.states[switched.state] ?? null,
           ),
         })),
-        area: used.at
-          ? { at: used.at, cells: declared.cells(declared.props.parse(used.props)) }
-          : null,
+        area:
+          used.at && !isConnector(declared)
+            ? { at: used.at, cells: declared.cells(declared.props.parse(used.props)) }
+            : null,
         ends: null,
         startFrame: enter.frame,
         endFrame: exitEnd,
@@ -673,7 +697,9 @@ const rejectStrayChildren = (
       );
     }
     const declared = components[parent.component]!;
-    const label = declared.labelArea?.(declared.props.parse(parent.props));
+    const label = isConnector(declared)
+      ? undefined
+      : declared.labelArea?.(declared.props.parse(parent.props));
     if (label) {
       const onScreen = {
         at: [parent.area!.at[0] + label.at[0], parent.area!.at[1] + label.at[1]] as const,

@@ -10,7 +10,7 @@ import {
   mascotCells,
   mascotGroup,
   mascotSymbolSize,
-} from "./declarations";
+} from "./mascot-declaration";
 import type { Stage } from "./stage";
 
 export type MascotSymbol = keyof typeof MASCOT_SYMBOLS;

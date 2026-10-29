@@ -15,7 +15,7 @@ import {
   BLOCK_SIZES,
   type BlockState,
   type PixelBlockProps,
-} from "./declarations";
+} from "./pixel-block-declaration";
 import type { RenderProps } from "./stage";
 
 // 各状态的描边和阴影颜色
