@@ -53,14 +53,14 @@ class Script:
     segments: list[Segment]
 
     @property
+    def scenes(self) -> list[Scene]:
+        """全部画面，按顺序。"""
+        return [scene for segment in self.segments for scene in segment.scenes]
+
+    @property
     def lines(self) -> list[Line]:
         """全部旁白句，按顺序。"""
-        return [
-            line
-            for segment in self.segments
-            for scene in segment.scenes
-            for line in scene.lines
-        ]
+        return [line for scene in self.scenes for line in scene.lines]
 
 
 class ScriptError(Exception):

@@ -95,13 +95,7 @@ def voice_episode(
     if font is not None:
         # 左上角的主题也用像素字体显示，报告里的 ID 记作 `title`
         glyphs["missing_glyphs"] = missing_glyphs(
-            [("title", script.title)]
-            + [
-                (line.id, line.text)
-                for segment in script.segments
-                for scene in segment.scenes
-                for line in scene.lines
-            ],
+            [("title", script.title)] + [(line.id, line.text) for line in script.lines],
             font,
         )
         if glyphs["missing_glyphs"]:

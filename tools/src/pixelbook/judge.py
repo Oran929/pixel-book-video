@@ -17,7 +17,7 @@ from pathlib import Path
 
 import yaml
 
-from pixelbook.check import RULES, check_script, factcheck_matches, format_report
+from pixelbook.check import check_unjudged, format_report
 from pixelbook.convert import Chapter, read_chapter
 from pixelbook.episode_path import EpisodePath
 from pixelbook.factcheck import (
@@ -94,8 +94,7 @@ def prompt(episode: EpisodePath) -> str:
 
     旧的 `factcheck.yaml` 和改过的稿对不上是预期的（这一轮就是要重新核对），不拦。
     """
-    rules = [rule for rule in RULES if rule is not factcheck_matches]
-    report = check_script(episode.script, rules)
+    report = check_unjudged(episode.script)
     if not report.passed:
         raise JudgeError(
             "旁白稿还有报错，修好后再核对：\n" + format_report(episode.script, report)

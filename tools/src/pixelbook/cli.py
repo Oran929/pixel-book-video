@@ -7,11 +7,10 @@ from typing import Any
 
 from pixelbook import REPO_ROOT
 from pixelbook.audition import AuditionError, choose_voice, run_audition
-from pixelbook.check import check_copy, check_script, format_report
+from pixelbook.check import check_script, check_unjudged, format_report
 from pixelbook.convert import CHAPTERS_DIR, ConvertError, convert_book
 from pixelbook.episode_path import EpisodePath, EpisodePathError
 from pixelbook.judge import JudgeError, prompt, record
-from pixelbook.minutes import sync_minutes
 from pixelbook.mix import MixError, mix_timeline
 from pixelbook.outline import OutlineError, check_outline, format_warnings, unit_table
 from pixelbook.pipeline import (
@@ -25,6 +24,7 @@ from pixelbook.pipeline import (
 from pixelbook.pronunciation import PronunciationError, load_pronunciation
 from pixelbook.render import RenderError, render_episode
 from pixelbook.script import ScriptError
+from pixelbook.sync_minutes import sync_minutes
 from pixelbook.term_audition import audition_terms
 from pixelbook.verification import (
     VerificationConfigError,
@@ -306,7 +306,7 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "check":
             script = args.script.resolve()
             report = (
-                check_copy(script, EpisodePath(args.episode.resolve()))
+                check_unjudged(script, EpisodePath(args.episode.resolve()))
                 if args.episode
                 else check_script(script)
             )

@@ -4,11 +4,15 @@
 全部问题一次列出。对照大纲的规则用同一章 `outline.yaml` 里和期目录同名的那一期；
 找不到这一期时只报一条，这些规则不跑。每条规则是一个函数，收到 `Context`，返回它发现的 `Finding`；
 新规则写成同样的函数加进 `RULES`。报错影响退出码，警告只列出。
+
+核对结果 `factcheck.yaml` 的对照（`factcheck_matches`）不在 `RULES` 里：`check_script` 在
+`RULES` 之后跑它；还没核对或正要重新核对的稿（草稿副本、给裁判出题前）用 `check_unjudged`。
 """
 
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 
 from pixelbook.convert import Chapter, read_chapter
@@ -28,8 +32,14 @@ from pixelbook.outline import (
 )
 from pixelbook.script import FINAL, Script, ScriptError, load_script, text_length
 
-ERROR = "报错"
-WARNING = "警告"
+
+class Level(StrEnum):
+    """问题的级别；值是报告里那一块的标题。报错影响退出码，警告只列出。"""
+
+    ERROR = "报错"
+    WARNING = "警告"
+
+
 # 估算时长的语速：字数口径和字幕计数相同（去掉空白后的字符数，只数字幕 `text`）
 CHARS_PER_MINUTE = 250
 # 不属于某一句的问题（如估算时长）记在这个位置下
@@ -46,7 +56,7 @@ MINUTES_STEP = 0.25
 
 @dataclass(frozen=True)
 class Finding:
-    level: str  # ERROR 或 WARNING
+    level: Level
     where: str  # 旁白句 ID（`points` 的问题用画面 ID），或 WHOLE_SCRIPT
     message: str
 
@@ -88,6 +98,11 @@ def _rounded_minutes(chars: int) -> float:
     return max(MINUTES_STEP, rounded)
 
 
+def segments_match(script: Script, outline: Episode) -> bool:
+    """旁白稿的段和大纲里这一期的段一一对应：个数、顺序、标题都相同。"""
+    return [s.title for s in script.segments] == [s.title for s in outline.segments]
+
+
 def synced_minutes(chars: list[int]) -> list[float]:
     """各段写回大纲的分钟数：估算取到 `MINUTES_STEP`（至少一个 `MINUTES_STEP`）。
 
@@ -113,9 +128,7 @@ def synced_minutes(chars: list[int]) -> list[float]:
 def estimate(script: Script, outline: Episode | None) -> Timing:
     """字数口径和字幕相同：只数 `text`、去掉空白。段和大纲一一对应（标题依次相同）时才对照。"""
     planned = None
-    if outline and [s.title for s in script.segments] == [
-        s.title for s in outline.segments
-    ]:
+    if outline and segments_match(script, outline):
         planned = [s.minutes for s in outline.segments]
     counts = [
         sum(text_length(line.text) for scene in segment.scenes for line in scene.lines)
@@ -178,7 +191,7 @@ def cite_exists(context: Context) -> list[Finding]:
         if missing := [i for i in line.cite if i not in context.chapter.paragraphs]:
             findings.append(
                 Finding(
-                    ERROR,
+                    Level.ERROR,
                     line.id,
                     f"`cite` 里的 {'、'.join(missing)} 在 {context.source} 里不存在",
                 )
@@ -191,7 +204,7 @@ def cite_has_text(context: Context) -> list[Finding]:
     paragraphs = context.chapter.paragraphs
     return [
         Finding(
-            ERROR,
+            Level.ERROR,
             line.id,
             f"`cite` 只引用了图片段（{'、'.join(line.cite)}），至少要有一个文字段",
         )
@@ -209,7 +222,7 @@ def estimated_duration(context: Context) -> list[Finding]:
         return []
     return [
         Finding(
-            ERROR,
+            Level.ERROR,
             WHOLE_SCRIPT,
             f"估算时长 {clock(seconds)}（{chars} 字，按 {CHARS_PER_MINUTE} 字/分钟），"
             f"应该在 {clock(low)}–{clock(high)} 内",
@@ -236,7 +249,7 @@ def minutes_follow_script(context: Context) -> list[Finding]:
         )
         findings.append(
             Finding(
-                ERROR,
+                Level.ERROR,
                 segment.id,
                 f"定稿的旁白稿估算 {clock(segment.seconds)}，取到 {MINUTES_STEP:g} 分钟"
                 f"{adjusted}是 {segment.synced_minutes:g} 分钟，但大纲给这一段的 `minutes` 是 "
@@ -254,7 +267,7 @@ def title_is_topic(context: Context) -> list[Finding]:
         return []
     return [
         Finding(
-            ERROR,
+            Level.ERROR,
             WHOLE_SCRIPT,
             f"`title` 是「{context.script.title}」，"
             f"但大纲里 {outline.id} 的主题 `topic` 是「{outline.topic}」",
@@ -267,13 +280,13 @@ def segments_follow_outline(context: Context) -> list[Finding]:
     outline = context.outline
     if outline is None:
         return []
+    if segments_match(context.script, outline):
+        return []
     ours = [segment.title for segment in context.script.segments]
     planned = [segment.title for segment in outline.segments]
-    if ours == planned:
-        return []
     return [
         Finding(
-            ERROR,
+            Level.ERROR,
             WHOLE_SCRIPT,
             f"段标题依次是{_quoted(ours)}，但大纲里 {outline.id} 的段依次是"
             f"{_quoted(planned)}",
@@ -291,13 +304,13 @@ def points_covered(context: Context) -> list[Finding]:
     if outline is None:
         return []
     known = [point.id for point in outline.points]
-    scenes = [scene for segment in context.script.segments for scene in segment.scenes]
+    scenes = context.script.scenes
     findings = []
     for scene in scenes:
         if unknown := [p for p in scene.points if p not in known]:
             findings.append(
                 Finding(
-                    ERROR,
+                    Level.ERROR,
                     scene.id,
                     f"`points` 里的 {'、'.join(unknown)} 不是大纲里 {outline.id} 的观点",
                 )
@@ -305,7 +318,7 @@ def points_covered(context: Context) -> list[Finding]:
     covered = {p for scene in scenes for p in scene.points}
     findings += [
         Finding(
-            ERROR,
+            Level.ERROR,
             WHOLE_SCRIPT,
             f"大纲里 {outline.id} 的观点 {point} 没有被任何画面的 `points` 讲到",
         )
@@ -323,7 +336,7 @@ def points_cited(context: Context) -> list[Finding]:
     """
     if context.outline is None:
         return []
-    scenes = [scene for segment in context.script.segments for scene in segment.scenes]
+    scenes = context.script.scenes
     findings = []
     for point in context.outline.points:
         telling = [scene for scene in scenes if point.id in scene.points]
@@ -331,7 +344,7 @@ def points_cited(context: Context) -> list[Finding]:
         if telling and not cited & set(point.cite):
             findings.append(
                 Finding(
-                    ERROR,
+                    Level.ERROR,
                     WHOLE_SCRIPT,
                     f"讲到观点 {point.id} 的画面（{'、'.join(s.id for s in telling)}）"
                     f"里没有一句引用它的出处 {'、'.join(point.cite)}",
@@ -350,7 +363,7 @@ def no_tip_numbers(context: Context) -> list[Finding]:
     for line in script.lines:
         fields += [(line.id, "text", line.text), (line.id, "speech", line.speech)]
     return [
-        Finding(ERROR, where, tip_number_message(f"`{field}`", number))
+        Finding(Level.ERROR, where, tip_number_message(f"`{field}`", number))
         for where, field, value in fields
         for number in tip_numbers(value or "")
     ]
@@ -367,7 +380,7 @@ def cite_in_scope(context: Context) -> list[Finding]:
         if outside := outside_scope(line.cite, scope, context.chapter):
             findings.append(
                 Finding(
-                    WARNING,
+                    Level.WARNING,
                     line.id,
                     f"`cite` 里的 {'、'.join(outside)} 不在本期覆盖的单元或段落范围里",
                 )
@@ -382,7 +395,7 @@ def not_copied(context: Context) -> list[Finding]:
     """
     paragraphs = context.chapter.paragraphs
     return [
-        Finding(WARNING, line.id, copied_message(cited, piece))
+        Finding(Level.WARNING, line.id, copied_message(cited, piece))
         for line in context.script.lines
         for cited in line.cite
         if cited in paragraphs and (piece := copied(line.text, paragraphs[cited]))
@@ -398,16 +411,15 @@ def description_terms(context: Context) -> list[Finding]:
     corpus = context.chapter.text
     flat = bare(corpus)
     findings = []
-    for segment in context.script.segments:
-        for scene in segment.scenes:
-            for term in _missing_terms(scene.description, corpus, flat):
-                findings.append(
-                    Finding(
-                        WARNING,
-                        scene.id,
-                        f"画面说明里的「{term}」在 {context.source} 里没有出现",
-                    )
+    for scene in context.script.scenes:
+        for term in _missing_terms(scene.description, corpus, flat):
+            findings.append(
+                Finding(
+                    Level.WARNING,
+                    scene.id,
+                    f"画面说明里的「{term}」在 {context.source} 里没有出现",
                 )
+            )
     return findings
 
 
@@ -443,7 +455,9 @@ def factcheck_matches(context: Context) -> list[Finding]:
     try:
         report = load_factcheck(path)
     except FactcheckError as error:
-        return [Finding(ERROR, WHOLE_SCRIPT, f"`{FACTCHECK_NAME}` 格式不对：{error}")]
+        return [
+            Finding(Level.ERROR, WHOLE_SCRIPT, f"`{FACTCHECK_NAME}` 格式不对：{error}")
+        ]
     judged = {verdict.id: verdict for verdict in report.lines}
     lines = {line.id for line in context.script.lines}
     findings = []
@@ -451,7 +465,7 @@ def factcheck_matches(context: Context) -> list[Finding]:
         verdict = judged.get(line.id)
         if verdict is None:
             findings.append(
-                Finding(ERROR, line.id, f"`{FACTCHECK_NAME}` 里没有这一句的判定")
+                Finding(Level.ERROR, line.id, f"`{FACTCHECK_NAME}` 里没有这一句的判定")
             )
         elif (verdict.text, verdict.cite, verdict.speech) != (
             line.text,
@@ -460,7 +474,7 @@ def factcheck_matches(context: Context) -> list[Finding]:
         ):
             findings.append(
                 Finding(
-                    ERROR,
+                    Level.ERROR,
                     line.id,
                     f"字幕、朗读或出处和 `{FACTCHECK_NAME}` 里核对过的不同，"
                     "核对之后改过这一句",
@@ -468,7 +482,7 @@ def factcheck_matches(context: Context) -> list[Finding]:
             )
     findings += [
         Finding(
-            ERROR,
+            Level.ERROR,
             verdict.id,
             f"`{FACTCHECK_NAME}` 里有这一句的判定，但旁白稿里没有这一句",
         )
@@ -491,18 +505,28 @@ RULES: list[Rule] = [
     cite_in_scope,
     not_copied,
     description_terms,
-    factcheck_matches,
 ]
 
 
-def check_script(
-    path: Path, rules: list[Rule] = RULES, episode: EpisodePath | None = None
-) -> Report:
-    """用 `rules` 检查 `path` 这份旁白稿。期目录布局不对、转换结果不存在时抛出异常，不出报告。
+def check_script(path: Path) -> Report:
+    """`pixelbook check`：期目录里的旁白稿，`RULES` 加上对照核对结果（`factcheck_matches`）。
 
-    `episode` 给出时，`path` 可以在别处（比如草稿副本），按这一期的大纲和原文检查。
+    期目录布局不对、转换结果不存在时抛出异常，不出报告。
     """
-    episode = episode or EpisodePath.from_script(path)
+    return _check(path, EpisodePath.from_script(path), [*RULES, factcheck_matches])
+
+
+def check_unjudged(path: Path, episode: EpisodePath | None = None) -> Report:
+    """只跑 `RULES`，不对照 `factcheck.yaml`：还没核对过的稿。
+
+    - 草稿副本（`pixelbook check <副本> --episode`，比如给用户的建议改法）：`path` 在期目录外，
+      按 `episode` 这一期的大纲和原文检查；改过的句子本来就和核对结果对不上。
+    - 给裁判出题前（`factcheck-prompt`）：旧的核对结果和改过的稿对不上是预期的。
+    """
+    return _check(path, episode or EpisodePath.from_script(path), RULES)
+
+
+def _check(path: Path, episode: EpisodePath, rules: list[Rule]) -> Report:
     converted = episode.chapter.converted
     if not converted.is_file():
         raise ScriptError(
@@ -513,27 +537,17 @@ def check_script(
     except ScriptError as error:
         # 格式错误只报第一处；路径在报告最后一行已经有了
         message = str(error).removeprefix(f"{path}: ")
-        return Report([Finding(ERROR, WHOLE_SCRIPT, message)], [])
+        return Report([Finding(Level.ERROR, WHOLE_SCRIPT, message)], [])
     outline, problem = outline_episode(episode)
-    findings = [Finding(ERROR, WHOLE_SCRIPT, problem)] if problem else []
+    findings = [Finding(Level.ERROR, WHOLE_SCRIPT, problem)] if problem else []
     context = Context(
         path, episode, script, read_chapter(converted), converted.name, outline
     )
     findings += [finding for rule in rules for finding in rule(context)]
     return Report(
-        errors=[f for f in findings if f.level == ERROR],
-        warnings=[f for f in findings if f.level == WARNING],
+        errors=[f for f in findings if f.level == Level.ERROR],
+        warnings=[f for f in findings if f.level == Level.WARNING],
         timing=estimate(script, outline),
-    )
-
-
-def check_copy(path: Path, episode: EpisodePath) -> Report:
-    """把 `path`（期目录外的草稿副本，比如给用户的建议改法）当作 `episode` 的旁白稿检查。
-
-    副本还没核对过，改过的句子本来就和 `factcheck.yaml` 对不上，所以不查核对结果。
-    """
-    return check_script(
-        path, [rule for rule in RULES if rule is not factcheck_matches], episode
     )
 
 
@@ -555,8 +569,8 @@ def format_report(path: Path, report: Report) -> str:
     """估算时长（全稿和每一段），然后报错和警告分成两块，每条以旁白句 ID 开头。"""
     blocks = [
         *_timing(report.timing),
-        _block(ERROR, report.errors),
-        _block(WARNING, report.warnings),
+        _block(Level.ERROR, report.errors),
+        _block(Level.WARNING, report.warnings),
         f"{path}: 旁白稿检查{'通过' if report.passed else '没有通过'}",
     ]
     return "\n".join(blocks)

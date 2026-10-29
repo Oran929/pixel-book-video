@@ -9,7 +9,7 @@ from pathlib import Path
 
 import yaml
 
-from pixelbook.check import estimate, outline_episode
+from pixelbook.check import estimate, outline_episode, segments_match
 from pixelbook.episode_path import EpisodePath
 from pixelbook.outline import SECONDS, clock
 from pixelbook.script import ScriptError, load_script
@@ -22,9 +22,7 @@ def sync_minutes(path: Path) -> str:
     outline, problem = outline_episode(episode)
     if problem:
         raise ScriptError(f"{path}: {problem}")
-    ours = [segment.title for segment in script.segments]
-    planned = [segment.title for segment in outline.segments]
-    if ours != planned:
+    if not segments_match(script, outline):
         raise ScriptError(
             f"{path}: 段标题和大纲里 {outline.id} 的段不一致，先让段和大纲一一对应"
         )
