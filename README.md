@@ -102,6 +102,15 @@ episodes:
 - **`minutes`**：正数，可以是小数（`1.5` 是 1 分 30 秒）。写大纲时是计划；旁白稿定稿时改成按稿子估算的时长（`pixelbook sync-minutes`，见「旁白稿与检查」），以定稿为准。
 - **`cite`**：写法和旁白稿相同。
 
+写大纲前先看单元表：
+
+```sh
+cd tools
+uv run pixelbook units ../books/pragmatic-programmer/chapters/ch02.md
+```
+
+每个单元一行：单元号和名字、首尾段落编号、段数、正文字数（编号段落文字的字符数，不算图片段；`/outline` 按它拆期），下面按原文顺序列出单元里的提示框标题和 `####` 小标题。
+
 检查（只检查，不生成任何东西）：
 
 ```sh
@@ -414,7 +423,7 @@ make check
 
 依次运行 pytest、ruff（lint + 格式）、`tsc`、ESLint、Vitest，任何一项失败就以非零码退出。"做完了"的标准就是这条命令通过。
 
-能写成代码的检查都放在 `pixelbook` 命令里（`outline`、`check`、`factcheck-prompt` 等），带测试；skill 只跑这些命令，做需要判断的事（写大纲、写稿、语义核对），不让智能体写一次性脚本自查。
+能写成代码的检查和统计都放在 `pixelbook` 命令里（`units`、`outline`、`check`、`factcheck-prompt` 等），带测试；skill 只跑这些命令，做需要判断的事（写大纲、写稿、语义核对），不让智能体写一次性脚本自查。
 
 GitHub Actions（`.github/workflows/check.yml`）在每个 PR 和推送到 main 时，在 Linux 上跑同一条 `make check`。私有仓库设不了「合并前必须通过」，合并 PR 前自己看一眼 Checks 是否全绿。
 

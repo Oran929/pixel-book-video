@@ -470,3 +470,24 @@ def test_the_word_tip_without_a_number_is_fine_in_the_outline(check):
     _ep(data, 1)["points"][0]["text"] = "这条提示一定要记住"
     code, out = check(data)
     assert code == 0, out
+
+
+def test_units_lists_each_unit_with_its_range_length_and_headings(book, capsys):
+    # 写大纲前看的单元表：单元号和名字、首尾编号、段数、正文字数（不算图片段），
+    # 以及单元里的提示框标题和小标题（相邻两段共用的只列一次）
+    code = cli.main(["units", str(book / "chapters" / "ch01.md")])
+
+    assert code == 0
+    assert capsys.readouterr().out == (
+        "单元 1　第一单元（ch01-¶002–ch01-¶005）：4 段，正文 25 字\n"
+        "  提示框：提示1　一条提示\n"
+        "  小标题：小标题\n"
+        "单元 2　第二单元（ch01-¶006–ch01-¶009）：4 段，正文 33 字\n"
+    )
+
+
+def test_units_needs_the_converted_chapter(book, capsys):
+    code = cli.main(["units", str(book / "chapters" / "ch09.md")])
+
+    assert code == 1
+    assert "pixelbook convert" in capsys.readouterr().out

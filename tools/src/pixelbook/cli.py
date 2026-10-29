@@ -13,7 +13,7 @@ from pixelbook.episode_path import EpisodePath, EpisodePathError
 from pixelbook.judge import JudgeError, prompt, record
 from pixelbook.minutes import sync_minutes
 from pixelbook.mix import MixError, mix_timeline
-from pixelbook.outline import OutlineError, check_outline, format_warnings
+from pixelbook.outline import OutlineError, check_outline, format_warnings, unit_table
 from pixelbook.pipeline import (
     MANIFEST_NAME,
     REPORT_NAME,
@@ -233,6 +233,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     outline.add_argument("outline", type=Path, help="books/<书>/chNN/outline.yaml")
 
+    units = commands.add_parser(
+        "units",
+        help="写大纲前看的单元表：每个单元的首尾段落编号、段数、正文字数、提示框和小标题",
+    )
+    units.add_argument("chapter", type=Path, help="books/<书>/chapters/chNN.md")
+
     check = commands.add_parser(
         "check",
         help="旁白稿的全部机械检查：格式、出处、估算时长……报错和警告分开列出",
@@ -295,6 +301,8 @@ def main(argv: list[str] | None = None) -> int:
                 print(format_warnings(warnings))
             ids = "、".join(episode.id for episode in checked.episodes)
             print(f"大纲检查通过：{len(checked.episodes)} 期（{ids}）")
+        elif args.command == "units":
+            print(unit_table(args.chapter.resolve()))
         elif args.command == "check":
             script = args.script.resolve()
             report = (

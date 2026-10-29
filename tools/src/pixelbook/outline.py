@@ -404,5 +404,36 @@ def _span(paragraphs: list[str]) -> str:
     return f"（{paragraphs[0]}–{paragraphs[-1]}）" if paragraphs else "（没有段落）"
 
 
+def unit_table(converted: Path) -> str:
+    """写大纲前看的单元表（`pixelbook units`）：每个单元一行，写出单元号和名字、首尾段落编号、
+    段数、正文字数（不算图片段，用来估一期装得下多少，见 `/outline` 的拆期规则），下面按原文
+    顺序列出单元里的提示框标题和 `####` 小标题（相邻两段共用的只列一次）。"""
+    if not converted.is_file():
+        raise OutlineError(
+            f"转换结果 {converted} 不存在，先跑 `pixelbook convert <书目录>`"
+        )
+    chapter = read_chapter(converted)
+    rows = []
+    for unit in chapter.units.values():
+        paragraphs = [chapter.paragraphs[i] for i in unit.paragraphs]
+        chars = sum(len(p.text) for p in paragraphs if not p.is_image)
+        rows.append(
+            f"单元 {unit.number}　{unit.name}{_span(unit.paragraphs)}："
+            f"{len(paragraphs)} 段，正文 {chars} 字"
+        )
+        headings: list[str] = []
+        for p in paragraphs:
+            for row in (
+                f"  提示框：{p.tip_before}" if p.tip_before else None,
+                f"  小标题：{p.heading_before}" if p.heading_before else None,
+                f"  提示框：{p.tip_after}" if p.tip_after else None,
+                f"  小标题：{p.heading_after}" if p.heading_after else None,
+            ):
+                if row and row not in headings[-1:]:
+                    headings.append(row)
+        rows += headings
+    return "\n".join(rows)
+
+
 def clock(seconds: int) -> str:
     return f"{seconds // 60}:{seconds % 60:02d}"

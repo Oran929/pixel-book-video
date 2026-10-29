@@ -27,15 +27,12 @@ disable-model-invocation: true
 从第一行读到最后一行（文件长时分页读完，最后一页要看到章末脚注）。再列出单元表：
 
 ```sh
-cd tools && uv run python -c '
-from pathlib import Path; from pixelbook.convert import read_chapter
-c = read_chapter(Path("../books/<书>/chapters/chNN.md"))
-for n, u in c.units.items():
-    words = sum(len(c.paragraphs[p].text) for p in u.paragraphs if not c.paragraphs[p].is_image)
-    print(n, u.name, u.paragraphs[0], u.paragraphs[-1], words)'
+cd tools && uv run pixelbook units ../books/<书>/chapters/chNN.md
 ```
 
-**完成**：读过每一个编号段落；手里有每个单元的号、名字、首尾编号和字数，以及每个单元下的提示框（`### 提示N`）和小标题（`####`）。
+它给每个单元写出号、名字、首尾编号、段数和正文字数（拆期按这个字数估），下面列出单元里的提示框（`### 提示N`）和小标题（`####`）。
+
+**完成**：读过每一个编号段落；手里有 `pixelbook units` 的单元表。
 
 ### 3. 拆期
 
