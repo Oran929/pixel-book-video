@@ -113,4 +113,4 @@ cd tools && uv run pixelbook sync-minutes ../<期目录>/script.yaml
 uv run pixelbook outline ../books/<书>/chNN/outline.yaml
 ```
 
-`sync-minutes` 把各段估算（取到 0.25 分钟）写回大纲里这一期的 `minutes`。再把 `status` 改成 `final`，跑第 4 步的 `pixelbook check`（定稿时大纲的 `minutes` 和估算对不上会报错），都通过后旁白稿、`factcheck.yaml` 和大纲一起提交。
+`sync-minutes` 把各段估算（取到 0.25 分钟；取整后总和出了 4:00–6:00 时它会调整一段，不用你改）写回大纲里这一期的 `minutes`。再把 `status` 改成 `final`，跑第 4 步的 `pixelbook check`（定稿时大纲的 `minutes` 和估算对不上会报错），都通过后旁白稿、`factcheck.yaml` 和大纲一起提交。

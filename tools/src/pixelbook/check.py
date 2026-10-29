@@ -60,11 +60,14 @@ class SegmentTiming:
     # 大纲给这一段的时长（秒）和 `minutes`；段和大纲对不上时为 None
     planned: int | None
     minutes: float | None
+    # 估算直接取到 `MINUTES_STEP`（至少一个）的分钟数，和 `sync-minutes` 写回大纲的分钟数
+    # （见 `synced_minutes`：为了让各段总和落在范围内，可能比直接取整多或少一个 `MINUTES_STEP`）
+    rounded_minutes: float
+    synced_minutes: float
 
     @property
-    def estimated_minutes(self) -> float:
-        """估算的分钟数，取到 `MINUTES_STEP`；`sync-minutes` 写回大纲的就是它。"""
-        return round(self.chars / CHARS_PER_MINUTE / MINUTES_STEP) * MINUTES_STEP
+    def adjusted(self) -> bool:
+        return self.rounded_minutes != self.synced_minutes
 
 
 @dataclass(frozen=True)
@@ -80,6 +83,33 @@ def _seconds(chars: int) -> int:
     return round(chars * 60 / CHARS_PER_MINUTE)
 
 
+def _rounded_minutes(chars: int) -> float:
+    rounded = round(chars / CHARS_PER_MINUTE / MINUTES_STEP) * MINUTES_STEP
+    return max(MINUTES_STEP, rounded)
+
+
+def synced_minutes(chars: list[int]) -> list[float]:
+    """各段写回大纲的分钟数：估算取到 `MINUTES_STEP`（至少一个 `MINUTES_STEP`）。
+
+    全稿估算在 `SECONDS` 范围内、各段取整后的总和却不在时（每段的误差凑到一起），依次把
+    取整误差最大的段（往下舍得最多的先加，往上入得最多的先减；一样大时取前面的段）多取或少取
+    一个 `MINUTES_STEP`，直到总和落进范围，这样 `pixelbook outline` 也能通过。
+    """
+    raw = [n / CHARS_PER_MINUTE for n in chars]
+    minutes = [_rounded_minutes(n) for n in chars]
+    low, high = (limit / 60 for limit in SECONDS)
+    if not low <= sum(raw) <= high:
+        return minutes
+    while sum(minutes) < low:
+        n = max(range(len(raw)), key=lambda i: (raw[i] - minutes[i], -i))
+        minutes[n] += MINUTES_STEP
+    while sum(minutes) > high:
+        shrinkable = [i for i in range(len(raw)) if minutes[i] > MINUTES_STEP]
+        n = max(shrinkable, key=lambda i: (minutes[i] - raw[i], -i))
+        minutes[n] -= MINUTES_STEP
+    return minutes
+
+
 def estimate(script: Script, outline: Episode | None) -> Timing:
     """字数口径和字幕相同：只数 `text`、去掉空白。段和大纲一一对应（标题依次相同）时才对照。"""
     planned = None
@@ -87,11 +117,14 @@ def estimate(script: Script, outline: Episode | None) -> Timing:
         s.title for s in outline.segments
     ]:
         planned = [s.minutes for s in outline.segments]
+    counts = [
+        sum(text_length(line.text) for scene in segment.scenes for line in scene.lines)
+        for segment in script.segments
+    ]
+    synced = synced_minutes(counts)
     segments = []
     for n, segment in enumerate(script.segments):
-        chars = sum(
-            text_length(line.text) for scene in segment.scenes for line in scene.lines
-        )
+        chars = counts[n]
         minutes = planned[n] if planned else None
         segments.append(
             SegmentTiming(
@@ -101,9 +134,11 @@ def estimate(script: Script, outline: Episode | None) -> Timing:
                 _seconds(chars),
                 round(minutes * 60) if minutes is not None else None,
                 minutes,
+                _rounded_minutes(chars),
+                synced[n],
             )
         )
-    chars = sum(s.chars for s in segments)
+    chars = sum(counts)
     return Timing(chars, _seconds(chars), segments)
 
 
@@ -183,7 +218,7 @@ def estimated_duration(context: Context) -> list[Finding]:
 
 
 def minutes_follow_script(context: Context) -> list[Finding]:
-    """定稿的旁白稿：大纲给每段的 `minutes` 要等于这一段的估算分钟数（取到 `MINUTES_STEP`）。
+    """定稿的旁白稿：大纲给每段的 `minutes` 要等于 `sync-minutes` 写回的值（`synced_minutes`）。
 
     草稿不查；段和大纲对不上时由 `segments_follow_outline` 报，这里不查。
     """
@@ -191,14 +226,20 @@ def minutes_follow_script(context: Context) -> list[Finding]:
         return []
     findings = []
     for segment in estimate(context.script, context.outline).segments:
-        if segment.minutes is None or segment.minutes == segment.estimated_minutes:
+        if segment.minutes is None or segment.minutes == segment.synced_minutes:
             continue
+        low, high = SECONDS
+        adjusted = (
+            ""
+            if not segment.adjusted
+            else f"（让各段总和落在 {clock(low)}–{clock(high)} 内）"
+        )
         findings.append(
             Finding(
                 ERROR,
                 segment.id,
-                f"定稿的旁白稿估算 {clock(segment.seconds)}，取到 {MINUTES_STEP:g} 分钟是 "
-                f"{segment.estimated_minutes:g} 分钟，但大纲给这一段的 `minutes` 是 "
+                f"定稿的旁白稿估算 {clock(segment.seconds)}，取到 {MINUTES_STEP:g} 分钟"
+                f"{adjusted}是 {segment.synced_minutes:g} 分钟，但大纲给这一段的 `minutes` 是 "
                 f"{segment.minutes:g}：跑 `pixelbook sync-minutes {context.path}` "
                 "把估算写回大纲",
             )

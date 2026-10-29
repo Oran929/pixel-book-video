@@ -1359,9 +1359,9 @@ episodes:
 def sync(pixelbook, episode):
     """写出 `OUTLINE_TEXT` 这份大纲和旁白稿，运行 `pixelbook sync-minutes`，返回退出码、输出和大纲全文。"""
 
-    def run(data: dict) -> tuple[int, str, str]:
+    def run(data: dict, text: str = OUTLINE_TEXT) -> tuple[int, str, str]:
         path = episode.parent / "outline.yaml"
-        path.write_text(OUTLINE_TEXT)
+        path.write_text(text)
         code, out = pixelbook(["sync-minutes", str(episode / "script.yaml")], data)
         return code, out, path.read_text()
 
@@ -1396,15 +1396,70 @@ def test_sync_minutes_refuses_segments_that_differ_from_the_outline(sync):
     assert written == OUTLINE_TEXT
 
 
-def test_sync_minutes_refuses_a_total_outside_4_to_6_minutes(sync):
-    # 每段 20 句 400 字 = 1.6 分钟 → 1.5，合计 3:00
+def test_sync_minutes_refuses_a_script_estimated_outside_4_to_6_minutes(sync):
+    # 每段 20 句 400 字，合计 800 字、估算 3:12：稿子本身太短，`check` 也报错，先改稿
     data, _ = _two_segments(20, 20)
 
     code, out, written = sync(data)
 
     assert code == 1
-    assert "3:00" in out and "4:00–6:00" in out
+    assert "3:12" in out and "4:00–6:00" in out
     assert written == OUTLINE_TEXT
+
+
+def _three_segments() -> dict:
+    """三段，各 340、338、342 字（1.36、1.352、1.368 分钟，都取到 1.25）：估算合计 1020 字、
+    4:05，在范围内；各段取整后合计 3.75 分钟，不在范围内。"""
+    data, _ = _two_segments(17, 34)
+    second = data["segments"][1]
+    third = {
+        "id": "s03",
+        "title": "再收尾",
+        "scenes": [
+            {
+                "id": "s03-c01",
+                "description": "一个方块",
+                "lines": second["scenes"][0]["lines"][17:],
+            }
+        ],
+    }
+    del second["scenes"][0]["lines"][17:]
+    for n, line in enumerate(third["scenes"][0]["lines"], start=1):
+        line["id"] = f"s03-l{n:02d}"
+    data["segments"].append(third)
+    second["scenes"][0]["lines"][0]["text"] = LINE_TEXT[:18]
+    third["scenes"][0]["lines"].append(
+        {"id": "s03-l18", "text": "一二", "cite": "ch01-¶001"}
+    )
+    return _final(data)
+
+
+THREE_SEGMENTS = OUTLINE_TEXT.replace(
+    "      - title: 收尾\n        minutes: 2.5\n",
+    "      - title: 收尾\n        minutes: 1.5\n      - title: 再收尾\n        minutes: 1\n",
+    1,
+).replace(
+    "开场      # 段注释要留着\n        minutes: 2.5",
+    "开场      # 段注释要留着\n        minutes: 2",
+    1,
+)
+
+
+def test_sync_minutes_rounds_up_the_segment_rounded_down_most_to_stay_in_range(
+    sync, check
+):
+    # 都取到 1.25 时合计 3:45；s03 被舍掉的最多（0.118 分钟），它改取 1.5，合计 4:00
+    data = _three_segments()
+
+    code, out, written = sync(data, THREE_SEGMENTS)
+
+    assert code == 0, out
+    assert "各段合计 4:00" in out
+    assert "s01 开场：2 → 1.25\n" in out
+    assert "s02 收尾：1.5 → 1.25\n" in out
+    assert "s03 再收尾：1 → 1.5（直接取整是 1.25" in out
+    assert "再收尾\n        minutes: 1.5\n" in written
+    assert check(data)[0] == 0
 
 
 def test_a_point_whose_scenes_never_cite_its_paragraphs_is_an_error(check):
