@@ -487,13 +487,40 @@ def test_quoting_the_tip_box_title_next_to_a_cited_paragraph_is_not_copying(
     data = outline()
     data["episodes"][0]["units"] = [1, 2]
     lines = script()
-    _line(lines, 3)["text"] = "提示1：程序员要为自己的职业生涯负责"
+    _line(lines, 3)["text"] = "程序员要为自己的职业生涯负责"
     _line(lines, 3)["cite"] = "ch01-¶006"
 
     code, out = check(lines, data)
 
     assert code == 0, out
     assert "警告：无" in out
+
+
+@pytest.mark.parametrize(
+    ("field", "text", "number"),
+    [
+        ("text", "这就是提示1说的", "提示1"),
+        ("text", "提示 14：别重复自己", "提示 14"),
+        ("text", "书里的提示１５", "提示１５"),  # 全角数字
+        ("speech", "这就是提示15说的", "提示15"),
+    ],
+)
+def test_a_tip_number_in_a_line_is_an_error(check, field, text, number):
+    # 书里的提示编号对观众没有意义：字幕和朗读都不念「提示N」
+    data = script()
+    _line(data, 4)[field] = text
+
+    code, out = check(data)
+
+    assert code == 1
+    assert f"s01-l04：`{field}` 里有书里的提示编号「{number}」" in _errors(out)
+
+
+def test_a_tip_without_a_number_is_fine(check):
+    data = script()
+    _line(data, 4)["text"] = "提示框里说，要提示自己"
+
+    assert check(data)[0] == 0
 
 
 def test_copying_is_only_compared_with_the_cited_paragraphs(check):

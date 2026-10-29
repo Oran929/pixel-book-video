@@ -1,89 +1,89 @@
-round: 2
+round: 3
 lines:
 - id: s01-l01
   text: 谈到软件设计，到处都有上师和大神，
   cite:
   - ch02-¶010
   verdict: supported
-  reason: 对应 ch02-¶010 中「谈起怎样设计软件，世界上到处都是上师和大神」。
+  reason: 对应 ch02-¶010 关于软件设计领域到处都是上师和大神的说法。
 - id: s01-l02
   text: 缩略词、列表、模式、图表应有尽有。
   cite:
   - ch02-¶010
   verdict: supported
-  reason: 对应 ch02-¶010 列举的缩略词、列表、模式、图表等。
+  reason: ch02-¶010 列举了缩略词、列表、模式、图表等。
 - id: s01-l03
   text: 作者坦言，这本书也未能免俗，
   cite:
   - ch02-¶011
   verdict: supported
-  reason: 对应 ch02-¶011「真是惭愧，拙著也未能免俗」。
+  reason: ch02-¶011 说“拙著也未能免俗”。
 - id: s01-l04
   text: 先给出一句总体概述。
   cite:
   - ch02-¶011
   verdict: supported
-  reason: 对应 ch02-¶011「首先是总体概述」。
+  reason: ch02-¶011 结尾说“首先是总体概述”。
 - id: s01-l05
-  text: 提示14：好设计比坏设计更容易变更。
+  text: 好设计比坏设计更容易变更。
   cite:
   - ch02-¶012
   verdict: supported
-  reason: 对应紧挨着 ch02-¶012 的提示框「提示14 优秀的设计比糟糕的设计更容易变更」。
+  reason: 来自紧挨 ch02-¶012 的提示框“优秀的设计比糟糕的设计更容易变更”。
 - id: s01-l06
   text: 好的设计能适应使用它的人，
   cite:
   - ch02-¶012
   verdict: supported
-  reason: 对应 ch02-¶012「能适应使用者的就是好的设计」。
+  reason: ch02-¶012 说“能适应使用者的就是好的设计”。
 - id: s01-l07
   text: 落到代码上，就是要能顺应变化。
   cite:
   - ch02-¶012
   verdict: supported
-  reason: 对应 ch02-¶012「对代码而言，就是要顺应变化」。
+  reason: ch02-¶012 说“对代码而言，就是要顺应变化”。
 - id: s01-l08
   text: 这就是 ETC 原则：更容易变更。
   cite:
   - ch02-¶012
   verdict: supported
-  reason: 对应 ch02-¶012 的 ETC 原则（Easier To Change，更容易变更）。
+  reason: ch02-¶012 提出 ETC 原则（更容易变更）。
 - id: s01-l09
   text: 作者认为，无论哪条设计原则，
   cite:
   - ch02-¶013
   verdict: supported
-  reason: 对应 ch02-¶013「据我们所知，无论是什么设计原则」。
+  reason: ch02-¶013 说“无论是什么设计原则”。
 - id: s01-l10
   text: 都是 ETC 的一个特例。
   cite:
   - ch02-¶013
   verdict: supported
-  reason: 对应 ch02-¶013「都是ETC的一个特例」。
+  reason: ch02-¶013 说这些原则“都是ETC的一个特例”。
 - id: s01-l11
   text: 解耦隔离了关注点，各部分都好改；
   cite:
   - ch02-¶014
   verdict: supported
-  reason: 对应 ch02-¶014，通过隔离关注焦点让每一部分容易变更。
+  reason: ch02-¶014 说解耦通过隔离关注焦点，让每一部分都容易变更。
 - id: s01-l12
   text: 单一职责让一个需求变化
   cite:
   - ch02-¶015
   verdict: supported
-  reason: 对应 ch02-¶015 单一职责原则下的一个需求变化。
+  reason: ch02-¶015 说单一职责原则下，一个需求变化只体现为一个对应变化。
 - id: s01-l13
   text: 只落在一个模块上；
   cite:
   - ch02-¶015
   verdict: supported
-  reason: 对应 ch02-¶015「仅体现为某个单一模块上的一个对应变化」。
+  reason: ch02-¶015 说这个变化只落在“某个单一模块上”。
 - id: s01-l14
   text: 好名字让代码易读，而改代码先要读代码。
   cite:
   - ch02-¶016
   verdict: supported
-  reason: 对应 ch02-¶016，好的命名让代码易读，而变更代码需要先阅读。
+  reason: ch02-¶016 说好命名让代码易读，而变更代码需要先阅读。
 - id: s01-l15
   text: 说到底，都是为了容易变更。
   cite:
@@ -91,430 +91,430 @@ lines:
   - ch02-¶015
   - ch02-¶016
   verdict: supported
-  reason: 概括 ch02-¶014、¶015、¶016 中三处都落到「此谓ETC」。
+  reason: ch02-¶014、¶015、¶016 都以“此谓ETC”收尾。
 - id: s02-l01
   text: ETC 是一种价值观念。
   cite:
   - ch02-¶017
   verdict: supported
-  reason: 对应紧挨着 ch02-¶017 的小标题「ETC 是一种价值观念，不是一条规则」。
+  reason: 来自紧挨 ch02-¶017 的小标题“ETC 是一种价值观念”。
 - id: s02-l02
   text: 价值观念帮你做决定：
   cite:
   - ch02-¶017
   verdict: supported
-  reason: 对应 ch02-¶017「价值观念是帮助你做决定的」。
+  reason: ch02-¶017 说“价值观念是帮助你做决定的”。
 - id: s02-l03
   text: 该做这个，还是做那个？
   cite:
   - ch02-¶017
   verdict: supported
-  reason: 对应 ch02-¶017「我应该做这个，还是做那个？」。
+  reason: ch02-¶017 说“我应该做这个，还是做那个？”
 - id: s02-l04
   text: 在软件领域，ETC 就像一个向导，
   cite:
   - ch02-¶017
   verdict: supported
-  reason: 对应 ch02-¶017「当你在软件领域思考时，ETC 是个向导」。
+  reason: ch02-¶017 说在软件领域思考时，ETC 是个向导。
 - id: s02-l05
   text: 帮你在几条路线中挑出一条。
   cite:
   - ch02-¶017
   verdict: supported
-  reason: 对应 ch02-¶017「帮助你在不同的路线中选出一条」。
+  reason: ch02-¶017 说 ETC 帮你在不同路线中选出一条。
 - id: s02-l06
   text: 最好让它待在意识之下，
   cite:
   - ch02-¶017
   verdict: supported
-  reason: 对应 ch02-¶017「让它漂浮在意识思维之下」。
+  reason: ch02-¶017 说应该让它漂浮在意识思维之下。
 - id: s02-l07
   text: 悄悄把你推向对的方向。
   cite:
   - ch02-¶017
   verdict: supported
-  reason: 对应 ch02-¶017「让它微妙地将你推向正确的方向」。
+  reason: ch02-¶017 说它会微妙地将你推向正确的方向。
 - id: s02-l08
   text: 那要怎么做到呢？
   cite:
   - ch02-¶018
   verdict: supported
-  reason: 过渡句，对应 ch02-¶018「那么怎样才能做到？」。
+  reason: 与 ch02-¶018 开头的“那么怎样才能做到？”一致。
 - id: s02-l09
   text: 作者的经验是，起初要有意识地强化。
   cite:
   - ch02-¶018
   verdict: supported
-  reason: 对应 ch02-¶018「一开始需要一点有意识的强化」。
+  reason: ch02-¶018 说一开始需要一点有意识的强化。
 - id: s02-l10
   text: 花一个星期左右，刻意问自己：
   cite:
   - ch02-¶018
   verdict: supported
-  reason: 对应 ch02-¶018「花一个星期左右的时间来有意识地问自己」。
+  reason: ch02-¶018 说花一个星期左右有意识地问自己。
 - id: s02-l11
   text: “我刚做的事，让整个系统
   cite:
   - ch02-¶018
   verdict: supported
-  reason: 对应 ch02-¶018 自问句的前半部分。
+  reason: 来自 ch02-¶018 引号里的自问。
 - id: s02-l12
   text: 更容易改，还是更难改？”
   cite:
   - ch02-¶018
   verdict: supported
-  reason: 对应 ch02-¶018「更容易改变还是更难改变」。
+  reason: 来自 ch02-¶018 引号里的自问“更容易改变还是更难改变”。
 - id: s02-l13
   text: 保存文件时问一次，
   cite:
   - ch02-¶018
   verdict: supported
-  reason: 对应 ch02-¶018「当你保存文件时问一遍」。
+  reason: ch02-¶018 说保存文件时问一遍。
 - id: s02-l14
   text: 写测试时问一次，修 Bug 时也问一次。
   cite:
   - ch02-¶018
   verdict: supported
-  reason: 对应 ch02-¶018 写测试时、修复 Bug 时各问一遍。
+  reason: ch02-¶018 说写测试和修复 Bug 时都要问一遍。
 - id: s03-l01
   text: ETC 有个隐含的前提：
   cite:
   - ch02-¶019
   verdict: supported
-  reason: 对应 ch02-¶019「ETC里有一个隐含的前提」。
+  reason: ch02-¶019 说 ETC 里有一个隐含的前提。
 - id: s03-l02
   text: 我们能分辨哪条路将来更好改。
   cite:
   - ch02-¶019
   verdict: supported
-  reason: 对应 ch02-¶019，ETC 假定我们有能力辨别哪条路线更易于将来的变更。
+  reason: ch02-¶019 说 ETC 假定我们能辨别哪条路线更易于将来变更。
 - id: s03-l03
   text: 多数时候，凭常识就能判断。
   cite:
   - ch02-¶019
   verdict: supported
-  reason: 对应 ch02-¶019「很多时候，常识通常就不会错」。
+  reason: ch02-¶019 说很多时候凭常识就能推断。
 - id: s03-l04
   text: 但有时你完全找不到线索。
   cite:
   - ch02-¶020
   verdict: supported
-  reason: 对应 ch02-¶020「然而有时你找不到线索」。
+  reason: ch02-¶020 说有时你找不到线索。
 - id: s03-l05
   text: 作者说这不要紧，可以做两件事。
   cite:
   - ch02-¶020
   verdict: supported
-  reason: 对应 ch02-¶020「这也没关系……你可以做两件事」。
+  reason: ch02-¶020 说这没关系，可以做两件事。
 - id: s03-l06
   text: 第一件：让你写的东西可以替换。
   cite:
   - ch02-¶021
   verdict: supported
-  reason: 对应 ch02-¶021「试着让你写的东西可替换」。
+  reason: ch02-¶021 说试着让你写的东西可替换。
 - id: s03-l07
   text: 不管将来怎么变，
   cite:
   - ch02-¶021
   verdict: supported
-  reason: 对应 ch02-¶021「无论未来发生什么」。
+  reason: ch02-¶021 说“无论未来发生什么”。
 - id: s03-l08
   text: 这段代码都不会挡路。
   cite:
   - ch02-¶021
   verdict: supported
-  reason: 对应 ch02-¶021「这块代码都不会成为路障」。
+  reason: ch02-¶021 说这块代码不会成为路障。
 - id: s03-l09
   text: 听着有点极端，其实一直都该这样做。
   cite:
   - ch02-¶021
   verdict: supported
-  reason: 对应 ch02-¶021「这似乎有点极端……实际上你一直应该这样做」。
+  reason: ch02-¶021 说似乎有点极端，但实际上一直应该这样做。
 - id: s03-l10
   text: 只要始终保持代码解耦、内聚就行。
   cite:
   - ch02-¶021
   verdict: supported
-  reason: 对应 ch02-¶021「想着一直保持代码的解耦和内聚就够了」。
+  reason: ch02-¶021 说一直保持代码的解耦和内聚就够了。
 - id: s03-l11
   text: 第二件：把它当成培养直觉的机会。
   cite:
   - ch02-¶022
   verdict: supported
-  reason: 对应 ch02-¶022「把它当作培养直觉的一种方式」。
+  reason: ch02-¶022 说把它当作培养直觉的一种方式。
 - id: s03-l12
   text: 在工程日志里记下当时的处境：
   cite:
   - ch02-¶022
   verdict: supported
-  reason: 对应 ch02-¶022「在工程日志中记下你面临的处境」。
+  reason: ch02-¶022 说在工程日志中记下你面临的处境。
 - id: s03-l13
   text: 有哪些选择，对变化有什么猜测。
   cite:
   - ch02-¶022
   verdict: supported
-  reason: 对应 ch02-¶022「你有哪些选择，以及关于改变的一些猜测」。
+  reason: ch02-¶022 说记下有哪些选择，以及关于改变的猜测。
 - id: s03-l14
   text: 再在源码里留个标签，
   cite:
   - ch02-¶022
   verdict: supported
-  reason: 对应 ch02-¶022「在源码中留个标签」。
+  reason: ch02-¶022 说在源码中留个标签。
 - id: s03-l15
   text: 以后要改这里时，回头看看当初的记录。
   cite:
   - ch02-¶022
   verdict: supported
-  reason: 对应 ch02-¶022，之后必须修改这块代码时进行回顾。
+  reason: ch02-¶022 说之后修改这块代码时进行回顾，并给自己留下反馈记录。
 - id: s03-l16
   text: 下次碰到类似的分岔口，就有帮助了。
   cite:
   - ch02-¶022
   verdict: supported
-  reason: 对应 ch02-¶022，下一次碰到类似的分岔口时会有所帮助。
+  reason: ch02-¶022 说下次碰到类似的分岔口时会有帮助。
 - id: s04-l01
   text: 柯克船长对付人工智能时，
   cite:
   - ch02-¶034
   verdict: supported
-  reason: 对应 ch02-¶034 柯克船长对抗人工智能劫掠者。
+  reason: ch02-¶034 写柯克船长对抗人工智能劫掠者。
 - id: s04-l02
   text: 最爱给电脑两条互相矛盾的知识。
   cite:
   - ch02-¶034
   verdict: supported
-  reason: 对应 ch02-¶034「最喜欢用的方法就是给电脑两条自相矛盾的知识」。
+  reason: ch02-¶034 说他最喜欢给电脑两条自相矛盾的知识。
 - id: s04-l03
   text: 可惜，这招拿来搞垮你的代码也一样灵。
   cite:
   - ch02-¶034
   verdict: supported
-  reason: 对应 ch02-¶034「这一原理用来击溃你的代码同样有效」。
+  reason: ch02-¶034 说这一原理用来击溃你的代码同样有效。
 - id: s04-l04
   text: 程序员的工作，就是收集、组织、
   cite:
   - ch02-¶035
   verdict: supported
-  reason: 对应 ch02-¶035「收集、组织、维护以及治理知识」的前半部分。
+  reason: ch02-¶035 说程序员做的就是收集、组织、维护以及治理知识。
 - id: s04-l05
   text: 维护和治理知识。
   cite:
   - ch02-¶035
   verdict: supported
-  reason: 对应 ch02-¶035「维护以及治理知识」。
+  reason: 承接上句，同出 ch02-¶035。
 - id: s04-l06
   text: 知识写进文档和规范，在代码里运行，
   cite:
   - ch02-¶035
   verdict: supported
-  reason: 对应 ch02-¶035，把知识文档化、写进规范，并通过运行代码赋予知识活力。
+  reason: ch02-¶035 说把知识文档化、写进规范，并通过运行代码赋予知识活力。
 - id: s04-l07
   text: 也在测试里决定要检查什么。
   cite:
   - ch02-¶035
   verdict: supported
-  reason: 对应 ch02-¶035，在测试中运用知识决定提供哪些检查。
+  reason: ch02-¶035 说测试中运用知识决定应提供哪些检查。
 - id: s04-l08
   text: 可是知识并不稳定，还常常在变。
   cite:
   - ch02-¶036
   verdict: supported
-  reason: 对应 ch02-¶036「知识并不稳定……通常频率还很高」。
+  reason: ch02-¶036 说知识并不稳定，而且常常改变。
 - id: s04-l09
   text: 跟客户开次会，对需求的看法就变了；
   cite:
   - ch02-¶036
   verdict: supported
-  reason: 对应 ch02-¶036「和客户开个会，对需求的理解马上就变了」。
+  reason: ch02-¶036 说和客户开个会，对需求的理解就变了。
 - id: s04-l10
   text: 政府改条规定，业务逻辑就过时了；
   cite:
   - ch02-¶036
   verdict: supported
-  reason: 对应 ch02-¶036「政府改了条规定，一些业务逻辑就过时了」。
+  reason: ch02-¶036 说政府改条规定，一些业务逻辑就过时了。
 - id: s04-l11
   text: 测试也可能发现原来的算法行不通。
   cite:
   - ch02-¶036
   verdict: supported
-  reason: 对应 ch02-¶036「测试提示之前选的算法行不通」。
+  reason: ch02-¶036 说测试可能提示之前选的算法行不通。
 - id: s04-l12
   text: 很多人以为，维护从程序发布才开始，
   cite:
   - ch02-¶037
   verdict: supported
-  reason: 对应 ch02-¶037「大多数人认为维护始于程序发布」。
+  reason: ch02-¶037 说大多数人认为维护始于程序发布。
 - id: s04-l13
   text: 作者认为他们错了。
   cite:
   - ch02-¶037
   verdict: supported
-  reason: 对应 ch02-¶037「我们觉得这些人搞错了」。
+  reason: ch02-¶037 说“我们觉得这些人搞错了”。
 - id: s04-l14
   text: 程序员一直处在维护状态，从没停过。
   cite:
   - ch02-¶037
   verdict: supported
-  reason: 对应 ch02-¶037「程序员一直处于维护模式下，从未间断」。
+  reason: ch02-¶037 说程序员一直处于维护模式下，从未间断。
 - id: s04-l15
   text: 我们的理解每天都在变，
   cite:
   - ch02-¶037
   verdict: supported
-  reason: 对应 ch02-¶037「我们的理解每天都在变化」。
+  reason: ch02-¶037 说我们的理解每天都在变化。
 - id: s04-l16
   text: 新需求不断出现，旧需求也在发展。
   cite:
   - ch02-¶037
   verdict: supported
-  reason: 对应 ch02-¶037，新的需求不断出现，已有的需求也会发展。
+  reason: ch02-¶037 说新需求不断出现，已有需求也会发展。
 - id: s04-l17
   text: 维护不是一个单独的活动，
   cite:
   - ch02-¶037
   verdict: supported
-  reason: 对应 ch02-¶037「维护从来不是个离散的活动」。
+  reason: ch02-¶037 说维护从来不是个离散的活动。
 - id: s04-l18
   text: 而是贯穿整个开发过程的常态。
   cite:
   - ch02-¶037
   verdict: supported
-  reason: 对应 ch02-¶037「而是整个开发过程中的常态」。
+  reason: ch02-¶037 说维护是整个开发过程中的常态。
 - id: s05-l01
   text: 维护时，得找到并修改知识的表达。
   cite:
   - ch02-¶038
   verdict: supported
-  reason: 对应 ch02-¶038，找到并变更事物的表达，也就是嵌入程序的知识胶囊。
+  reason: ch02-¶038 说维护时必须找到并变更知识的表达。
 - id: s05-l02
   text: 可在规范、流程和程序里复制知识太容易，
   cite:
   - ch02-¶038
   verdict: supported
-  reason: 对应 ch02-¶038「在规范、流程、开发的程序中复制知识太容易了」。
+  reason: ch02-¶038 说在规范、流程和程序中复制知识太容易。
 - id: s05-l03
   text: 一旦复制，维护就成了噩梦，
   cite:
   - ch02-¶038
   verdict: supported
-  reason: 对应 ch02-¶038「一旦我们动手这么做，就会招致维护的噩梦」。
+  reason: ch02-¶038 说一旦这么做就会招致维护的噩梦。
 - id: s05-l04
   text: 而且发布之前噩梦就开始了。
   cite:
   - ch02-¶038
   verdict: supported
-  reason: 对应 ch02-¶038「这个噩梦在程序发布前就会开始」。
+  reason: ch02-¶038 说噩梦在程序发布前就会开始。
 - id: s05-l05
   text: 想让软件好开发、好维护，
   cite:
   - ch02-¶039
   verdict: supported
-  reason: 压缩自 ch02-¶039「想可靠地开发软件，或让开发项目更容易理解和维护」。
+  reason: 是 ch02-¶039“可靠地开发软件、让项目更容易理解和维护”的压缩。
 - id: s05-l06
   text: 唯一办法是遵循 DRY 原则：
   cite:
   - ch02-¶039
   verdict: supported
-  reason: 对应 ch02-¶039「唯一的方法是遵循……DRY 的原则」。
+  reason: ch02-¶039 说唯一的方法是遵循 DRY 原则。
 - id: s05-l07
   text: 系统里的每一处知识，
   cite:
   - ch02-¶040
   verdict: supported
-  reason: 对应 ch02-¶040「在一个系统中，每一处知识」。
+  reason: ch02-¶040 说“在一个系统中，每一处知识”。
 - id: s05-l08
   text: 都要有单一、明确、权威的表达。
   cite:
   - ch02-¶040
   verdict: supported
-  reason: 对应 ch02-¶040「都必须单一、明确、权威地表达」。
+  reason: ch02-¶040 说都必须单一、明确、权威地表达。
 - id: s05-l09
-  text: 提示15：DRY——不要重复自己。
+  text: DRY，就是不要重复自己。
   cite:
   - ch02-¶041
   verdict: supported
-  reason: 对应紧挨着 ch02-¶041 的提示框「提示15 DRY——不要重复自己」。
+  reason: 来自紧挨 ch02-¶041 的提示框“DRY——不要重复自己”。
 - id: s05-l10
   text: 反过来，把同一件事写在两个以上地方，
   cite:
   - ch02-¶042
   verdict: supported
-  reason: 对应 ch02-¶042「在两个或更多地方表达相同的东西」。
+  reason: ch02-¶042 说相对的做法是在两个或更多地方表达相同的东西。
 - id: s05-l11
   text: 改了一处，就得记着改其他各处。
   cite:
   - ch02-¶042
   verdict: supported
-  reason: 对应 ch02-¶042「如果变更了其中一个，就必须记得变更其他的那些」。
+  reason: ch02-¶042 说变更其中一个，就必须记得变更其他的。
 - id: s05-l12
   text: 不然程序会像那台外星电脑一样，
   cite:
   - ch02-¶042
   verdict: supported
-  reason: 对应 ch02-¶042「就像星际迷航中的外星电脑一样」。
+  reason: ch02-¶042 用星际迷航里的外星电脑作比。
 - id: s05-l13
   text: 因为一处矛盾而崩溃。
   cite:
   - ch02-¶042
   verdict: supported
-  reason: 对应 ch02-¶042「程序会因为一个矛盾点而崩溃」。
+  reason: ch02-¶042 说程序会因为一个矛盾点而崩溃。
 - id: s05-l14
   text: 问题不在记不记得住，而在何时会忘。
   cite:
   - ch02-¶042
   verdict: supported
-  reason: 对应 ch02-¶042「这不是你能不能记住的问题，而是什么时候会忘记的问题」。
+  reason: ch02-¶042 说问题不是能不能记住，而是什么时候会忘记。
 - id: s05-l15
   text: 很多人以为 DRY 只是别复制粘贴代码。
   cite:
   - ch02-¶045
   verdict: supported
-  reason: 对应 ch02-¶045，许多人将 DRY 限定为「不要复制粘贴源码」。
+  reason: ch02-¶045 说许多人把 DRY 限定为“不要复制粘贴源码”。
 - id: s05-l16
   text: 作者说，这只是很小的一部分。
   cite:
   - ch02-¶046
   verdict: supported
-  reason: 对应 ch02-¶046「这只是一个很小的部分」。
+  reason: ch02-¶046 说这只是一个很小的部分。
 - id: s05-l17
   text: DRY 针对的是知识和意图的重复：
   cite:
   - ch02-¶047
   verdict: supported
-  reason: 对应 ch02-¶047「DRY 针对的是你对知识和意图的复制」。
+  reason: ch02-¶047 说 DRY 针对的是对知识和意图的复制。
 - id: s05-l18
   text: 两处说的是同一件事，哪怕写法完全不同。
   cite:
   - ch02-¶047
   verdict: supported
-  reason: 对应 ch02-¶047，两处表达的东西相同，只是表达方式可能完全不同。
+  reason: ch02-¶047 说两处表达的东西相同，表达方式可能完全不同。
 - id: s05-l19
   text: 可以这样检验：
   cite:
   - ch02-¶048
   verdict: supported
-  reason: 过渡句，对应 ch02-¶048「一个严峻的考验」。
+  reason: 过渡句，对应 ch02-¶048 的“严峻的考验”。
 - id: s05-l20
   text: 代码的某一方面要改时，
   cite:
   - ch02-¶048
   verdict: supported
-  reason: 对应 ch02-¶048「当代码的某个单一方面必须改变时」。
+  reason: ch02-¶048 说当代码的某个单一方面必须改变时。
 - id: s05-l21
   text: 你是不是得在好几处、用好几种格式改？
   cite:
   - ch02-¶048
   verdict: supported
-  reason: 对应 ch02-¶048「在多个地方以多种不同的格式进行了变更」。
+  reason: ch02-¶048 问你是否在多个地方以多种格式进行变更。
 - id: s05-l22
   text: 比如同时改代码和文档。
   cite:
   - ch02-¶048
   verdict: supported
-  reason: 对应 ch02-¶048「同时修改代码和文档」这个例子。
+  reason: ch02-¶048 举例同时修改代码和文档。
 - id: s05-l23
   text: 如果是，你的代码就不满足 DRY。
   cite:
   - ch02-¶048
   verdict: supported
-  reason: 对应 ch02-¶048「如果这类情况发生，你的代码并不满足DRY」。
+  reason: ch02-¶048 说如果发生这类情况，你的代码并不满足 DRY。

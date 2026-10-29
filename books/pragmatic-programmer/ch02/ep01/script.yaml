@@ -24,7 +24,7 @@ segments:
         points: [p01]
         lines:
           - id: s01-l05
-            text: 提示14：好设计比坏设计更容易变更。
+            text: 好设计比坏设计更容易变更。
             cite: ch02-¶012
           - id: s01-l06
             text: 好的设计能适应使用它的人，
@@ -283,7 +283,7 @@ segments:
             text: 都要有单一、明确、权威的表达。
             cite: ch02-¶040
           - id: s05-l09
-            text: 提示15：DRY——不要重复自己。
+            text: DRY，就是不要重复自己。
             cite: ch02-¶041
       - id: s05-c03
         description: 两处表达相同的知识，只改了一处，电脑因为矛盾崩溃

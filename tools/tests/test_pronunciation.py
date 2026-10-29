@@ -167,7 +167,9 @@ def test_no_new_terms_means_voicing_runs(episode):
 
 
 def test_repo_table_starts_with_the_two_confirmed_terms():
-    assert load_pronunciation(REPO_ROOT / "pronunciation.yaml") == TABLE
+    # 之后确认的术语接在后面（如 #13 加的 ETC、Bug），表的开头不变
+    table = load_pronunciation(REPO_ROOT / "pronunciation.yaml")
+    assert dict(list(table.items())[: len(TABLE)]) == TABLE
 
 
 def test_empty_table_file_is_an_empty_table(tmp_path):
