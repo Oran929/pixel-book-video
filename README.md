@@ -300,14 +300,14 @@ npm run timeline -- ../books/sample/ch01/ep01                   # 时间轴、�
 npm run render -- ../out/sample-ch01-ep01.mp4                  # 渲染 MP4
 ```
 
-`voice` 先看定稿状态（`status: draft` 时拒绝，加 `--draft` 放行），再按读音表检查新术语（见下），没有新术语才用这本书的音色（见下文“书的音色与锁定”）逐句配音，写出期目录里的合成清单 `episode.json`，再清空 `video/public/episode/`，把每句 wav 和合成清单复制进去。Remotion 只读 `video/public/episode/episode.json`。
+`voice` 先看定稿状态（`status: draft` 时拒绝，加 `--draft` 放行），再按读音表检查新术语（见下），没有新术语才用这本书的音色（见下文“书的音色与锁定”）逐句配音，写出期目录里的合成清单 `episode.json`（每个画面带上原样抄自旁白稿的画面说明 `description`，供组件上的字做检查），再清空 `video/public/episode/`，把每句 wav 和合成清单复制进去。Remotion 只读 `video/public/episode/episode.json`。合成清单缺画面说明（#32 之前配音写出的）时 Remotion 和 `npm run timeline` 拒绝读取，重新运行 `pixelbook voice` 即可，配音全部命中缓存，不会重新生成。
 
 ### 片尾
 
 每期末尾自动接一段固定片尾（ADR-0010），所有期、所有书都一样：「本期先讲到这里，欢迎大家阅读原著了解更原汁原味的内容，我们下一期见」。**片尾的文字只在 `tools/src/pixelbook/outro.py` 的 `OUTRO_LINES` 里定义**，要改就改那里：每项是一条字幕（不超过 20 字），在自然停顿处断开。
 
 - 片尾不写进 `script.yaml`，没有出处，不参加 `pixelbook check`（出处、照搬、提示编号、估算时长）和语义核对。
-- `voice`（和 `render` 的配音一步）把它接在旁白稿后面：和正文一样做缺字检查、用这本书的锁定音色配音、走配音缓存和语音识别复核（复核未通过的片尾句照常列进报告），在合成清单里是最后一段——段 `outro`（标题「片尾」）、画面 `outro-c01`、旁白句 `outro-l01`……。这些 ID 是保留的，旁白稿里用了就拒绝配音。
+- `voice`（和 `render` 的配音一步）把它接在旁白稿后面：和正文一样做缺字检查、用这本书的锁定音色配音、走配音缓存和语音识别复核（复核未通过的片尾句照常列进报告），在合成清单里是最后一段——段 `outro`（标题「片尾」）、画面 `outro-c01`（画面说明是空串）、旁白句 `outro-l01`……。这些 ID 是保留的，旁白稿里用了就拒绝配音。
 - 之后照普通的段处理：字幕照常显示，时间轴、帧数核对、总时长都算上片尾；打点时间表不列片尾（每期都一样）；分镜可以给 `outro-c01` 放组件，也可以覆盖片尾前的停顿。总时长报告另外分开写正文（到片尾开始为止，含片尾前的停顿）和片尾的时长。
 
 每句配音缓存在 `books/<书>/cache/tts/<指纹>.wav`（不提交），指纹由朗读文本和音色指纹算出；音色指纹包括模型、参考音频的**文件内容**、参考文本、生成参数和引擎自身的设置（如参考音频补的静音），不包括随机种子。所以再次运行时只有改过的句子会重新生成，改了音色设置或换了参考音频的内容就全部重新生成。每个 wav 旁边的 `<指纹>.json` 记录生成信息。缓存可以随时删掉，删了就整期重新生成。
@@ -328,7 +328,7 @@ npm run render -- ../out/sample-ch01-ep01.mp4                  # 渲染 MP4
 
 ### 缺字检查
 
-`voice` 还检查字幕文本里的每个字在像素字体（`video/public/fonts/` 里的 Fusion Pixel）里有没有字形：缺字时浏览器会换成系统字体，画面上混进一个不是像素风的字。左上角的主题 `title` 也一样检查。缺的字列进检查报告的 `missing_glyphs`（旁白句 `id` 和字 `char`；主题里缺的字，`id` 记作 `title`），`voice` 打印出来并以非零码退出。这项检查在配音之前做：有缺字就不配音，合成清单、`video/public/episode/` 和锁定音色都不动，检查报告里只有 `missing_glyphs` 一项。改写那句字幕（或者换字体）后再配音。空白不检查。
+`voice` 还检查字幕文本里的每个字在像素字体（`video/public/fonts/` 里的 Fusion Pixel）里有没有字形：缺字时浏览器会换成系统字体，画面上混进一个不是像素风的字。左上角的主题 `title` 和每个画面的画面说明也一样检查（组件上的字可以取自画面说明）。缺的字列进检查报告的 `missing_glyphs`（旁白句 `id` 和字 `char`；画面说明里缺的字，`id` 是画面 ID；主题里缺的字，`id` 记作 `title`），`voice` 打印出来并以非零码退出。这项检查在配音之前做：有缺字就不配音，合成清单、`video/public/episode/` 和锁定音色都不动，检查报告里只有 `missing_glyphs` 一项。改写那句字幕或画面说明（或者换字体）后再配音。空白不检查。
 
 只想重新复制合成清单和分镜、不重新配音时（比如改了分镜），用 `uv run pixelbook stage ../books/sample/ch01/ep01`。
 
@@ -406,11 +406,11 @@ uv run pixelbook mix ../books/sample/ch01/ep01/timeline.json   # 拼到 out/mix/
 
 ## 风格表、字体与频道形象
 
-- 风格表在 `video/src/style/style.ts`：16 色调色板 `PALETTE` 和按用途取色的 `COLOR`、像素网格 `GRID`（4px，画面上一个"像素"）、字号 `FONT_SIZE` 与行高、尺寸 `SIZE`（都是网格的整数倍）、描边 `border`、硬阴影 `hardShadow`、描边字 `outlinedText`。字幕框（`src/shell/`）和组件（`src/components/`）里的颜色和尺寸只能引用这些常量，`npm run test` 会检查源码里有没有写死的颜色值和数字（0、1 除外）。
+- 风格表在 `video/src/style/style.ts`：16 色调色板 `PALETTE` 和按用途取色的 `COLOR`、像素网格 `GRID`（4px，画面上一个"像素"）、字号 `FONT_SIZE` 与行高、尺寸 `SIZE`（都是网格的整数倍）、描边 `border`、硬阴影 `hardShadow`、描边字 `outlinedText`。组件（`src/components/`，包括子目录里的常驻组件）里的颜色和尺寸只能引用这些常量，`npm run test` 递归扫描这个目录，检查源码里有没有写死的颜色值和数字（0、1 除外）。
 - 字体：Fusion Pixel 12px 比例宽度简体（OFL 1.1，来源和许可在 `video/public/fonts/`）。字形画在 12×12 格上，字号只能是 12 的整数倍（现在用 24 / 48 / 96），否则会模糊；测试检查这一点。字体由 `src/style/font.ts` 在第一帧之前加载。
-- 画面左上角常驻这一期的主题：旁白稿顶层的 `title`（等于大纲里这一期的 `topic`），经合成清单 `episode.json` 的 `title` 传进成片，由外壳组件 `src/shell/EpisodeTitle.tsx` 显示（橙字深色描边）。代码里没有写死的频道名。
+- 画面左上角常驻这一期的主题：旁白稿顶层的 `title`（等于大纲里这一期的 `topic`），经合成清单 `episode.json` 的 `title` 传进成片，由常驻组件 `src/components/resident/EpisodeTitle.tsx` 显示（橙字深色描边）。代码里没有写死的频道名。
 - 频道小人不常驻画面，是一个通用组件 `Mascot`：分镜里需要"人物做什么"时才用，参数 `character`（Q 版角色，按外观起名：`dragon`、`reader`、`whale`、`gothic`，见 `style.ts` 的 `MASCOTS`）和 `position`（站在画面底部的 `left` / `center` / `right`），例如 `{ "id": "host", "component": "Mascot", "props": { "character": "reader", "position": "left" } }`。小人是从 `character/Q.png` 裁出的透明底 PNG（`video/public/character/`，裁图脚本 `character/crop_q.py`），按原尺寸、最近邻插值显示；暂时没有动效。
-- 字幕只在显示时去掉分句标点 `，。、；`：句中的换成一个空格，句末（和句首）的直接去掉，紧挨在右引号、右书名号、右括号前的也直接去掉（`他说：“好的。”` 显示为 `他说：“好的”`）；`：“”‘’《》（）——？！` 保留（`video/src/shell/subtitle-text.ts`）。旁白脚本、配音、语音识别核对、合成清单和缺字检查都用原句。
+- 字幕只在显示时去掉分句标点 `，。、；`：句中的换成一个空格，句末（和句首）的直接去掉，紧挨在右引号、右书名号、右括号前的也直接去掉（`他说：“好的。”` 显示为 `他说：“好的”`）；`：“”‘’《》（）——？！` 保留（`video/src/components/resident/subtitle-text.ts`）。旁白脚本、配音、语音识别核对、合成清单和缺字检查都用原句。
 - 中间帧格式是 PNG（`video/remotion.config.ts`），JPEG 会让像素边缘出现杂色。
 
 ## 检查

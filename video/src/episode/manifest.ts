@@ -14,7 +14,22 @@ export const EpisodeManifestSchema = z
   // 这一期的主题（旁白稿顶层的 `title`），显示在画面左上角
   title: z.string().min(1, "不能为空"),
   segments: z.array(z.object({ id: z.string(), title: z.string() })).min(1),
-  scenes: z.array(z.object({ id: z.string(), segment: z.string() })).min(1),
+  scenes: z
+    .array(
+      z.object({
+        id: z.string(),
+        segment: z.string(),
+        // 画面说明，原样抄自旁白稿；片尾画面是空串。组件上显示的字要能在这里或
+        // 旁白句里找到（票 #32）。旧的合成清单没有这一项：重新配音会命中缓存
+        description: z.string({
+          error: (issue) =>
+            issue.input === undefined
+              ? "缺画面说明：重新运行 `pixelbook voice`（配音会命中缓存，不会重新生成）"
+              : "应为字符串",
+        }),
+      }),
+    )
+    .min(1),
   lines: z
     .array(
       z.object({

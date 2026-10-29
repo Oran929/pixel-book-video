@@ -23,6 +23,8 @@ OUTRO_LINES = (
 OUTRO_SEGMENT = "outro"
 OUTRO_SCENE = f"{OUTRO_SEGMENT}-c01"
 OUTRO_TITLE = "片尾"
+# 片尾画面没有画面说明：合成清单里写空串（票 #32），显示文字检查不会从这里取到字
+OUTRO_DESCRIPTION = ""
 
 
 class OutroError(Exception):
@@ -50,6 +52,6 @@ def with_outro(script: Script) -> Script:
     outro = Segment(
         id=OUTRO_SEGMENT,
         title=OUTRO_TITLE,
-        scenes=[Scene(id=OUTRO_SCENE, description=OUTRO_TITLE, lines=lines)],
+        scenes=[Scene(id=OUTRO_SCENE, description=OUTRO_DESCRIPTION, lines=lines)],
     )
     return replace(script, segments=[*script.segments, outro])

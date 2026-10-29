@@ -1,5 +1,5 @@
 // 风格表（票 09）：颜色、像素网格、像素字体、描边和阴影规则。
-// 字幕框、外壳和组件里的颜色、尺寸只能从这里取（style/hardcoded.test.ts 检查）。
+// 组件（包括常驻组件字幕框和主题）里的颜色、尺寸只能从这里取（style/hardcoded.test.ts 检查）。
 // 纯 .ts、不引用 React/remotion：components/schemas.ts 和 Node 里的命令也可以引用。
 
 /**

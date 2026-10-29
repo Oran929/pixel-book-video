@@ -1,4 +1,5 @@
 import { readdirSync, readFileSync } from "node:fs";
+import { sep } from "node:path";
 import { describe, expect, it } from "vitest";
 import { findHardcodedStyle } from "./hardcoded";
 
@@ -30,19 +31,26 @@ describe("findHardcodedStyle", () => {
   });
 });
 
-// 字幕框（外壳）和组件只能引用风格表
-const SCANNED = ["../shell/", "../components/"];
+// 组件（包括常驻组件字幕和主题）只能引用风格表；递归扫描，子目录里的组件也查
+const COMPONENTS_DIR = new URL("../components/", import.meta.url);
+const files = readdirSync(COMPONENTS_DIR, { recursive: true, encoding: "utf8" })
+  .filter((name) => name.endsWith(".tsx"))
+  .map((name) => name.split(sep).join("/"))
+  .sort();
 
-describe.each(SCANNED)("%s 里没有写死的颜色和尺寸", (dir) => {
-  const url = new URL(dir, import.meta.url);
-  const files = readdirSync(url).filter((name) => name.endsWith(".tsx"));
-
-  it("目录里有组件文件", () => {
-    expect(files.length).toBeGreaterThan(0);
+describe("组件目录里没有写死的颜色和尺寸", () => {
+  it("扫描到子目录里的常驻组件", () => {
+    expect(files).toEqual(
+      expect.arrayContaining([
+        "resident/EpisodeTitle.tsx",
+        "resident/Subtitle.tsx",
+        "PixelBlock.tsx",
+      ]),
+    );
   });
 
   it.each(files)("%s", (name) => {
-    const source = readFileSync(new URL(name, url), "utf8");
+    const source = readFileSync(new URL(name, COMPONENTS_DIR), "utf8");
     expect(findHardcodedStyle(source)).toEqual([]);
   });
 });

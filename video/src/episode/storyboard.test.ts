@@ -17,8 +17,8 @@ const MANIFEST: EpisodeManifest = {
   title: "程序员修炼之道",
   segments: [{ id: "s01", title: "开场" }],
   scenes: [
-    { id: "s01-c01", segment: "s01" },
-    { id: "s01-c02", segment: "s01" },
+    { id: "s01-c01", segment: "s01", description: "一个方块" },
+    { id: "s01-c02", segment: "s01", description: "一个方块" },
   ],
   lines: [
     line("s01-l01", "s01-c01", 2),

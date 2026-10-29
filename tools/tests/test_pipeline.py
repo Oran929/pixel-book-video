@@ -44,10 +44,11 @@ def test_manifest_lists_segments_scenes_and_lines_in_order(tmp_path, script_path
         {"id": "s02", "title": "原则"},
         {"id": "outro", "title": "片尾"},
     ]
+    # 每个画面带上旁白稿里的画面说明（原样抄），片尾画面是空串（票 #32）
     assert manifest["scenes"] == [
-        {"id": "s01-c01", "segment": "s01"},
-        {"id": "s02-c01", "segment": "s02"},
-        {"id": "outro-c01", "segment": "outro"},
+        {"id": "s01-c01", "segment": "s01", "description": "书的封面"},
+        {"id": "s02-c01", "segment": "s02", "description": "一个方块"},
+        {"id": "outro-c01", "segment": "outro", "description": ""},
     ]
     lines = manifest["lines"]
     assert [(line["id"], line["scene"], line["text"]) for line in lines] == [
@@ -1433,6 +1434,30 @@ def test_a_character_missing_from_the_font_in_the_title_is_reported_as_title(
         )
 
     assert _report(script_path)["missing_glyphs"] == [{"id": "title", "char": "𠀀"}]
+
+
+def test_a_character_missing_from_the_font_in_a_description_is_reported_with_its_scene(
+    tmp_path, script_path
+):
+    # 组件上的字可以取自画面说明（票 #32），画面说明里的字也要在像素字体里
+    script_path.write_text(
+        SCRIPT.replace("description: 一个方块", "description: 𠀀方块")
+    )
+
+    with pytest.raises(PipelineError, match="s02-c01"):
+        voice_episode(
+            script_path,
+            VoicingSettings(
+                engine=FakeTtsEngine(),
+                voice=VOICE,
+                public_dir=tmp_path / "public",
+                pronunciation={},
+                verifier=fake_asr_verifier(),
+                font=FONT,
+            ),
+        )
+
+    assert _report(script_path)["missing_glyphs"] == [{"id": "s02-c01", "char": "𠀀"}]
 
 
 def test_a_missing_font_file_is_rejected_before_any_voicing(tmp_path, script_path):

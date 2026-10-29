@@ -17,8 +17,8 @@ const MANIFEST = {
     { id: "s02", title: "原则" },
   ],
   scenes: [
-    { id: "s01-c01", segment: "s01" },
-    { id: "s02-c01", segment: "s02" },
+    { id: "s01-c01", segment: "s01", description: "一个方块" },
+    { id: "s02-c01", segment: "s02", description: "一个方块" },
   ],
   lines: [
     line("s01-l01", "s01-c01", 2),

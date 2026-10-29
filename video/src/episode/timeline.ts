@@ -24,7 +24,7 @@ export type Timeline = {
   /** 每句音频占据的帧（不含之后的停顿） */
   lines: TimedLine[];
   /** 从第一句开始到下一个画面开始（最后一个画面到总帧数） */
-  scenes: ({ id: string; segment: string } & FrameSpan)[];
+  scenes: (EpisodeManifest["scenes"][number] & FrameSpan)[];
   segments: ({ id: string; title: string } & FrameSpan)[];
 };
 

@@ -77,7 +77,7 @@ class VoicingSettings:
 class VoicingReport:
     """检查报告：需要人看的问题，每次配音重写进期目录里的 `report.json`。
 
-    `missing_glyphs` 是字体里没有字形的字（旁白句 ID 或 `title`，和字）；
+    `missing_glyphs` 是字体里没有字形的字（旁白句 ID、画面 ID 或 `title`，和字）；
     没给字体、不做缺字检查时是 `None`，`report.json` 里也没有这一项。
     """
 
@@ -131,8 +131,8 @@ def voice_episode(
     并列进检查报告 `report.json`（每次运行都列出）；字符对比不通过、靠拼音
     对比通过的句子（多半是同音字）也列进报告，单独一项。
 
-    给了字幕字体时，配音前先做缺字检查：字幕文本和主题 `title` 里字体没有
-    字形的字列进报告的 `missing_glyphs`。有缺字就抛出 `PipelineError`，报告里
+    给了字幕字体时，配音前先做缺字检查：字幕文本、画面说明和主题 `title` 里
+    字体没有字形的字列进报告的 `missing_glyphs`。有缺字就抛出 `PipelineError`，报告里
     只有这一项；不配音，也不碰合成清单、Remotion 静态目录和锁定音色。
     """
     episode = EpisodePath.from_script(script_path)
@@ -200,11 +200,13 @@ def _check_glyphs(
         return None
     if not font.is_file():
         raise PipelineError(f"字幕字体 {font} 不存在，无法做缺字检查")
-    # 左上角的主题也用像素字体显示，报告里的 ID 记作 `title`
-    missing = missing_glyphs(
-        [("title", script.title)] + [(line.id, line.text) for line in script.lines],
-        font,
-    )
+    # 左上角的主题也用像素字体显示，报告里的 ID 记作 `title`；组件上的字可以取自
+    # 画面说明（票 #32），画面说明也查，报告里的 ID 是画面 ID
+    texts = [("title", script.title)]
+    for scene in script.scenes:
+        texts.append((scene.id, scene.description))
+        texts.extend((line.id, line.text) for line in scene.lines)
+    missing = missing_glyphs(texts, font)
     if missing:
         _write_report(episode_dir, {"missing_glyphs": missing})
         raise PipelineError(missing_glyphs_message(script_path, missing, font))
@@ -219,7 +221,14 @@ def _voice_lines(
     for segment in script.segments:
         voiced.segments.append({"id": segment.id, "title": segment.title})
         for scene in segment.scenes:
-            voiced.scenes.append({"id": scene.id, "segment": segment.id})
+            # 画面说明原样抄进合成清单，TypeScript 一侧的显示文字检查要用（票 #32）
+            voiced.scenes.append(
+                {
+                    "id": scene.id,
+                    "segment": segment.id,
+                    "description": scene.description,
+                }
+            )
             for line in scene.lines:
                 spoken = spoken_text(line, pronunciation)
                 cached = cache.line(spoken)
@@ -279,9 +288,9 @@ def missing_glyphs_message(
         for item in missing
     )
     return (
-        f"{script_path}: 字幕里有 {len(missing)} 个字在像素字体里没有字形"
+        f"{script_path}: 字幕、画面说明或主题里有 {len(missing)} 个字在像素字体里没有字形"
         f"（会显示成系统字体），拒绝配音：\n{listing}\n"
-        "改写这些旁白句的字幕（`title` 是左上角的主题），"
+        "改写这些旁白句的字幕或画面说明（`title` 是左上角的主题），"
         f"或换一款有这些字的字体（{font.name}）。"
     )
 

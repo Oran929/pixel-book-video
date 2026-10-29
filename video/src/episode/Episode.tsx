@@ -7,8 +7,8 @@ import {
   useCurrentFrame,
 } from "remotion";
 import { Entering } from "../components/Entering";
-import { EpisodeTitle } from "../shell/EpisodeTitle";
-import { Subtitle } from "../shell/Subtitle";
+import { EpisodeTitle } from "../components/resident/EpisodeTitle";
+import { Subtitle } from "../components/resident/Subtitle";
 import { COLOR } from "../style/style";
 import { planEpisode } from "./episode-plan";
 import type { Cue } from "./storyboard";
