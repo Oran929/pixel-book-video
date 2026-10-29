@@ -24,7 +24,7 @@ from pixelbook.outline import (
     load_outline,
     outside_scope,
 )
-from pixelbook.script import Script, ScriptError, load_script, text_length
+from pixelbook.script import FINAL, Script, ScriptError, load_script, text_length
 
 ERROR = "报错"
 WARNING = "警告"
@@ -38,10 +38,8 @@ QUOTED_TERM = re.compile(
     r"「([^」]+)」|“([^”]+)”|\"([^\"]+)\"|『([^』]+)』|《([^》]+)》"
 )
 TIP_TERM = re.compile(r"提示\d+")
-# 一段的估算时长和大纲给它的 `minutes` 相差超过这个比例（且至少 `SEGMENT_SLACK_SECONDS`
-# 秒）时警告：0.5 分钟的短段只差几句就会超出 25%，所以设一个下限
-SEGMENT_SLACK = 0.25
-SEGMENT_SLACK_SECONDS = 15
+# 大纲的 `minutes` 跟着定稿走：每段的估算分钟数取到这个粒度写回大纲（`pixelbook sync-minutes`）
+MINUTES_STEP = 0.25
 
 
 @dataclass(frozen=True)
@@ -60,6 +58,11 @@ class SegmentTiming:
     # 大纲给这一段的时长（秒）和 `minutes`；段和大纲对不上时为 None
     planned: int | None
     minutes: float | None
+
+    @property
+    def estimated_minutes(self) -> float:
+        """估算的分钟数，取到 `MINUTES_STEP`；`sync-minutes` 写回大纲的就是它。"""
+        return round(self.chars / CHARS_PER_MINUTE / MINUTES_STEP) * MINUTES_STEP
 
 
 @dataclass(frozen=True)
@@ -177,25 +180,27 @@ def estimated_duration(context: Context) -> list[Finding]:
     ]
 
 
-def segment_near_outline(context: Context) -> list[Finding]:
-    """一段的估算时长和大纲的 `minutes` 相差太多时警告：字数没有按大纲分配。"""
+def minutes_follow_script(context: Context) -> list[Finding]:
+    """定稿的旁白稿：大纲给每段的 `minutes` 要等于这一段的估算分钟数（取到 `MINUTES_STEP`）。
+
+    草稿不查；段和大纲对不上时由 `segments_follow_outline` 报，这里不查。
+    """
+    if context.script.status != FINAL:
+        return []
     findings = []
     for segment in estimate(context.script, context.outline).segments:
-        if segment.planned is None:
+        if segment.minutes is None or segment.minutes == segment.estimated_minutes:
             continue
-        slack = max(segment.planned * SEGMENT_SLACK, SEGMENT_SLACK_SECONDS)
-        gap = segment.seconds - segment.planned
-        if abs(gap) > slack:
-            findings.append(
-                Finding(
-                    WARNING,
-                    segment.id,
-                    f"估算 {clock(segment.seconds)}（{segment.chars} 字），"
-                    f"大纲 {clock(segment.planned)}，{'多' if gap > 0 else '少'}了 "
-                    f"{abs(gap)} 秒，超过大纲时长的 {SEGMENT_SLACK:.0%}"
-                    f"（至少 {SEGMENT_SLACK_SECONDS} 秒）",
-                )
+        findings.append(
+            Finding(
+                ERROR,
+                segment.id,
+                f"定稿的旁白稿估算 {clock(segment.seconds)}，取到 {MINUTES_STEP:g} 分钟是 "
+                f"{segment.estimated_minutes:g} 分钟，但大纲给这一段的 `minutes` 是 "
+                f"{segment.minutes:g}：跑 `pixelbook sync-minutes {context.path}` "
+                "把估算写回大纲",
             )
+        )
     return findings
 
 
@@ -264,6 +269,31 @@ def points_covered(context: Context) -> list[Finding]:
         for point in known
         if point not in covered
     ]
+    return findings
+
+
+def points_cited(context: Context) -> list[Finding]:
+    """讲到一条观点的画面里，至少有一句引用了这条观点的某个出处段落：
+    画面标了 `points`，内容却没讲这条观点时报出来。
+
+    没被任何画面讲到的观点由 `points_covered` 报，这里不查。
+    """
+    if context.outline is None:
+        return []
+    scenes = [scene for segment in context.script.segments for scene in segment.scenes]
+    findings = []
+    for point in context.outline.points:
+        telling = [scene for scene in scenes if point.id in scene.points]
+        cited = {i for scene in telling for line in scene.lines for i in line.cite}
+        if telling and not cited & set(point.cite):
+            findings.append(
+                Finding(
+                    ERROR,
+                    WHOLE_SCRIPT,
+                    f"讲到观点 {point.id} 的画面（{'、'.join(s.id for s in telling)}）"
+                    f"里没有一句引用它的出处 {'、'.join(point.cite)}",
+                )
+            )
     return findings
 
 
@@ -389,10 +419,11 @@ RULES: list[Rule] = [
     cite_exists,
     cite_has_text,
     estimated_duration,
-    segment_near_outline,
+    minutes_follow_script,
     title_is_topic,
     segments_follow_outline,
     points_covered,
+    points_cited,
     cite_in_scope,
     not_copied,
     description_terms,
@@ -400,9 +431,14 @@ RULES: list[Rule] = [
 ]
 
 
-def check_script(path: Path, rules: list[Rule] = RULES) -> Report:
-    """用 `rules` 检查 `path` 这份旁白稿。期目录布局不对、转换结果不存在时抛出异常，不出报告。"""
-    episode = EpisodePath.from_script(path)
+def check_script(
+    path: Path, rules: list[Rule] = RULES, episode: EpisodePath | None = None
+) -> Report:
+    """用 `rules` 检查 `path` 这份旁白稿。期目录布局不对、转换结果不存在时抛出异常，不出报告。
+
+    `episode` 给出时，`path` 可以在别处（比如草稿副本），按这一期的大纲和原文检查。
+    """
+    episode = episode or EpisodePath.from_script(path)
     converted = episode.chapter.converted
     if not converted.is_file():
         raise ScriptError(
@@ -414,7 +450,7 @@ def check_script(path: Path, rules: list[Rule] = RULES) -> Report:
         # 格式错误只报第一处；路径在报告最后一行已经有了
         message = str(error).removeprefix(f"{path}: ")
         return Report([Finding(ERROR, WHOLE_SCRIPT, message)], [])
-    outline, problem = _outline_episode(episode)
+    outline, problem = outline_episode(episode)
     findings = [Finding(ERROR, WHOLE_SCRIPT, problem)] if problem else []
     context = Context(
         path, episode, script, read_chapter(converted), converted.name, outline
@@ -427,7 +463,17 @@ def check_script(path: Path, rules: list[Rule] = RULES) -> Report:
     )
 
 
-def _outline_episode(episode: EpisodePath) -> tuple[Episode | None, str | None]:
+def check_copy(path: Path, episode: EpisodePath) -> Report:
+    """把 `path`（期目录外的草稿副本，比如给用户的建议改法）当作 `episode` 的旁白稿检查。
+
+    副本还没核对过，改过的句子本来就和 `factcheck.yaml` 对不上，所以不查核对结果。
+    """
+    return check_script(
+        path, [rule for rule in RULES if rule is not factcheck_matches], episode
+    )
+
+
+def outline_episode(episode: EpisodePath) -> tuple[Episode | None, str | None]:
     """大纲里和期目录同名的那一期；找不到时返回原因。"""
     if not episode.outline.is_file():
         return None, f"找不到大纲 {episode.outline}，先写大纲再写旁白稿"

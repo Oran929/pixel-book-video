@@ -7,10 +7,11 @@ from typing import Any
 
 from pixelbook import REPO_ROOT
 from pixelbook.audition import AuditionError, choose_voice, run_audition
-from pixelbook.check import check_script, format_report
+from pixelbook.check import check_copy, check_script, format_report
 from pixelbook.convert import CHAPTERS_DIR, ConvertError, convert_book
 from pixelbook.episode_path import EpisodePath, EpisodePathError
 from pixelbook.judge import JudgeError, prompt, record
+from pixelbook.minutes import sync_minutes
 from pixelbook.mix import MixError, mix_timeline
 from pixelbook.outline import OutlineError, check_outline, format_warnings
 from pixelbook.pipeline import (
@@ -229,6 +230,18 @@ def main(argv: list[str] | None = None) -> int:
         help="旁白稿的全部机械检查：格式、出处、估算时长……报错和警告分开列出",
     )
     check.add_argument("script", type=Path, help="books/<书>/<章>/<期>/script.yaml")
+    check.add_argument(
+        "--episode",
+        type=Path,
+        help="books/<书>/<章>/<期>/：script 是这一期旁白稿的草稿副本（放在别处），"
+        "按这一期的大纲和原文检查，不查 factcheck.yaml",
+    )
+
+    minutes = commands.add_parser(
+        "sync-minutes",
+        help="把旁白稿每段的估算分钟数（取到 0.25）写回大纲里这一期的 segments[].minutes",
+    )
+    minutes.add_argument("script", type=Path, help="books/<书>/<章>/<期>/script.yaml")
 
     factcheck_prompt = commands.add_parser(
         "factcheck-prompt",
@@ -245,6 +258,12 @@ def main(argv: list[str] | None = None) -> int:
         "answer",
         type=Path,
         help="裁判返回的 YAML（packet：校验码；lines：id、verdict、reason）",
+    )
+    factcheck_record.add_argument(
+        "--user-edited",
+        action="store_true",
+        help="和上一轮相比不只是拆句（改写、新增、删除），而且是用户改的或用户同意的；"
+        "只有用户能授权",
     )
 
     args = parser.parse_args(argv)
@@ -270,13 +289,25 @@ def main(argv: list[str] | None = None) -> int:
             print(f"大纲检查通过：{len(checked.episodes)} 期（{ids}）")
         elif args.command == "check":
             script = args.script.resolve()
-            report = check_script(script)
+            report = (
+                check_copy(script, EpisodePath(args.episode.resolve()))
+                if args.episode
+                else check_script(script)
+            )
             print(format_report(script, report))
             return 0 if report.passed else 1
+        elif args.command == "sync-minutes":
+            print(sync_minutes(args.script.resolve()))
         elif args.command == "factcheck-prompt":
             print(prompt(EpisodePath(args.episode.resolve())), end="")
         elif args.command == "factcheck-record":
-            print(record(EpisodePath(args.episode.resolve()), args.answer.resolve()))
+            print(
+                record(
+                    EpisodePath(args.episode.resolve()),
+                    args.answer.resolve(),
+                    user_edited=args.user_edited,
+                )
+            )
         elif args.command == "render":
             return _render(args.script.resolve(), args.out, args.revoice, args.draft)
         elif args.command == "voice":

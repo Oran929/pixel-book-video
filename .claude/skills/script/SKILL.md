@@ -1,6 +1,6 @@
 ---
 name: script
-description: 按大纲写一期旁白稿（status draft），跑 pixelbook check 直到没有报错，调用 /factcheck，不支持的句子改写后重新核对（最多 3 轮），停在人工关口 2。
+description: 按大纲写一期旁白稿（status draft），跑 pixelbook check 直到没有报错，调用 /factcheck，给不支持和部分支持的句子写好验证过的建议改法，停在人工关口 2 交给用户决定。
 argument-hint: <期目录>
 disable-model-invocation: true
 ---
@@ -10,7 +10,7 @@ disable-model-invocation: true
 参数：`$ARGUMENTS`，形如 `books/<书>/chNN/epNN`。
 
 - **输入**：同一章的大纲 `books/<书>/chNN/outline.yaml` 里和期目录同名的那一期（主题、`units`、段、核心观点），以及这一期覆盖的原文：转换结果 `books/<书>/chapters/chNN.md` 里本期范围内的编号段落。
-- **输出**：`<期目录>/script.yaml`（`status: draft`）和 `/factcheck` 写出的 `<期目录>/factcheck.yaml`。格式和全部机械规则以 README「旁白稿与检查」「语义核对」为准，由 `pixelbook check` 判定；这份 skill 只管写稿和改稿。
+- **输出**：`<期目录>/script.yaml`（`status: draft`）、`/factcheck` 写出的 `<期目录>/factcheck.yaml`，和给用户的建议改法（临时目录里的草稿副本，不改正式稿）。格式和全部机械规则以 README「旁白稿与检查」「语义核对」为准，由 `pixelbook check` 判定；这份 skill 只管写稿和改稿。
 - 术语以 `GLOSSARY.md` 为准：期、主题、段、画面、旁白句、出处、大纲、核心观点。
 
 ## 防编造
@@ -62,8 +62,9 @@ cd tools && uv run pixelbook check ../<期目录>/script.yaml
 
 - 照搬：按防编造规则改写，除非相同的片段是术语或专有名词（紧挨着的提示框标题和小标题不会报）；
 - 范围：只在确实需要引用别处时保留；
-- 段时长：输出开头的每段估算和大纲对不上，按大纲的 `minutes` 增删这一段的内容；增加的内容同样只来自原文；
 - 画面说明：报出的词语在本章原文里没有，改成原文里的说法。
+
+输出开头的各段估算只是参考：大纲的 `minutes` 定稿时跟着稿子改（第 6 步），写稿时按第 3 步分配字数即可。
 
 保留的警告记下理由，交给用户时说明。
 
@@ -73,18 +74,42 @@ cd tools && uv run pixelbook check ../<期目录>/script.yaml
 
 用 Skill 工具调用 `/factcheck <期目录>`，读它转来的 `factcheck-record` 汇报。
 
-- 没有不支持的句子，或汇报写明轮次已用完：进入第 6 步。
-- 汇报写明还可以再核对：按每个不支持句的理由改写，让它回到出处推得出的内容，或补上漏列的出处；推不出的说法删掉比换个说法保留更好。部分支持的句子留给用户审，这里不改。然后回到第 4 步，再调用 `/factcheck`。
+**第一轮核对之后，正式稿里你自己能做的改动只有拆句**：把一句切成连续的几句，字幕依次接起来和原句一字不差、出处不变，后面的 ID 依次改号。改写、新增、删除句子都由用户决定；`factcheck-record` 会拒绝记录这样的稿，`--user-edited` 只有用户能授权。
 
-**完成**：最后一次汇报里没有不支持的句子，或写明轮次已用完；`pixelbook check` 退出码 0（核对之后改过稿时它会报错）。
+**完成**：拿到 `factcheck-record` 的汇报；正式稿除了拆句，和核对时一样。
 
-### 6. 交给用户（人工关口 2）
+### 6. 写建议改法
 
-用中文汇报，然后停下等用户审。旁白稿和 `factcheck.yaml` 都不提交，`status` 保持 `draft`；用户审过后自己改成 `final`，再一起提交。
+汇报里每个不支持、部分支持的句子，都写一条建议改法，先验证再交给用户：
 
-- **置顶**：最后一次汇报里仍然不支持的句子（ID、字幕、理由）；
-- 部分支持的句子；
+1. 把正式稿复制到会话的临时目录（`<scratchpad>/script.suggested.yaml`），在副本里按理由改写：回到出处推得出的内容，或补上漏列的出处；推不出的说法建议删掉。一句改长了就照第 3 步切句。
+2. 检查副本：
+
+   ```sh
+   cd tools && uv run pixelbook check <scratchpad>/script.suggested.yaml --episode ../<期目录>
+   ```
+
+   改到退出码 0，改过的句子没有新的照搬、范围警告（第 4 步的处理办法同样适用）。副本不查 `factcheck.yaml`。
+
+**完成**：每个不支持、部分支持的句子都有一条建议改法，副本的检查退出码 0；正式稿没动。
+
+### 7. 交给用户（人工关口 2）
+
+用中文汇报，然后停下等用户审。旁白稿和 `factcheck.yaml` 都不提交，`status` 保持 `draft`。
+
+- **置顶**：不支持的句子（ID、字幕、理由）和建议改法；
+- 部分支持的句子和建议改法；
+- `factcheck-record` 汇报里的改动清单，原样附上；
 - `pixelbook check` 输出开头的估算时长（全稿和每段，对照大纲），剩下的警告和保留理由；
-- 核对了几轮；改写过哪些句子、为什么。
+- 核对了几轮。
 
-用户提的修改意见如果是规则问题（怎么写、怎么切句、怎么引用），先改这份 skill，再按改过的 skill 改稿。用户手改旁白稿之后，单独跑 `/factcheck` 重新核对。
+用户逐句决定改法。用户提的修改意见如果是规则问题（怎么写、怎么切句、怎么引用），先改这份 skill，再按改过的 skill 改稿。按用户的决定改正式稿（或用户自己改）之后，跑第 4 步，再调用 `/factcheck <期目录>`，并告诉它这次的改动是用户授权的（记录时加 `--user-edited`）；然后回到第 6 步。
+
+用户说定稿时：
+
+```sh
+cd tools && uv run pixelbook sync-minutes ../<期目录>/script.yaml
+uv run pixelbook outline ../books/<书>/chNN/outline.yaml
+```
+
+`sync-minutes` 把各段估算（取到 0.25 分钟）写回大纲里这一期的 `minutes`。再把 `status` 改成 `final`，跑第 4 步的 `pixelbook check`（定稿时大纲的 `minutes` 和估算对不上会报错），都通过后旁白稿、`factcheck.yaml` 和大纲一起提交。

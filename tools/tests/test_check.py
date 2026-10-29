@@ -1,4 +1,4 @@
-"""旁白稿检查：`pixelbook check <旁白稿>`（票 #8、#9、#11）。
+"""旁白稿检查：`pixelbook check <旁白稿>`，语义核对的两条命令和 `sync-minutes`（票 #8、#9、#11、#12）。
 
 转换结果用夹具手写成 `books/demo/chapters/ch01.md`，格式和 `pixelbook convert` 的输出相同；
 大纲是 `books/demo/ch01/outline.yaml`，旁白稿是 `books/demo/ch01/ep01/script.yaml`，
@@ -66,7 +66,8 @@ def script(lines: int = 60) -> dict:
     """一份能通过检查的旁白稿：一段一个画面，`lines` 句，出处轮流写成字符串和列表。"""
     return {
         "title": "第一单元",
-        "status": "final",
+        # 定稿才对照大纲的 `minutes`（见 `test_minutes_*`），一般的用例用草稿
+        "status": "draft",
         "segments": [
             {
                 "id": "s01",
@@ -745,13 +746,19 @@ def record(pixelbook, episode, tmp_path):
     回答里没有 `packet` 时补上 prompt 的校验码，就像裁判照做了一样；`sign=False` 时不补。
     """
 
-    def run(data: dict, answer: dict, factcheck: dict | None = None, sign: bool = True):
+    def run(
+        data: dict,
+        answer: dict,
+        factcheck: dict | None = None,
+        sign: bool = True,
+        flags: tuple[str, ...] = (),
+    ):
         if sign and "packet" not in answer:
             token = _token(_prompt(pixelbook, episode, data, factcheck=factcheck)[1])
             answer = {"packet": token, **answer}
         answer_path = tmp_path / "verdicts.yaml"
         _dump(answer_path, answer)
-        argv = ["factcheck-record", str(episode), str(answer_path)]
+        argv = ["factcheck-record", str(episode), str(answer_path), *flags]
         return pixelbook(argv, data, factcheck=factcheck)
 
     return run
@@ -881,20 +888,126 @@ def test_the_summary_pins_unsupported_lines_above_partial_ones(record):
     assert "  s01-l05「这句原文里没有」：原文没有这个结论" in out
     assert f"  s01-l02「{LINE_TEXT}」：多了一个例子" in out
     assert "第 1 轮：支持 58 句，部分支持 1 句，不支持 1 句" in out
-    assert "还可以改写后再核对 2 轮" in out
 
 
-def test_the_summary_says_when_the_rounds_are_used_up(record):
+def _distinct(data: dict) -> dict:
+    """每句字幕各不相同（前两个字换成句号），比较改动时不会对错位置；仍是每句 20 字。"""
+    for n, line in enumerate(data["segments"][0]["scenes"][0]["lines"], start=1):
+        line["text"] = f"{n:02d}{LINE_TEXT[2:]}"
+    return data
+
+
+def _split_first_line(data: dict) -> dict:
+    """把第 1 句按原字切成两句，出处不变，后面的句子依次改号：一次纯拆分。"""
+    lines = data["segments"][0]["scenes"][0]["lines"]
+    first = lines[0]
+    lines[0:1] = [
+        {"id": "", "text": first["text"][:10], "cite": first["cite"]},
+        {"id": "", "text": first["text"][10:], "cite": first["cite"]},
+    ]
+    for n, line in enumerate(lines, start=1):
+        line["id"] = f"s01-l{n:02d}"
+    return data
+
+
+def test_the_first_round_has_no_change_list(record):
     data = script()
-    earlier = factcheck(data)
-    earlier["round"] = 2
-    answer = verdicts(data)
-    answer["lines"][0]["verdict"] = "unsupported"
 
-    code, out = record(data, answer, factcheck=earlier)
+    code, out = record(data, verdicts(data))
 
     assert code == 0
-    assert "已核对 3 轮，轮次用完" in out
+    assert "第 1 轮，没有上一轮可比" in out
+
+
+def test_splitting_lines_after_a_round_is_recorded_with_the_change_list(
+    record, episode
+):
+    data = _distinct(script())
+    earlier = factcheck(data)
+    _split_first_line(data)
+
+    code, out = record(data, verdicts(data), factcheck=earlier)
+
+    assert code == 0, out
+    assert yaml.safe_load((episode / "factcheck.yaml").read_text())["round"] == 2
+    assert "和第 1 轮相比：" in out
+    assert "  拆分：s01-l01 → s01-l01、s01-l02" in out
+    assert "  改了编号：s01-l02–s01-l60 → s01-l03–s01-l61" in out
+    assert "改写" not in out
+
+
+def test_an_unchanged_script_lists_no_changes(record):
+    data = script()
+
+    code, out = record(data, verdicts(data), factcheck=factcheck(data))
+
+    assert code == 0, out
+    assert "和第 1 轮相比：没有改动" in out
+
+
+def _reword_third(data: dict) -> None:
+    _line(data, 3)["text"] = "换了说法的第三句"
+
+
+def _recite_third(data: dict) -> None:
+    _line(data, 3)["cite"] = "ch01-¶003"
+
+
+def _drop_third(data: dict) -> None:
+    del data["segments"][0]["scenes"][0]["lines"][2]
+
+
+def _add_after_third(data: dict) -> None:
+    lines = data["segments"][0]["scenes"][0]["lines"]
+    lines.insert(3, {"id": "s01-l99", "text": "新加的一句", "cite": "ch01-¶003"})
+
+
+def _split_with_new_words(data: dict) -> None:
+    _split_first_line(data)
+    _line(data, 2)["text"] += "多"
+
+
+@pytest.mark.parametrize(
+    ("change", "listed"),
+    [
+        (_reword_third, f"  改写：s01-l03「03{LINE_TEXT[2:]}」→「换了说法的第三句」"),
+        (_recite_third, "  改写：s01-l03 出处 ch01-¶001 → ch01-¶003"),
+        (_drop_third, f"  删除：s01-l03「03{LINE_TEXT[2:]}」"),
+        (_add_after_third, "  新增：s01-l99「新加的一句」"),
+        (_split_with_new_words, "  改写：s01-l01"),
+    ],
+    ids=["reworded", "cite changed", "deleted", "added", "split plus new words"],
+)
+def test_anything_but_splitting_after_a_round_is_refused(
+    record, episode, change, listed
+):
+    data = _distinct(script())
+    earlier = factcheck(data)
+    change(data)
+
+    code, out = record(data, verdicts(data), factcheck=earlier)
+
+    assert code == 1
+    assert "只能拆句" in out and "--user-edited" in out
+    assert listed in out
+    assert yaml.safe_load((episode / "factcheck.yaml").read_text()) == earlier
+
+
+def test_user_edits_are_recorded_with_the_flag_and_listed(record, episode):
+    data = _distinct(script())
+    earlier = factcheck(data)
+    _reword_third(data)
+    _add_after_third(data)
+
+    code, out = record(
+        data, verdicts(data), factcheck=earlier, flags=("--user-edited",)
+    )
+
+    assert code == 0, out
+    assert yaml.safe_load((episode / "factcheck.yaml").read_text())["round"] == 2
+    assert "和第 1 轮相比（用户改过稿）：" in out
+    assert f"  改写：s01-l03「03{LINE_TEXT[2:]}」→「换了说法的第三句」" in out
+    assert "  新增：s01-l99「新加的一句」" in out
 
 
 def test_check_always_prints_the_estimate_and_each_segment_against_the_outline(check):
@@ -931,27 +1044,15 @@ def _two_segments(first: int, second: int) -> tuple[dict, dict]:
     return data, plan
 
 
-@pytest.mark.parametrize(
-    ("first", "second", "warned"),
-    [
-        # 2.5 分钟 = 150 秒，25% 是 37.5 秒：每句 20 字 4.8 秒
-        (31, 31, []),  # 148.8 秒，各差 1 秒
-        (39, 23, ["s02"]),  # 187 秒（多 37 秒，不到 37.5）与 110 秒（少 40 秒）
-        (40, 22, ["s01", "s02"]),  # 192 秒、106 秒
-    ],
-    ids=["close", "s02 short", "both off"],
-)
-def test_a_segment_far_from_its_outline_minutes_is_a_warning(
-    check, first, second, warned
-):
-    data, plan = _two_segments(first, second)
+def test_a_segment_far_from_its_outline_minutes_is_not_a_warning(check):
+    # 2.5 分钟 = 150 秒；40 句 192 秒、22 句 106 秒，差得远也只在估算表里看得到
+    data, plan = _two_segments(40, 22)
 
     code, out = check(data, plan)
 
     assert code == 0, out
-    for segment in ("s01", "s02"):
-        flagged = f"  {segment}：估算" in out.split("警告")[1]
-        assert flagged == (segment in warned), out
+    assert "警告：无" in out
+    assert "  s02 收尾：440 字，估算 1:46，大纲 2:30（2.5 分钟）" in out
 
 
 @pytest.mark.parametrize(
@@ -1043,3 +1144,165 @@ def test_a_description_term_not_in_the_chapter_is_a_warning(
     assert (
         f"s01-c01：画面说明里的「{term}」在 ch01.md 里没有出现" in out.split("警告")[1]
     )
+
+
+def _final(data: dict) -> dict:
+    data["status"] = "final"
+    return data
+
+
+def test_minutes_of_a_final_script_must_match_the_outline(check, episode):
+    # 60 句 × 20 字 = 1200 字，4.8 分钟，取到 0.25 分钟是 4.75；大纲写的是 5
+    code, out = check(_final(script()))
+
+    assert code == 1
+    assert (
+        "  s01：定稿的旁白稿估算 4:48，取到 0.25 分钟是 4.75 分钟，"
+        "但大纲给这一段的 `minutes` 是 5"
+    ) in _errors(out)
+    assert f"pixelbook sync-minutes {episode / 'script.yaml'}" in _errors(out)
+
+
+def test_minutes_matching_a_final_script_pass(check):
+    plan = outline()
+    plan["episodes"][0]["segments"][0]["minutes"] = 4.75
+
+    code, out = check(_final(script()), plan)
+
+    assert code == 0, out
+
+
+def test_minutes_of_a_draft_are_not_compared(check):
+    assert check(script())[0] == 0
+
+
+OUTLINE_TEXT = """\
+chapter: 1
+episodes:
+  - id: ep01
+    topic: 第一单元
+    units: [1]
+    segments:
+      - title: 开场      # 段注释要留着
+        minutes: 2.5
+      - title: 收尾
+        minutes: 2.5
+    points:
+      - id: p01
+        text: 第一条观点
+        cite: ch01-¶001
+  - id: ep02
+    topic: 第二单元
+    units: [2]
+    segments:
+      - title: 开场
+        minutes: 2.5
+    points:
+      - id: p02
+        text: 第二条观点
+        cite: ch01-¶006
+"""
+
+
+@pytest.fixture
+def sync(pixelbook, episode):
+    """写出 `OUTLINE_TEXT` 这份大纲和旁白稿，运行 `pixelbook sync-minutes`，返回退出码、输出和大纲全文。"""
+
+    def run(data: dict) -> tuple[int, str, str]:
+        path = episode.parent / "outline.yaml"
+        path.write_text(OUTLINE_TEXT)
+        code, out = pixelbook(["sync-minutes", str(episode / "script.yaml")], data)
+        return code, out, path.read_text()
+
+    return run
+
+
+def test_sync_minutes_writes_each_estimate_into_this_episode_of_the_outline(
+    sync, check, episode
+):
+    # 40 句 192 秒 = 3.2 分钟 → 3.25；22 句 105.6 秒 = 1.76 分钟 → 1.75
+    data, _ = _two_segments(40, 22)
+    data = _final(data)
+
+    code, out, written = sync(data)
+
+    assert code == 0, out
+    assert written == OUTLINE_TEXT.replace(
+        "开场      # 段注释要留着\n        minutes: 2.5",
+        "开场      # 段注释要留着\n        minutes: 3.25",
+        1,
+    ).replace("收尾\n        minutes: 2.5", "收尾\n        minutes: 1.75")
+    assert "s01 开场：2.5 → 3.25" in out
+    assert "s02 收尾：2.5 → 1.75" in out
+    assert check(data)[0] == 0
+
+
+def test_sync_minutes_refuses_segments_that_differ_from_the_outline(sync):
+    code, out, written = sync(script())
+
+    assert code == 1
+    assert "段标题" in out
+    assert written == OUTLINE_TEXT
+
+
+def test_sync_minutes_refuses_a_total_outside_4_to_6_minutes(sync):
+    # 每段 20 句 400 字 = 1.6 分钟 → 1.5，合计 3:00
+    data, _ = _two_segments(20, 20)
+
+    code, out, written = sync(data)
+
+    assert code == 1
+    assert "3:00" in out and "4:00–6:00" in out
+    assert written == OUTLINE_TEXT
+
+
+def test_a_point_whose_scenes_never_cite_its_paragraphs_is_an_error(check):
+    # p01 的出处是 ¶001；讲到 p01 的画面里没有一句引用它
+    data = script()
+    for line in data["segments"][0]["scenes"][0]["lines"]:
+        line["cite"] = "ch01-¶003"
+
+    code, out = check(data)
+
+    assert code == 1
+    assert (
+        "  旁白稿：讲到观点 p01 的画面（s01-c01）里没有一句引用它的出处 ch01-¶001"
+    ) in _errors(out)
+
+
+def test_a_point_cited_by_one_line_of_one_of_its_scenes_passes(check):
+    data = script()
+    for line in data["segments"][0]["scenes"][0]["lines"]:
+        line["cite"] = "ch01-¶003"
+    _line(data, 7)["cite"] = ["ch01-¶003", "ch01-¶001"]
+
+    assert check(data)[0] == 0
+
+
+def test_a_scratch_copy_is_checked_against_the_episode_without_the_factcheck(
+    pixelbook, episode, tmp_path
+):
+    # 期目录里是核对过的稿；草稿副本改了一句，先用 `--episode` 检查建议的改法
+    data = script()
+    pixelbook(["check", str(episode / "script.yaml")], data, factcheck=factcheck(data))
+    _line(data, 3)["text"] = "建议改成的说法"
+    scratch = tmp_path / "suggested.yaml"
+    _dump(scratch, data)
+
+    code = cli.main(["check", str(scratch), "--episode", str(episode)])
+
+    assert code == 0
+
+
+def test_a_scratch_copy_still_gets_the_other_checks(episode, tmp_path, capsys):
+    data = script()
+    _line(data, 3)["cite"] = "ch01-¶099"
+    scratch = tmp_path / "suggested.yaml"
+    _dump(scratch, data)
+
+    code = cli.main(["check", str(scratch), "--episode", str(episode)])
+    out = capsys.readouterr().out
+
+    assert code == 1
+    assert "  s01-l03：`cite` 里的 ch01-¶099 在 ch01.md 里不存在" in out
+    assert f"{scratch}: 旁白稿检查没有通过" in out

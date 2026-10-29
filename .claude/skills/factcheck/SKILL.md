@@ -38,7 +38,11 @@ cd tools && uv run pixelbook factcheck-prompt ../<期目录> > <scratchpad>/fact
 cd tools && uv run pixelbook factcheck-record ../<期目录> <scratchpad>/factcheck-answer.yaml
 ```
 
+用户在这次对话里说过旁白稿的改动是他改的或他同意的（`/script` 转达用户的决定也算），命令末尾加 `--user-edited`；没有用户这句话就不加。
+
 退出码 1 时按报错处理，不自己补判、不手改回答：
+
+- 写稿者只能拆句：和上一轮相比有改写、新增或删除，用户没有授权。停下，把报错里的改动清单交还给调用者，由用户决定。
 
 - 校验码缺失或不同：旁白稿在第 1 步之后改过，或裁判没收到完整的 prompt。回到第 1 步重新生成，交给新的裁判。
 - 格式不对或和旁白稿对不上：回到第 2 步，把同一份 prompt 交给另一个全新的裁判。
@@ -47,4 +51,4 @@ cd tools && uv run pixelbook factcheck-record ../<期目录> <scratchpad>/factch
 
 ### 4. 汇报
 
-把 `factcheck-record` 打印的汇报原样转给调用者。单独运行时到此结束：`factcheck.yaml` 和旁白稿一起交给用户审，用户审过（关口 2）后两者一起提交。
+把 `factcheck-record` 打印的汇报原样转给调用者。单独运行时到此结束：`factcheck.yaml` 和旁白稿一起交给用户审，用户审过（关口 2）、定稿后两者一起提交（见 `/script` 第 7 步）。
