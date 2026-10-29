@@ -458,16 +458,16 @@ def factcheck_matches(context: Context) -> list[Finding]:
         return [
             Finding(Level.ERROR, WHOLE_SCRIPT, f"`{FACTCHECK_NAME}` 格式不对：{error}")
         ]
-    judged = {verdict.id: verdict for verdict in report.lines}
+    judged = {checked.id: checked for checked in report.lines}
     lines = {line.id for line in context.script.lines}
     findings = []
     for line in context.script.lines:
-        verdict = judged.get(line.id)
-        if verdict is None:
+        checked = judged.get(line.id)
+        if checked is None:
             findings.append(
                 Finding(Level.ERROR, line.id, f"`{FACTCHECK_NAME}` 里没有这一句的判定")
             )
-        elif (verdict.text, verdict.cite, verdict.speech) != (
+        elif (checked.text, checked.cite, checked.speech) != (
             line.text,
             line.cite,
             line.speech,
@@ -483,11 +483,11 @@ def factcheck_matches(context: Context) -> list[Finding]:
     findings += [
         Finding(
             Level.ERROR,
-            verdict.id,
+            checked.id,
             f"`{FACTCHECK_NAME}` 里有这一句的判定，但旁白稿里没有这一句",
         )
-        for verdict in judged.values()
-        if verdict.id not in lines
+        for checked in judged.values()
+        if checked.id not in lines
     ]
     return findings
 

@@ -15,21 +15,18 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import yaml
-
 from pixelbook.check import check_unjudged, format_report
 from pixelbook.convert import Chapter, read_chapter
 from pixelbook.episode_path import EpisodePath
 from pixelbook.factcheck import (
-    PARTIAL,
-    SUPPORTED,
-    UNSUPPORTED,
-    VERDICTS,
+    CheckedLine,
     Factcheck,
     FactcheckError,
+    Judgement,
     Verdict,
     load_answer,
     load_factcheck,
+    write_factcheck,
 )
 from pixelbook.script import Line, load_script
 
@@ -89,7 +86,15 @@ class JudgeError(Exception):
     pass
 
 
-def prompt(episode: EpisodePath) -> str:
+@dataclass(frozen=True)
+class Prompt:
+    """给裁判的完整 prompt `text`，和它最后一行的校验码 `token`。"""
+
+    text: str
+    token: str
+
+
+def prompt(episode: EpisodePath) -> Prompt:
     """旁白稿除核对结果外的机械检查都没有报错时，返回给裁判的完整 prompt；否则抛出带检查报告的错误。
 
     旧的 `factcheck.yaml` 和改过的稿对不上是预期的（这一轮就是要重新核对），不拦。
@@ -111,11 +116,8 @@ def prompt(episode: EpisodePath) -> str:
         f"{INSTRUCTIONS}\n--- 原文段落 ---\n\n{sources}\n\n"
         f"--- 旁白句 ---\n\n{narration}\n\n--- 校验码 ---\n\n"
     )
-    return f"{body}{TOKEN_LINE}{_token(body)}\n"
-
-
-def _token(body: str) -> str:
-    return TOKEN_PREFIX + hashlib.sha256(body.encode()).hexdigest()[:TOKEN_LENGTH]
+    token = TOKEN_PREFIX + hashlib.sha256(body.encode()).hexdigest()[:TOKEN_LENGTH]
+    return Prompt(f"{body}{TOKEN_LINE}{token}\n", token)
 
 
 def _sources(cited: list[str], chapter: Chapter) -> list[str]:
@@ -128,23 +130,19 @@ def _sources(cited: list[str], chapter: Chapter) -> list[str]:
         paragraph = chapter.paragraphs[i]
         if previous is not None and order.index(i) != order.index(previous) + 1:
             rows.append(GAP)
-        before = [
-            f"{TIP}{paragraph.tip_before}" if paragraph.tip_before else None,
-            f"{SUBHEADING}{paragraph.heading_before}"
-            if paragraph.heading_before
-            else None,
-        ]
-        after = [
-            f"{TIP}{paragraph.tip_after}" if paragraph.tip_after else None,
-            f"{SUBHEADING}{paragraph.heading_after}"
-            if paragraph.heading_after
-            else None,
-        ]
+        before = _headings(paragraph.tip_before, paragraph.heading_before)
+        after = _headings(paragraph.tip_after, paragraph.heading_after)
         for row in [*before, f"{i} {paragraph.text}", *after]:
-            if row and row not in rows[-1:]:
+            if row not in rows[-1:]:
                 rows.append(row)
         previous = i
     return rows
+
+
+def _headings(tip: str | None, heading: str | None) -> list[str]:
+    """段落一侧紧挨着的提示框标题和小标题，写成材料里的行。"""
+    rows = [f"{TIP}{tip}"] if tip else []
+    return rows + ([f"{SUBHEADING}{heading}"] if heading else [])
 
 
 @dataclass(frozen=True)
@@ -152,8 +150,25 @@ class Split:
     """上一轮的一句 `old`，拆成了当前旁白稿里连续的几句 `new`：字幕依次接起来（去掉空白后）
     和原句相同，出处都和原句相同。"""
 
-    old: Verdict
+    old: CheckedLine
     new: list[Line]
+
+
+@dataclass(frozen=True)
+class Renumbered:
+    """字幕、`speech`、出处都没变、只改了 ID 的一句：上一轮第 `old_index` 句、现在第 `new_index` 句。"""
+
+    old_index: int
+    old_id: str
+    new_index: int
+    new_id: str
+
+    def follows(self, other: "Renumbered") -> bool:
+        """在上一轮和现在都紧接在 `other` 后面。"""
+        return (self.old_index, self.new_index) == (
+            other.old_index + 1,
+            other.new_index + 1,
+        )
 
 
 @dataclass
@@ -162,13 +177,11 @@ class Changes:
 
     splits: list[Split] = field(default_factory=list)
     # 字幕、`speech` 或出处改了的句子：(上一轮, 现在)
-    reworded: list[tuple[Verdict, Line]] = field(default_factory=list)
+    reworded: list[tuple[CheckedLine, Line]] = field(default_factory=list)
     added: list[Line] = field(default_factory=list)
-    deleted: list[Verdict] = field(default_factory=list)
-    # 字幕、`speech`、出处都没变、只改了 ID 的句子，按顺序：(上一轮的位置和 ID, 现在的位置和 ID)
-    renumbered: list[tuple[tuple[int, str], tuple[int, str]]] = field(
-        default_factory=list
-    )
+    deleted: list[CheckedLine] = field(default_factory=list)
+    # 只改了 ID 的句子，按顺序
+    renumbered: list[Renumbered] = field(default_factory=list)
 
     @property
     def only_splits(self) -> bool:
@@ -187,7 +200,7 @@ class Changes:
         return rows
 
 
-def changes(previous: list[Verdict], lines: list[Line]) -> Changes:
+def changes(previous: list[CheckedLine], lines: list[Line]) -> Changes:
     """逐句比较上一轮记下的字幕、`speech`、出处和当前旁白稿。
 
     三者都相同的句子按顺序对齐（ID 不同就是改了编号）；其余的部分里，上一轮的一句
@@ -195,13 +208,13 @@ def changes(previous: list[Verdict], lines: list[Line]) -> Changes:
     多出来的是新增或删除。
     """
     found = Changes()
-    old_keys = [(v.text, tuple(v.cite or []), v.speech) for v in previous]
+    old_keys = [(v.text, tuple(v.cite), v.speech) for v in previous]
     new_keys = [(line.text, tuple(line.cite), line.speech) for line in lines]
     matcher = difflib.SequenceMatcher(None, old_keys, new_keys, autojunk=False)
     for tag, i1, i2, j1, j2 in matcher.get_opcodes():
         if tag == "equal":
             found.renumbered += [
-                ((i, previous[i].id), (j, lines[j].id))
+                Renumbered(i, previous[i].id, j, lines[j].id)
                 for i, j in zip(range(i1, i2), range(j1, j2), strict=True)
                 if previous[i].id != lines[j].id
             ]
@@ -220,30 +233,32 @@ def changes(previous: list[Verdict], lines: list[Line]) -> Changes:
     return found
 
 
-def _bare(text: str) -> str:
+def _unspaced(text: str) -> str:
     return re.sub(r"\s", "", text)
 
 
-def _split(old: Verdict, candidates: list[Line]) -> list[Line] | None:
+def _split(old: CheckedLine, candidates: list[Line]) -> list[Line] | None:
     """`candidates` 开头连续的、出处和 `old` 相同的两句以上，接起来正好是 `old` 的字幕时返回它们。
 
     念的内容（有 `speech` 时是它，否则是字幕）也要跟着拆：几句念的依次接起来等于 `old` 念的。
     """
-    target, joined = _bare(old.text), ""
+    target, joined = _unspaced(old.text), ""
     for n, line in enumerate(candidates, start=1):
         if line.cite != old.cite:
             return None
-        joined += _bare(line.text)
+        joined += _unspaced(line.text)
         if not target.startswith(joined):
             return None
         if joined == target:
             pieces = candidates[:n]
-            said = "".join(_bare(piece.speech or piece.text) for piece in pieces)
-            return pieces if n > 1 and said == _bare(old.speech or old.text) else None
+            said = "".join(_unspaced(piece.speech or piece.text) for piece in pieces)
+            return (
+                pieces if n > 1 and said == _unspaced(old.speech or old.text) else None
+            )
     return None
 
 
-def _reworded(old: Verdict, new: Line) -> str:
+def _reworded(old: CheckedLine, new: Line) -> str:
     out = old.id if old.id == new.id else f"{old.id} → {new.id}"
     parts = []
     if old.text != new.text:
@@ -251,7 +266,7 @@ def _reworded(old: Verdict, new: Line) -> str:
     if old.speech != new.speech:
         parts.append(f"朗读{_said(old.speech)}→{_said(new.speech)}")
     if old.cite != new.cite:
-        parts.append(f"出处 {'、'.join(old.cite or [])} → {'、'.join(new.cite)}")
+        parts.append(f"出处 {'、'.join(old.cite)} → {'、'.join(new.cite)}")
     joined = "，".join(parts)
     return out + (joined if joined.startswith("「") else f" {joined}")
 
@@ -260,19 +275,18 @@ def _said(speech: str | None) -> str:
     return f"「{speech}」" if speech else "（无）"
 
 
-def _renumbered_runs(pairs) -> list[str]:
+def _renumbered_runs(renumbered: list[Renumbered]) -> list[str]:
     """连续的改号合成一段：`s01-l02–s01-l60 → s01-l03–s01-l61`。"""
-    runs: list[list] = []
-    for pair in pairs:
-        (i, _), (j, _) = pair
-        if runs and runs[-1][-1][0][0] + 1 == i and runs[-1][-1][1][0] + 1 == j:
-            runs[-1].append(pair)
+    runs: list[list[Renumbered]] = []
+    for item in renumbered:
+        if runs and item.follows(runs[-1][-1]):
+            runs[-1].append(item)
         else:
-            runs.append([pair])
+            runs.append([item])
     return [
-        f"{run[0][0][1]} → {run[0][1][1]}"
+        f"{run[0].old_id} → {run[0].new_id}"
         if len(run) == 1
-        else f"{run[0][0][1]}–{run[-1][0][1]} → {run[0][1][1]}–{run[-1][1][1]}"
+        else f"{run[0].old_id}–{run[-1].old_id} → {run[0].new_id}–{run[-1].new_id}"
         for run in runs
     ]
 
@@ -297,10 +311,11 @@ def record(episode: EpisodePath, answer: Path, user_edited: bool = False) -> str
             + "\n".join(found.listing())
         )
     try:
-        token, verdicts = load_answer(answer)
+        answered = load_answer(answer)
     except FactcheckError as error:
         raise JudgeError(f"{answer}: 裁判的回答格式不对：{error}") from error
-    expected_token = prompt(episode).rsplit(TOKEN_LINE, 1)[1].strip()
+    token, verdicts = answered.packet, answered.lines
+    expected_token = prompt(episode).token
     if token != expected_token:
         raise JudgeError(
             f"{answer}: 回答里的校验码 {token} 和当前旁白稿生成的 prompt 的校验码 "
@@ -321,23 +336,13 @@ def record(episode: EpisodePath, answer: Path, user_edited: bool = False) -> str
                 f"实际是 {actual or '没有'}。把同一份材料交给新的裁判重新判定"
             )
     round_ = previous.round + 1 if previous else 1
-    data = {
-        "round": round_,
-        "lines": [
-            {
-                "id": line.id,
-                "text": line.text,
-                "cite": line.cite,
-                **({"speech": line.speech} if line.speech else {}),
-                "verdict": verdict.verdict,
-                "reason": verdict.reason,
-            }
-            for line, verdict in zip(lines, verdicts, strict=True)
-        ],
-    }
-    episode.factcheck.write_text(
-        yaml.safe_dump(data, allow_unicode=True, sort_keys=False, width=1000)
-    )
+    checked = [
+        CheckedLine(
+            line.id, line.text, line.cite, verdict.verdict, verdict.reason, line.speech
+        )
+        for line, verdict in zip(lines, verdicts, strict=True)
+    ]
+    write_factcheck(episode.factcheck, Factcheck(round_, checked))
     return _summary(episode.factcheck, round_, lines, verdicts, found, user_edited)
 
 
@@ -357,17 +362,17 @@ def _summary(
     path: Path,
     round_: int,
     lines: list[Line],
-    verdicts: list[Verdict],
+    verdicts: list[Judgement],
     found: Changes | None,
     user_edited: bool,
 ) -> str:
     text = {line.id: line.text for line in lines}
-    counts = {v: sum(x.verdict == v for x in verdicts) for v in VERDICTS}
+    counts = {v: sum(x.verdict == v for x in verdicts) for v in Verdict}
     out = [
         f"已写入 {path}",
         (
-            f"第 {round_} 轮：支持 {counts[SUPPORTED]} 句，部分支持 {counts[PARTIAL]} 句，"
-            f"不支持 {counts[UNSUPPORTED]} 句"
+            f"第 {round_} 轮：支持 {counts[Verdict.SUPPORTED]} 句，"
+            f"部分支持 {counts[Verdict.PARTIAL]} 句，不支持 {counts[Verdict.UNSUPPORTED]} 句"
         ),
     ]
     if found is None:
@@ -376,7 +381,10 @@ def _summary(
         compared = f"和第 {round_ - 1} 轮相比{'（用户改过稿）' if user_edited else ''}"
         listing = found.listing()
         out += [f"{compared}：", *listing] if listing else [f"{compared}：没有改动"]
-    for verdict, title in ((UNSUPPORTED, "不支持"), (PARTIAL, "部分支持")):
+    for verdict, title in (
+        (Verdict.UNSUPPORTED, "不支持"),
+        (Verdict.PARTIAL, "部分支持"),
+    ):
         if picked := [v for v in verdicts if v.verdict == verdict]:
             out.append(f"{title}（{len(picked)} 句）：")
             out += [f"  {v.id}「{text[v.id]}」：{v.reason}" for v in picked]

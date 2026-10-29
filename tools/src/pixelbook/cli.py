@@ -112,7 +112,7 @@ def _verifier() -> Verifier:
     )
 
 
-def _parts(duration: dict[str, Any]) -> str:
+def _body_and_outro(duration: dict[str, Any]) -> str:
     """正文和片尾分开写（时间轴导出命令算好的，ADR-0010）；没有片尾时不写。"""
     outro = duration.get("outro")
     if not outro:
@@ -127,7 +127,7 @@ def _print_render_summary(summary: dict[str, Any]) -> None:
         f"\n成片 {summary['mp4']}\n"
         f"  帧数：视频流 {summary['frames']} 帧，时间轴 {summary['total_frames']} 帧"
         f"（{summary['fps']}fps，相差不超过一帧）\n"
-        f"  总时长 {duration['text']}：{duration['verdictText']}{_parts(duration)}\n"
+        f"  总时长 {duration['text']}：{duration['verdictText']}{_body_and_outro(duration)}\n"
         f"  打点时间表 {summary['segments']}"
     )
     if passes := summary["asr_pinyin_passes"]:
@@ -315,7 +315,7 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "sync-minutes":
             print(sync_minutes(args.script.resolve()))
         elif args.command == "factcheck-prompt":
-            print(prompt(EpisodePath(args.episode.resolve())), end="")
+            print(prompt(EpisodePath(args.episode.resolve())).text, end="")
         elif args.command == "factcheck-record":
             print(
                 record(
