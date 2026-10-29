@@ -8,6 +8,7 @@ import shutil
 import subprocess
 
 import pytest
+from conftest import SCRIPT, VOICE
 
 from pixelbook import REPO_ROOT
 from pixelbook.asr import FakeAsrEngine
@@ -16,35 +17,6 @@ from pixelbook.render import RenderError, check_frames, render_episode
 from pixelbook.tts import FakeTtsEngine
 from pixelbook.verification import Verifier
 from pixelbook.voice import Voice
-
-VOICE = Voice(
-    model="base-model",
-    ref_audio="voices/tianmei.wav",
-    ref_text="你好。",
-    params={"language": "chinese"},
-)
-
-SCRIPT = """\
-title: 冒烟样例
-segments:
-  - id: s01
-    title: 开场
-    scenes:
-      - id: s01-c01
-        description: 只有字幕
-        lines:
-          - id: s01-l01
-            text: 今天读一本书
-            cite: ch01-¶001
-"""
-
-
-@pytest.fixture
-def script_path(tmp_path):
-    path = tmp_path / "books" / "demo" / "ch01" / "ep01" / "script.yaml"
-    path.parent.mkdir(parents=True)
-    path.write_text(SCRIPT)
-    return path
 
 
 def render(script_path, tmp_path, voice=VOICE, **kwargs):

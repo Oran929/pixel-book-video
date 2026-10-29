@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from pixelbook.audio import wav_seconds
+from pixelbook.episode_path import EpisodePath
 from pixelbook.glyphs import missing_glyphs
 from pixelbook.pronunciation import find_new_terms, spoken_text
 from pixelbook.script import load_script
@@ -59,11 +60,12 @@ def voice_episode(
     有缺字就抛出 `PipelineError`，报告里只有这一项；不配音，也不碰合成清单、
     Remotion 静态目录和锁定音色。不给字体就不检查，报告里也没有这一项。
     """
+    episode = EpisodePath.from_script(script_path)
     script = load_script(script_path)
     if terms := find_new_terms(script, pronunciation):
         raise PipelineError(new_terms_message(script_path, terms))
-    # 旁白稿在 books/<书>/<章>/<期>/script.yaml，配音缓存和锁定音色放在书的目录下
-    book_dir = script_path.parents[2]
+    # 配音缓存和锁定音色放在书的目录下
+    book_dir = episode.book_dir
     try:
         locked = lock_record(voice)
         cache = TtsCache(book_dir / "cache" / "tts", engine, voice, verifier)
@@ -87,7 +89,7 @@ def voice_episode(
             font,
         )
         if glyphs["missing_glyphs"]:
-            _write_report(script_path.parent, glyphs)
+            _write_report(episode.dir, glyphs)
             raise PipelineError(
                 missing_glyphs_message(script_path, glyphs["missing_glyphs"], font)
             )
@@ -140,12 +142,12 @@ def voice_episode(
         "scenes": scenes,
         "lines": lines,
     }
-    (script_path.parent / MANIFEST_NAME).write_text(
+    (episode.dir / MANIFEST_NAME).write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n"
     )
 
     _write_report(
-        script_path.parent,
+        episode.dir,
         {"asr_failures": failures, "asr_pinyin_passes": pinyin_passes, **glyphs},
     )
 
@@ -155,7 +157,7 @@ def voice_episode(
     stage.mkdir(parents=True)
     for audio, wav in wavs.items():
         shutil.copyfile(wav, public_dir / audio)
-    stage_episode(script_path.parent, public_dir)
+    stage_episode(episode.dir, public_dir)
     write_lock(book_dir, locked)
     return manifest
 

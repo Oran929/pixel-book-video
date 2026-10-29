@@ -7,8 +7,10 @@ from typing import Any
 
 from pixelbook import REPO_ROOT
 from pixelbook.audition import AuditionError, choose_voice, run_audition
+from pixelbook.episode_path import EpisodePath, EpisodePathError
 from pixelbook.mix import MixError, mix_timeline
 from pixelbook.pipeline import (
+    MANIFEST_NAME,
     REPORT_NAME,
     SUBTITLE_FONT,
     PipelineError,
@@ -129,8 +131,7 @@ def _print_render_summary(summary: dict[str, Any]) -> None:
 
 
 def _book_voice(script: Path) -> Voice:
-    # 旁白稿在 books/<书>/<章>/<期>/script.yaml
-    return resolve_book_voice(script.parents[2], REPO_ROOT)
+    return resolve_book_voice(EpisodePath.from_script(script).book_dir, REPO_ROOT)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -226,7 +227,7 @@ def main(argv: list[str] | None = None) -> int:
             total = sum(line["seconds"] for line in manifest["lines"])
             print(
                 f"{len(manifest['lines'])} 句，配音共 {total:.1f} 秒（不含停顿）；"
-                f"合成清单 {args.script.parent / 'episode.json'}，"
+                f"合成清单 {args.script.parent / MANIFEST_NAME}，"
                 f"已复制到 {VIDEO_PUBLIC / 'episode'}"
             )
             _print_asr_report(script.parent / REPORT_NAME)
@@ -252,13 +253,10 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"听完把读法写进 {PRONUNCIATION}（读法不变就写成 `术语: 术语`）")
         elif args.command == "mix":
             timeline = args.timeline.resolve()
-            # timeline.json 默认在期目录 books/<书>/<章>/<期>/ 里
+            # timeline.json 在期目录里
             out = (
                 args.out
-                or REPO_ROOT
-                / "out"
-                / "mix"
-                / ("-".join(timeline.parent.parts[-3:]) + ".wav")
+                or REPO_ROOT / "out" / "mix" / f"{EpisodePath(timeline.parent).id}.wav"
             ).resolve()
             seconds = mix_timeline(timeline, VIDEO_PUBLIC, out)
             print(f"试听音轨 {out}：{seconds:.2f} 秒")
@@ -267,6 +265,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"已复制到 {VIDEO_PUBLIC / 'episode'}")
     except (
         AuditionError,
+        EpisodePathError,
         MixError,
         ScriptError,
         PipelineError,
@@ -280,9 +279,8 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _render(script: Path, out: Path | None, revoice: bool) -> int:
-    # 旁白稿在 books/<书>/<章>/<期>/script.yaml
     out = (
-        out or REPO_ROOT / "out" / ("-".join(script.parent.parts[-3:]) + ".mp4")
+        out or REPO_ROOT / "out" / f"{EpisodePath.from_script(script).id}.mp4"
     ).resolve()
     try:
         try:

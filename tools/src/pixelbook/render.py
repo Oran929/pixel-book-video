@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from pixelbook import REPO_ROOT
+from pixelbook.episode_path import EpisodePathError
 from pixelbook.pipeline import REPORT_NAME, PipelineError, voice_episode
 from pixelbook.pronunciation import PronunciationError
 from pixelbook.script import ScriptError
@@ -65,7 +66,13 @@ def render_episode(
             revoice=revoice,
             font=font,
         )
-    except (PipelineError, ScriptError, PronunciationError, VoiceConfigError) as error:
+    except (
+        EpisodePathError,
+        PipelineError,
+        ScriptError,
+        PronunciationError,
+        VoiceConfigError,
+    ) as error:
         raise RenderError("配音", str(error)) from error
     report = json.loads((episode_dir / REPORT_NAME).read_text())
 

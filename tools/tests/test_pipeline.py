@@ -7,6 +7,7 @@ from dataclasses import replace
 
 import pytest
 import yaml
+from conftest import SCRIPT, VOICE
 
 from pixelbook import REPO_ROOT
 from pixelbook.asr import FakeAsrEngine
@@ -20,55 +21,11 @@ from pixelbook.pronunciation import load_pronunciation
 from pixelbook.script import ScriptError
 from pixelbook.tts import FakeTtsEngine
 from pixelbook.verification import Verifier
-from pixelbook.voice import Voice
 
 
 def fake_asr_verifier(asr=None, max_retries=2):
     """复核：默认用原样"听见"朗读文本的假识别引擎，阈值 0.1，重试 2 次。"""
     return Verifier(asr or FakeAsrEngine(), max_diff_rate=0.1, max_retries=max_retries)
-
-
-VOICE = Voice(
-    model="base-model",
-    ref_audio="voices/tianmei.wav",
-    ref_text="你好。",
-    params={"language": "chinese"},
-)
-
-SCRIPT = """\
-title: 程序员修炼之道
-segments:
-  - id: s01
-    title: 开场
-    scenes:
-      - id: s01-c01
-        description: 书的封面
-        lines:
-          - id: s01-l01
-            text: 今天读一本书
-            cite: ch01-¶001
-          - id: s01-l02
-            text: 它讲怎样写好代码
-            cite: ch01-¶002
-  - id: s02
-    title: 原则
-    scenes:
-      - id: s02-c01
-        description: 一个方块
-        lines:
-          - id: s02-l01
-            text: 不要重复
-            speech: 不要重复你自己
-            cite: ch01-¶003
-"""
-
-
-@pytest.fixture
-def script_path(tmp_path):
-    path = tmp_path / "books" / "demo" / "ch01" / "ep01" / "script.yaml"
-    path.parent.mkdir(parents=True)
-    path.write_text(SCRIPT)
-    return path
 
 
 def test_manifest_lists_segments_scenes_and_lines_in_order(tmp_path, script_path):
