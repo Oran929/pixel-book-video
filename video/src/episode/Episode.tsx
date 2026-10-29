@@ -6,13 +6,18 @@ import {
   staticFile,
   useCurrentFrame,
 } from "remotion";
-import { Entering } from "../components/Entering";
-import { EpisodeTitle } from "../shell/EpisodeTitle";
-import { Subtitle } from "../shell/Subtitle";
+import { StagedCues } from "../components/Staged";
+import { SoundCues } from "../sound/SoundCues";
+import type { SoundCue } from "../sound/sounds";
+import { EpisodeTitle } from "../components/resident/EpisodeTitle";
+import { Subtitle } from "../components/resident/Subtitle";
 import { COLOR } from "../style/style";
-import { planEpisode } from "./episode-plan";
+import { VOLUME } from "../style/volume";
+import { EpisodeMusic } from "../music/EpisodeMusic";
+import { type IntroId, type OutroId, SelectedBookend } from "../bookend/bookends";
+import { type MusicPlan, planEpisode } from "./episode-plan";
 import type { Cue } from "./storyboard";
-import { lineAt, type Timeline } from "./timeline";
+import { bodyEndFrame, lineAt, showsResidents, type Timeline } from "./timeline";
 
 // 合成清单和分镜由 `pixelbook voice` / `pixelbook stage` 复制到 video/public/episode/
 const MANIFEST_FILE = "episode/episode.json";
@@ -23,6 +28,13 @@ export type EpisodeProps = {
   title: string;
   timeline: Timeline | null;
   cues: Cue[];
+  /** 要放的音效（帧、音效 ID） */
+  sounds: SoundCue[];
+  /** 配乐；没有分镜（字幕版）时为 null，不放配乐 */
+  music: MusicPlan | null;
+  /** 片头、片尾（登记表的 ID，项目配置选的）；不用时为 null */
+  intro: IntroId | null;
+  outro: OutroId | null;
 };
 
 const readJson = async (file: string, signal: AbortSignal) => {
@@ -46,33 +58,46 @@ export const calculateEpisodeMetadata: CalculateMetadataFunction<
     );
   }
   const storyboardData = await readJson(STORYBOARD_FILE, abortSignal);
-  const { manifest, timeline, cues } = planEpisode(
+  const { manifest, timeline, cues, sounds, music, intro, outro } = planEpisode(
     manifestData,
     storyboardData,
   );
   return {
     durationInFrames: timeline.totalFrames,
-    props: { title: manifest.title, timeline, cues },
+    props: { title: manifest.title, timeline, cues, sounds, music, intro, outro },
   };
 };
 
-const CurrentSubtitle: React.FC<{ timeline: Timeline }> = ({ timeline }) => {
-  const line = lineAt(timeline, useCurrentFrame());
-  return line ? <Subtitle text={line.text} /> : null;
+/** 主题：片头、片尾期间不显示（spec #16 修订二、修订三） */
+const CurrentTitle: React.FC<{ title: string; timeline: Timeline | null }> = ({
+  title,
+  timeline,
+}) => {
+  const frame = useCurrentFrame();
+  if (!title) return null;
+  if (timeline && !showsResidents(timeline, frame)) return null;
+  return <EpisodeTitle title={title} />;
 };
 
-export const Episode: React.FC<EpisodeProps> = ({ title, timeline, cues }) => (
+/** 当前这句旁白的字幕（两句之间的停顿里继续显示上一句；片头、片尾期间不显示） */
+export const CurrentSubtitle: React.FC<{ timeline: Timeline }> = ({ timeline }) => {
+  const frame = useCurrentFrame();
+  const line = lineAt(timeline, frame);
+  return line && showsResidents(timeline, frame) ? <Subtitle text={line.text} /> : null;
+};
+
+export const Episode: React.FC<EpisodeProps> = ({
+  title,
+  timeline,
+  cues,
+  sounds,
+  music,
+  intro,
+  outro,
+}) => (
   <AbsoluteFill style={{ backgroundColor: COLOR.background }}>
-    {title ? <EpisodeTitle title={title} /> : null}
-    {cues.map((cue) => (
-      <Sequence
-        key={cue.key}
-        from={cue.startFrame}
-        durationInFrames={cue.endFrame - cue.startFrame}
-      >
-        <Entering cue={cue} />
-      </Sequence>
-    ))}
+    <CurrentTitle title={title} timeline={timeline} />
+    <StagedCues cues={cues} />
     {timeline?.lines.map((line) => (
       // 每句的音频单独放置，不拼接成一条音轨（ADR-0003）
       <Sequence
@@ -81,9 +106,23 @@ export const Episode: React.FC<EpisodeProps> = ({ title, timeline, cues }) => (
         durationInFrames={line.endFrame - line.startFrame}
         layout="none"
       >
-        <Html5Audio src={staticFile(line.audio)} />
+        <Html5Audio src={staticFile(line.audio)} volume={VOLUME.narration} />
       </Sequence>
     ))}
+    <SoundCues sounds={sounds} />
+    {music ? <EpisodeMusic music={music} /> : null}
     {timeline ? <CurrentSubtitle timeline={timeline} /> : null}
+    {/* 片头片尾盖在最上面；它们期间没有字幕和主题，正文在片头结束后开始、片尾开始前结束 */}
+    {intro ? <SelectedBookend kind="intro" id={intro} /> : null}
+    {outro && timeline ? (
+      <SelectedBookend kind="outro" id={outro} from={bodyEndFrame(timeline)} />
+    ) : null}
   </AbsoluteFill>
 );
+
+/**
+ * 只有配乐的声轨：和 Episode 同一份排期，不放旁白和音效。
+ * 全长试验（#39）渲染它来单独检查配乐的循环接缝和淡出，免得旁白混在里面。
+ */
+export const EpisodeMusicOnly: React.FC<EpisodeProps> = ({ music }) =>
+  music ? <EpisodeMusic music={music} /> : null;

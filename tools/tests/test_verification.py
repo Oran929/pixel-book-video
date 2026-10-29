@@ -1,10 +1,13 @@
 """语音识别复核的规范化与差异率（票 07）。"""
 
+import subprocess
+import sys
+
 import pytest
 
 from pixelbook import REPO_ROOT
-from pixelbook.mlx_asr import ASR_MODELS
 from pixelbook.verification import (
+    ASR_MODELS,
     VerificationConfig,
     VerificationConfigError,
     difference_rate,
@@ -107,3 +110,16 @@ def test_bad_verification_config_names_the_field(tmp_path, text, field):
 )
 def test_pinyin_difference_rate_ignores_homophones_and_tones(spoken, heard, rate):
     assert pinyin_difference_rate(spoken, heard) == rate
+
+
+def test_verification_does_not_depend_on_a_concrete_asr_engine():
+    # 核心模块不依赖具体的语音识别适配器（票 #30）：在干净的解释器里导入，
+    # 连间接导入也算
+    probe = (
+        "import sys, pixelbook.verification; print('pixelbook.mlx_asr' in sys.modules)"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", probe], capture_output=True, text=True, check=True
+    )
+
+    assert result.stdout.strip() == "False"

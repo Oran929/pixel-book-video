@@ -19,9 +19,9 @@ const MANIFEST: EpisodeManifest = {
     { id: "s02", title: "原则" },
   ],
   scenes: [
-    { id: "s01-c01", segment: "s01" },
-    { id: "s01-c02", segment: "s01" },
-    { id: "s02-c01", segment: "s02" },
+    { id: "s01-c01", segment: "s01", description: "一个方块" },
+    { id: "s01-c02", segment: "s01", description: "一个方块" },
+    { id: "s02-c01", segment: "s02", description: "一个方块" },
   ],
   lines: [
     line("s01-l01", "s01-c01", 2),
@@ -54,9 +54,9 @@ describe("computeTimeline", () => {
     const timeline = computeTimeline(MANIFEST, DEFAULT_PAUSES, 30);
 
     expect(timeline.scenes).toEqual([
-      { id: "s01-c01", segment: "s01", startFrame: 0, endFrame: 138 },
-      { id: "s01-c02", segment: "s01", startFrame: 138, endFrame: 192 },
-      { id: "s02-c01", segment: "s02", startFrame: 192, endFrame: 267 },
+      { id: "s01-c01", segment: "s01", description: "一个方块", startFrame: 0, endFrame: 138 },
+      { id: "s01-c02", segment: "s01", description: "一个方块", startFrame: 138, endFrame: 192 },
+      { id: "s02-c01", segment: "s02", description: "一个方块", startFrame: 192, endFrame: 267 },
     ]);
     expect(timeline.segments).toEqual([
       { id: "s01", title: "开场", startFrame: 0, endFrame: 192 },
@@ -77,7 +77,7 @@ describe("computeTimeline", () => {
       voice_fingerprint: "3f2a9c0d1e4b5a6f",
       title: "程序员修炼之道",
       segments: [{ id: "s01", title: "开场" }],
-      scenes: [{ id: "s01-c01", segment: "s01" }],
+      scenes: [{ id: "s01-c01", segment: "s01", description: "一个方块" }],
       lines: durations.map((seconds, i) => line(`s01-l0${i}`, "s01-c01", seconds)),
     };
 

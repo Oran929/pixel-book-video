@@ -3,11 +3,10 @@
 from dataclasses import replace
 
 import pytest
+from conftest import fake_asr_verifier
 
-from pixelbook.asr import FakeAsrEngine
-from pixelbook.pipeline import PipelineError, voice_episode
+from pixelbook.pipeline import PipelineError, VoicingSettings, voice_episode
 from pixelbook.tts import FakeTtsEngine
-from pixelbook.verification import Verifier
 from pixelbook.voice import Voice, VoiceConfigError, save_voice_config
 from pixelbook.voice_lock import resolve_book_voice
 
@@ -79,11 +78,6 @@ segments:
 """
 
 
-def fake_asr_verifier(asr=None, max_retries=2):
-    """复核：默认用原样"听见"朗读文本的假识别引擎，阈值 0.1，重试 2 次。"""
-    return Verifier(asr or FakeAsrEngine(), max_diff_rate=0.1, max_retries=max_retries)
-
-
 def _voice(repo, **options):
     """像 `pixelbook voice` 那样：先解析书的音色，再配音。"""
     script = repo / "books" / "demo" / "ch01" / "ep01" / "script.yaml"
@@ -92,13 +86,15 @@ def _voice(repo, **options):
     voice = resolve_book_voice(repo / "books" / "demo", repo)
     return voice_episode(
         script,
-        FakeTtsEngine(),
-        voice,
-        repo / "public",
-        {},
-        **options,
-        verifier=fake_asr_verifier(),
-    )
+        VoicingSettings(
+            engine=FakeTtsEngine(),
+            voice=voice,
+            public_dir=repo / "public",
+            pronunciation={},
+            **options,
+            verifier=fake_asr_verifier(),
+        ),
+    ).manifest
 
 
 def test_changing_the_project_default_voice_is_refused_for_a_locked_book(repo):

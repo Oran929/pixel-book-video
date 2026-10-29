@@ -1,9 +1,18 @@
 {
   "scenes": [
     {
+      "scene": "s01-c01",
+      "components": [
+        { "id": "book", "component": "PixelBlock", "props": { "label": "一本书", "size": "medium", "color": "blue" }, "at": [4, 1] }
+      ],
+      "triggers": [
+        { "target": "book", "line": "s01-l01", "offset": 0.5, "action": "enter", "animation": "fade" }
+      ]
+    },
+    {
       "scene": "s01-c02",
       "components": [
-        { "id": "dry", "component": "PixelBlock", "props": { "label": "DRY" } }
+        { "id": "dry", "component": "PixelBlock", "props": { "label": "DRY", "size": "medium", "color": "orange" }, "at": [0, 0] }
       ],
       "triggers": [
         {
@@ -18,7 +27,7 @@
     {
       "scene": "s02-c01",
       "components": [
-        { "id": "once", "component": "PixelBlock", "props": { "label": "一次" } }
+        { "id": "once", "component": "PixelBlock", "props": { "label": "一次", "size": "medium", "color": "orange" }, "at": [4, 1] }
       ],
       "triggers": [
         {
@@ -31,5 +40,6 @@
       ]
     }
   ],
+  "music": "forgotten-path",
   "pauses": [{ "after": "s01-l04", "seconds": 1.2 }]
 }

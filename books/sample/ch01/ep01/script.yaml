@@ -9,7 +9,7 @@ segments:
     title: 开场
     scenes:
       - id: s01-c01
-        description: 米白底色上只有字幕，介绍这一期要读的书
+        description: 米白底色上一个知识块写着一本书，介绍这一期要读的书
         lines:
           - id: s01-l01
             text: 今天我们一起读一本书。

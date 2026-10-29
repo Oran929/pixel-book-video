@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
+import { declareComponent } from "../components/declaration";
 import type { EpisodeManifest } from "./manifest";
 import { parseStoryboard, pauseOverrides, scheduleCues } from "./storyboard";
 import { computeTimeline, DEFAULT_PAUSES } from "./timeline";
+import { withEveryScene } from "./fixtures/every-scene";
 
 const line = (id: string, scene: string, seconds: number) => ({
   id,
@@ -17,8 +19,8 @@ const MANIFEST: EpisodeManifest = {
   title: "程序员修炼之道",
   segments: [{ id: "s01", title: "开场" }],
   scenes: [
-    { id: "s01-c01", segment: "s01" },
-    { id: "s01-c02", segment: "s01" },
+    { id: "s01-c01", segment: "s01", description: "一个方块" },
+    { id: "s01-c02", segment: "s01", description: "一个方块" },
   ],
   lines: [
     line("s01-l01", "s01-c01", 2),
@@ -28,14 +30,24 @@ const MANIFEST: EpisodeManifest = {
   ],
 };
 
-// 假的组件注册表：只关心组件名和参数格式
-const COMPONENTS = { Box: z.object({ label: z.string() }) };
+// 假的组件声明：只关心组件名和参数格式
+const COMPONENTS = {
+  Box: declareComponent({
+    props: z.object({ label: z.string() }),
+    states: ["normal"],
+    cells: () => [1, 1],
+    enter: "fade",
+    exit: "fade",
+    connector: false,
+    sounds: { enter: null, exit: null, states: { normal: null } },
+  }),
+};
 
 const STORYBOARD = {
   scenes: [
     {
       scene: "s01-c02",
-      components: [{ id: "dry", component: "Box", props: { label: "DRY" } }],
+      components: [{ id: "dry", component: "Box", props: { label: "DRY" }, at: [0, 0] }],
       triggers: [
         {
           target: "dry",
@@ -47,14 +59,19 @@ const STORYBOARD = {
       ],
     },
   ],
+  music: "forgotten-path",
   pauses: [{ after: "s01-l02", seconds: 1.2 }],
 };
 
-const parse = (data: unknown) => parseStoryboard(data, MANIFEST, COMPONENTS);
+// 分镜没写到的画面补一个占位组件（每个画面至少一个组件，检查本身在 episode-plan.test.ts）
+const parse = (data: unknown) => {
+  const [filled, components] = withEveryScene(MANIFEST, data, COMPONENTS);
+  return parseStoryboard(filled, MANIFEST, components);
+};
 
 describe("parseStoryboard", () => {
   it("accepts a storyboard that only references existing lines and components", () => {
-    expect(parse(STORYBOARD)).toEqual(STORYBOARD);
+    expect(parse(STORYBOARD).scenes[0]).toEqual(STORYBOARD.scenes[0]);
   });
 
   it("names the scene and trigger whose line does not exist", () => {
@@ -154,6 +171,7 @@ describe("scheduleCues", () => {
   // 30fps、默认停顿：s01-c02 从第 138 帧开始，到第 237 帧（总帧数）结束；
   // s01-l03 从第 138 帧开始，s01-l04 从第 177 帧开始
   const timeline = computeTimeline(MANIFEST, DEFAULT_PAUSES, 30);
+  const [, FILLED] = withEveryScene(MANIFEST, null, COMPONENTS);
   const enteringOn = (line: string, offset: number) =>
     parse({
       scenes: [
@@ -162,16 +180,23 @@ describe("scheduleCues", () => {
           triggers: [{ ...STORYBOARD.scenes[0]!.triggers[0]!, line, offset }],
         },
       ],
+      music: "forgotten-path",
       pauses: [],
     });
 
   it("shows the component from its line's start until the scene ends", () => {
-    expect(scheduleCues(enteringOn("s01-l04", 0), timeline)).toEqual([
+    const [cue] = scheduleCues(enteringOn("s01-l04", 0), timeline, FILLED);
+    expect([cue]).toEqual([
       {
         key: "s01-c02/dry",
         component: "Box",
         props: { label: "DRY" },
-        animation: "slide",
+        enter: { frame: 177, animation: "slide", frames: 12, sound: null },
+        exit: null,
+        initialState: "normal",
+        states: [],
+        area: { at: [0, 0], cells: [1, 1] },
+        ends: null,
         startFrame: 177,
         endFrame: 237,
       },
@@ -179,33 +204,33 @@ describe("scheduleCues", () => {
   });
 
   it("lets a negative offset enter before its line starts", () => {
-    const [cue] = scheduleCues(enteringOn("s01-l04", -0.5), timeline);
+    const [cue] = scheduleCues(enteringOn("s01-l04", -0.5), timeline, FILLED);
 
     expect(cue!.startFrame).toBe(162);
   });
 
   it("rounds the trigger to the nearest frame", () => {
     // 177 + 0.517 × 30 = 192.51
-    const [cue] = scheduleCues(enteringOn("s01-l04", 0.517), timeline);
+    const [cue] = scheduleCues(enteringOn("s01-l04", 0.517), timeline, FILLED);
 
     expect(cue!.startFrame).toBe(193);
   });
 
   it("allows a trigger exactly on the scene start", () => {
-    const [cue] = scheduleCues(enteringOn("s01-l04", -1.3), timeline);
+    const [cue] = scheduleCues(enteringOn("s01-l04", -1.3), timeline, FILLED);
 
     expect(cue!.startFrame).toBe(138);
   });
 
   it("refuses a trigger before its scene starts instead of clipping it", () => {
     // 177 − 1.5 × 30 = 132，早于画面开始帧 138
-    expect(() => scheduleCues(enteringOn("s01-l04", -1.5), timeline)).toThrow(
+    expect(() => scheduleCues(enteringOn("s01-l04", -1.5), timeline, FILLED)).toThrow(
       /第 1 个画面 第 1 个触发.*触发帧 132 早于画面 s01-c02 的开始帧 138/,
     );
   });
 
   it("refuses a trigger after its scene ends", () => {
-    expect(() => scheduleCues(enteringOn("s01-l04", 2), timeline)).toThrow(
+    expect(() => scheduleCues(enteringOn("s01-l04", 2), timeline, FILLED)).toThrow(
       /第 1 个画面 第 1 个触发.*触发帧 237 不早于画面 s01-c02 的结束帧 237/,
     );
   });

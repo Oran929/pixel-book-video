@@ -3,25 +3,17 @@
 import shutil
 
 import pytest
-from conftest import OUTRO
+from conftest import fake_asr_verifier
 
 from pixelbook import REPO_ROOT
-from pixelbook.asr import FakeAsrEngine
-from pixelbook.pipeline import PipelineError, voice_episode
+from pixelbook.pipeline import PipelineError, VoicingSettings, voice_episode
 from pixelbook.pronunciation import (
     PronunciationError,
     load_pronunciation,
     new_terms,
 )
 from pixelbook.tts import FakeTtsEngine
-from pixelbook.verification import Verifier
 from pixelbook.voice import Voice
-
-
-def fake_asr_verifier(asr=None, max_retries=2):
-    """复核：默认用原样"听见"朗读文本的假识别引擎，阈值 0.1，重试 2 次。"""
-    return Verifier(asr or FakeAsrEngine(), max_diff_rate=0.1, max_retries=max_retries)
-
 
 VOICE = Voice(model="base-model", ref_audio="voices/tianmei.wav", ref_text="你好。")
 TABLE = {"DRY": "DRY", "KV Cache": "KV Cache"}
@@ -51,11 +43,13 @@ def episode(tmp_path):
         engine = FakeTtsEngine()
         voice_episode(
             path,
-            engine,
-            VOICE,
-            tmp_path / "public",
-            table,
-            verifier=fake_asr_verifier(),
+            VoicingSettings(
+                engine=engine,
+                voice=VOICE,
+                public_dir=tmp_path / "public",
+                pronunciation=table,
+                verifier=fake_asr_verifier(),
+            ),
         )
         return engine
 
@@ -67,7 +61,7 @@ def episode(tmp_path):
 def test_spoken_text_replaces_terms_from_the_table(episode):
     engine = episode(script(("Python 读作派森", None)), {"Python": "派森"})
 
-    assert engine.texts == ["派森 读作派森", *OUTRO]
+    assert engine.texts == ["派森 读作派森"]
 
 
 def test_longer_term_wins_over_its_prefix(episode):
@@ -75,7 +69,7 @@ def test_longer_term_wins_over_its_prefix(episode):
 
     engine = episode(script(("KV Cache 里的 KV", None)), table)
 
-    assert engine.texts == ["KV 缓存 里的 K V", *OUTRO]
+    assert engine.texts == ["KV 缓存 里的 K V"]
 
 
 def test_replacement_is_case_sensitive_and_deterministic(episode):
@@ -87,7 +81,7 @@ def test_replacement_is_case_sensitive_and_deterministic(episode):
     shutil.rmtree(episode.path.parents[2] / "cache")
     second = episode(text, dict(reversed(table.items()))).texts
 
-    assert first == second == ["dry 原则 不是 干", *OUTRO]
+    assert first == second == ["dry 原则 不是 干"]
 
 
 def test_handwritten_speech_wins_over_the_table(episode):
@@ -95,13 +89,13 @@ def test_handwritten_speech_wins_over_the_table(episode):
         script(("用 KV Cache 加速", "用键值缓存加速")), {"KV Cache": "KV 缓存"}
     )
 
-    assert engine.texts == ["用键值缓存加速", *OUTRO]
+    assert engine.texts == ["用键值缓存加速"]
 
 
 def test_unchanged_entry_keeps_spoken_text_as_written(episode):
     engine = episode(script(("第一条原则叫 DRY。", None)), TABLE)
 
-    assert engine.texts == ["第一条原则叫 DRY。", *OUTRO]
+    assert engine.texts == ["第一条原则叫 DRY。"]
     assert new_terms("第一条原则叫 DRY。", TABLE) == []
 
 
@@ -164,7 +158,7 @@ def test_new_terms_refuse_voicing_and_name_the_lines(episode):
 def test_no_new_terms_means_voicing_runs(episode):
     engine = episode(script(("用 KV Cache 加速", None), ("性能提升 30%", None)), TABLE)
 
-    assert engine.texts == ["用 KV Cache 加速", "性能提升 30%", *OUTRO]
+    assert engine.texts == ["用 KV Cache 加速", "性能提升 30%"]
 
 
 def test_repo_table_starts_with_the_two_confirmed_terms():

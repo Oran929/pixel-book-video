@@ -1,15 +1,13 @@
 """测试共用的音色、旁白稿和期目录。
 
-常量供测试文件 `from conftest import ...` 直接用（改写旁白稿、换音色时要以它们为底）。
+常量和辅助函数供测试文件 `from conftest import ...` 直接用（改写旁白稿、换音色时要以它们为底）。
 """
 
 import pytest
 
-from pixelbook.outro import OUTRO_LINES
+from pixelbook.asr import FakeAsrEngine
+from pixelbook.verification import Verifier
 from pixelbook.voice import Voice
-
-# 配音时接在每期旁白稿后面的固定片尾（票 #15）：TTS 收到的文字以它结尾
-OUTRO = list(OUTRO_LINES)
 
 # 用参考音频克隆的音色；配音用假引擎，参考音频只参与指纹
 VOICE = Voice(
@@ -47,6 +45,11 @@ segments:
             speech: 不要重复你自己
             cite: ch01-¶003
 """
+
+
+def fake_asr_verifier(asr=None, max_retries=2):
+    """复核：默认用原样"听见"朗读文本的假识别引擎，阈值 0.1，重试 2 次。"""
+    return Verifier(asr or FakeAsrEngine(), max_diff_rate=0.1, max_retries=max_retries)
 
 
 @pytest.fixture
