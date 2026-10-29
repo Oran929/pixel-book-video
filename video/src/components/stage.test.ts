@@ -23,6 +23,7 @@ const DECLARATIONS = {
     enter: "fade",
     exit: "slide",
     connector: false,
+    sounds: { enter: null, exit: null, states: { off: null, on: null, broken: null } },
   }),
 };
 

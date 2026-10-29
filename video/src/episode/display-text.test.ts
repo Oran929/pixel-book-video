@@ -27,6 +27,7 @@ const DECLARATIONS: ComponentDeclarations = {
     enter: "fade",
     exit: "fade",
     connector: false,
+    sounds: { enter: null, exit: null, states: { normal: null } },
   }),
 };
 

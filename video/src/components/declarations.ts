@@ -9,7 +9,7 @@ import {
   displayText,
 } from "./declaration";
 
-// 各组件的声明（参数格式、状态、占几格、默认动画）。单独放在不含 JSX、
+// 各组件的声明（参数格式、状态、占几格、默认动画、默认音效）。单独放在不含 JSX、
 // 不引用 remotion 的文件里，这样时间轴导出命令（Node 里运行）校验分镜时
 // 不用加载 React 组件。组件实现在 registry.ts 里按同样的名字登记。
 
@@ -85,6 +85,12 @@ export const COMPONENT_DECLARATIONS = {
     enter: "slide",
     exit: "fade",
     connector: false,
+    // 落下一声；被点到轻点一声，被改动嗡一声，切回正常也轻点一声
+    sounds: {
+      enter: "drop",
+      exit: "leave",
+      states: { normal: "blip", highlight: "blip", changed: "buzz" },
+    },
   }),
   Mascot: declareComponent({
     props: MascotProps,
@@ -94,5 +100,6 @@ export const COMPONENT_DECLARATIONS = {
     enter: "fade",
     exit: "fade",
     connector: false,
+    sounds: { enter: "pop", exit: "leave", states: { normal: null } },
   }),
 } as const satisfies ComponentDeclarations;

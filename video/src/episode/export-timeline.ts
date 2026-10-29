@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { planEpisode } from "./episode-plan";
 import { durationReport, segmentsText, type DurationReport } from "./rhythm";
+import type { SoundCue } from "../sound/sounds";
 import type { Timeline } from "./timeline";
 
 // 期目录里的文件名，与 tools/src/pixelbook/pipeline.py 一致
@@ -12,7 +13,7 @@ export const SEGMENTS_FILE = "segments.txt";
 
 /**
  * 读期目录里的合成清单（有分镜时也读分镜，取它的停顿覆盖），用 Remotion 里
- * 同一个 `planEpisode` 算出时间轴，连同总时长报告写成 `timeline.json`
+ * 同一个 `planEpisode` 算出时间轴，连同总时长报告和音效列表写成 `timeline.json`
  * （供 Python 的试听拼接读取）。写到期目录里时，同时写出打点时间表 `segments.txt`。
  */
 export type ExportOptions = {
@@ -22,8 +23,14 @@ export type ExportOptions = {
   out?: string;
 };
 
-/** `timeline.json` 的内容：时间轴，外加总时长报告（Python 只读时间轴的字段） */
-export type ExportedTimeline = Timeline & { duration: DurationReport };
+/**
+ * `timeline.json` 的内容：时间轴，外加总时长报告和要放的音效（帧、音效 ID；
+ * 冒烟测试用它检查成片里每个音效帧附近有声音）。Python 只读需要的字段。
+ */
+export type ExportedTimeline = Timeline & {
+  duration: DurationReport;
+  sounds: SoundCue[];
+};
 
 export type ExportResult = {
   timeline: ExportedTimeline;
@@ -41,13 +48,13 @@ export const exportTimeline = (
   const readJson = (file: string) =>
     JSON.parse(readFileSync(join(episodeDir, file), "utf8")) as unknown;
   // 和 Remotion 用同一个函数：触发帧落在画面之外时在这里就报错，不用等到渲染
-  const { timeline: computed } = planEpisode(
+  const { timeline: computed, sounds } = planEpisode(
     readJson(MANIFEST_FILE),
     useStoryboard && existsSync(join(episodeDir, STORYBOARD_FILE))
       ? readJson(STORYBOARD_FILE)
       : null,
   );
-  const timeline = { ...computed, duration: durationReport(computed) };
+  const timeline = { ...computed, duration: durationReport(computed), sounds };
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, JSON.stringify(timeline, null, 2) + "\n");
 

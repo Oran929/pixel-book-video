@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { Sound } from "../sound/sounds";
 import type { GridPoint } from "../style/grid";
 import { MOTION } from "../style/style";
 
@@ -20,11 +21,24 @@ export const animationFrames = (animation: Animation, fps: number): number =>
 /** 占几格：[列数, 行数]（网格见 style/grid.ts） */
 export type Cells = GridPoint;
 
-export type ComponentDeclaration<Props extends z.ZodType = z.ZodType> = {
+/**
+ * 默认音效：每个动作、每个状态各一个音效 ID，或 null（不放音效）。
+ * 入场时组件处在初始状态，只响 `enter`，不响初始状态的音效；之后切回初始状态时才响它。
+ */
+export type ComponentSounds<State extends string = string> = {
+  enter: Sound;
+  exit: Sound;
+  states: Record<State, Sound>;
+};
+
+export type ComponentDeclaration<
+  Props extends z.ZodType = z.ZodType,
+  State extends string = string,
+> = {
   /** 参数格式 */
   props: Props;
   /** 状态清单，第一个是初始状态 */
-  states: readonly [string, ...string[]];
+  states: readonly [State, ...State[]];
   /** 按参数算出占几格 */
   cells(props: z.infer<Props>): Cells;
   /** 分镜的入场触发不写 `animation` 时用的动画 */
@@ -33,15 +47,23 @@ export type ComponentDeclaration<Props extends z.ZodType = z.ZodType> = {
   exit: Animation;
   /** 连线类组件（箭头）：不按格子摆放，按组件 id 指向两端 */
   connector: boolean;
+  /** 默认音效；分镜的触发可以用 `sound` 关掉或替换 */
+  sounds: ComponentSounds<State>;
 };
 
 /** 组件名 → 声明 */
 export type ComponentDeclarations = Readonly<Record<string, ComponentDeclaration>>;
 
-/** 登记一个组件的声明；`cells` 的参数类型从 `props` 推出 */
-export const declareComponent = <Props extends z.ZodType>(
-  declaration: ComponentDeclaration<Props>,
-): ComponentDeclaration<Props> => declaration;
+/**
+ * 登记一个组件的声明；`cells` 的参数类型从 `props` 推出，
+ * `sounds.states` 必须为 `states` 里的每个状态都写一项（少写类型检查会报错）
+ */
+export const declareComponent = <
+  Props extends z.ZodType,
+  const State extends string,
+>(
+  declaration: ComponentDeclaration<Props, State>,
+): ComponentDeclaration<Props, State> => declaration;
 
 /**
  * 显示文字的登记表：登记在这里的参数格式，值会显示在画面上，

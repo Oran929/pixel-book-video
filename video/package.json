@@ -8,7 +8,8 @@
     "lint": "eslint .",
     "test": "vitest run",
     "render": "remotion render Episode",
-    "timeline": "tsx src/episode/timeline-cli.ts"
+    "timeline": "tsx src/episode/timeline-cli.ts",
+    "sfx": "tsx src/sound/generate-sfx.ts"
   },
   "dependencies": {
     "@remotion/cli": "^4.0.539",
@@ -21,6 +22,7 @@
     "@remotion/eslint-config-flat": "^4.0.539",
     "@types/react": "^19.3.0",
     "eslint": "^10.13.0",
+    "jsfxr": "1.4.1",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "vitest": "^5.0.5"

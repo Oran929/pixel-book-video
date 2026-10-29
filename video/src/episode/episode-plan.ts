@@ -10,7 +10,9 @@ import {
   parseStoryboard,
   pauseOverrides,
   scheduleCues,
+  soundCues,
 } from "./storyboard";
+import type { SoundCue } from "../sound/sounds";
 import { computeTimeline, DEFAULT_PAUSES, type Timeline } from "./timeline";
 
 export type EpisodePlan = {
@@ -18,12 +20,14 @@ export type EpisodePlan = {
   timeline: Timeline;
   /** 组件的触发；没有分镜时为空 */
   cues: Cue[];
+  /** 要放的音效（帧、音效 ID），按帧排序；没有分镜时为空 */
+  sounds: SoundCue[];
 };
 
 /**
  * 校验合成清单和分镜（`storyboardData` 为 null 表示没有分镜，只渲染字幕），
  * 用默认停顿加分镜的停顿覆盖算出时间轴（ADR-0003），再排出每个组件的入场、
- * 退场和切换状态（ADR-0011）。排不出来时（比如触发帧落在画面之外）抛错。
+ * 退场和切换状态（ADR-0011），以及要放的音效。排不出来时（比如触发帧落在画面之外）抛错。
  * `components` 是组件声明，默认是组件注册表的；测试可以换成假的。
  */
 export const planEpisode = (
@@ -43,5 +47,5 @@ export const planEpisode = (
     storyboard ? pauseOverrides(storyboard) : {},
   );
   const cues = storyboard ? scheduleCues(storyboard, timeline, components) : [];
-  return { manifest, timeline, cues };
+  return { manifest, timeline, cues, sounds: soundCues(cues) };
 };

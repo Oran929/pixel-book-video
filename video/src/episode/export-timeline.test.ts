@@ -81,6 +81,19 @@ describe("exportTimeline", () => {
         body: { seconds: 214 / 30, text: "0:07" },
         outro: null,
       },
+      // 没有分镜：不放音效
+      sounds: [],
+    });
+  });
+
+  it("lists the storyboard's sound effects (frame, sound ID) for checking the rendered audio", () => {
+    write("storyboard.json", STORYBOARD);
+
+    exportTimeline(episode);
+
+    // s02-l01 从第 166 帧开始，知识块在 0.5 秒（15 帧）后入场，默认音效 drop
+    expect(read(join(episode, "timeline.json"))).toMatchObject({
+      sounds: [{ frame: 181, sound: "drop" }],
     });
   });
 

@@ -377,7 +377,7 @@ uv run pixelbook terms ../books/sample/ch01/ep01/script.yaml   # 每个新术语
       "triggers": [
         { "target": "dry", "line": "s01-l03", "offset": 1.2, "action": "enter", "animation": "slide" },
         { "target": "dry", "line": "s01-l04", "offset": -0.3, "action": "state", "state": "highlight" },
-        { "target": "dry", "line": "s01-l05", "offset": 0.5, "action": "exit" }
+        { "target": "dry", "line": "s01-l05", "offset": 0.5, "action": "exit", "sound": null }
       ]
     }
   ],
@@ -387,7 +387,7 @@ uv run pixelbook terms ../books/sample/ch01/ep01/script.yaml   # 每个新术语
 
 - `scene`：合成清单里的画面 ID。`components`：本画面用的组件，`id` 是本画面里的名字，`component` 是组件名，`props` 按该组件的参数格式校验。
 - `at`：组件左上角所在的格 `[列, 行]`，从 0 开始（见下面的「网格」）。连线类组件（箭头）不写 `at`，其余组件必须写。组件占几格由组件按参数自己算，分镜只写位置。
-- 新组件要登记三处：**声明**在 `video/src/components/declarations.ts`（用 `declareComponent`，格式见 `declaration.ts`：参数格式 `props`（zod）、状态清单 `states`（第一个是初始状态）、占几格 `cells`（按参数算，`[列数, 行数]`）、入场和退场的默认动画 `enter`、`exit`、是否是连线类组件 `connector`；会显示在画面上的参数用 `displayText` 标出，见下面的「显示文字」），**实现**在 `video/src/components/registry.ts`，**样张**在 `video/src/components/samples.ts`；少登记一处，类型检查会报错。分镜检查只依赖声明，不含 JSX，时间轴导出命令在 Node 里也用它校验分镜。
+- 新组件要登记三处：**声明**在 `video/src/components/declarations.ts`（用 `declareComponent`，格式见 `declaration.ts`：参数格式 `props`（zod）、状态清单 `states`（第一个是初始状态）、占几格 `cells`（按参数算，`[列数, 行数]`）、入场和退场的默认动画 `enter`、`exit`、是否是连线类组件 `connector`、默认音效 `sounds`（见下面的「音效」）；会显示在画面上的参数用 `displayText` 标出，见下面的「显示文字」），**实现**在 `video/src/components/registry.ts`，**样张**在 `video/src/components/samples.ts`；少登记一处，类型检查会报错。分镜检查只依赖声明，不含 JSX，时间轴导出命令在 Node 里也用它校验分镜。
 - **渲染接口**（`video/src/components/stage.ts`）：组件实现是 `React.FC<RenderProps<参数>>`，拿到两样东西：
 
   ```ts
@@ -401,10 +401,11 @@ uv run pixelbook terms ../books/sample/ch01/ep01/script.yaml   # 每个新术语
   ```
 
   Episode 按排期把组件放进它在网格上占的矩形（`cellRect`，连线类组件铺满画面），外面套上通用的入场和退场动画（`fade`、`slide`、`none`，带缓动），组件自己只画「这个状态、这一帧」的样子，填满给它的矩形。排期在 `Cue` 里带上 `initialState`，`stageAt(cue, 帧)` 算出舞台信息。
-- **样张**：每个组件在 Studio 里有一页 `Sample-<组件名>`，用 `samples.ts` 里的假分镜（经同一个 `planEpisode` 排期）把它的每个状态、每种入场和退场动画都演一遍，字幕位置写着这一刻在演什么。`npm run test` 检查每个登记的组件都有样张、样张通过分镜检查、演到了每个状态和每种入场退场动画。导出某一帧：`npx remotion still Sample-PixelBlock ../out/samples/pixelblock.png --frame=300`。
+- **样张**：每个组件在 Studio 里有一页 `Sample-<组件名>`，用 `samples.ts` 里的假分镜（经同一个 `planEpisode` 排期）把它的每个状态、每种入场和退场动画、每个默认音效都演一遍，字幕位置写着这一刻在演什么，同时放出音效。`npm run test` 检查每个登记的组件都有样张、样张通过分镜检查、演到了每个状态和每种入场退场动画、放到了入场、退场和切到每个状态的默认音效。导出某一帧：`npx remotion still Sample-PixelBlock ../out/samples/pixelblock.png --frame=300`。
 - `triggers`：每条触发让 `target` 组件在 `line` 这句开始后偏移 `offset` 秒做一个动作（ADR-0011），`action` 三选一：
   - `enter` 入场、`exit` 退场：可选 `animation`，不写就用组件声明的默认动画。
   - `state` 切换状态：必须写 `state: <状态名>`，状态名必须是组件声明过的；组件入场时是初始状态。
+- 三种动作都可以写 `sound`：写音效 ID（音效登记表里的）就替换这个动作的默认音效，写 `null` 就不放，不写就用组件声明的默认音效（见下面的「音效」）。
 - `animation` 的取值（入场和退场通用）：`fade` 淡入 / 淡出，`slide` 从上方落下 / 向上升起，各播 0.4 秒（风格表 `MOTION.animationSeconds`）；`none` 瞬间出现 / 消失，不播动画（也不放音效），用来把同一个东西接到下一个画面。组件自己的特殊效果以后作为它的默认动画登记。
 - 每个组件恰好一次 `enter`、最多一次 `exit`、任意次 `state`。帧顺序必须是 **入场 ≤ 切换状态 < 退场**；同一帧切两次状态、切到组件当前已经是的状态都报错。没有 `exit` 的组件显示到画面结束（下一个画面的第一句开始）；有 `exit` 的，显示到退场动画播完，退场动画必须在画面结束前播完，否则报错。
 - `line` 必须是本画面的旁白句。触发帧 = 这句的开始帧 + `offset` 秒 × 帧率，四舍五入到整帧；`offset` 可以为负，但触发帧必须落在本画面之内，否则渲染前报错。画面从它的第一句开始，所以**负偏移不能挂在画面的第一句上**：上例里 `s01-l04`（`s01-c02` 的第二句）的 `-0.3` 表示在上一句 `s01-l03` 快结束时高亮；要是写成 `{ "line": "s01-l03", "offset": -0.3 }`（`s01-l03` 是这个画面的第一句），触发帧就早于画面开始，报「触发帧 … 早于画面 s01-c02 的开始帧 …」。想在画面一开始就出现，写第一句、`offset: 0`。
@@ -450,6 +451,20 @@ uv run pixelbook terms ../books/sample/ch01/ep01/script.yaml   # 每个新术语
 - **组件不渲染参数以外的固定文字**。比如电脑屏幕上的「ERROR」，也要作为显示文字参数传进去，并且写进画面说明或旁白句。`npm run test` 扫描组件目录里的 `.tsx`（`findFixedText`，`video/src/style/hardcoded.ts`），找出 JSX 里直接写的字（`<b>ERROR</b>`、`{"ERROR"}`）；藏在常量里再引用的字认不出来，靠代码审查。
 - **强度有限**：这条检查只能挡住原文以外的词，挡不住拼凑。几项各自出自原文的字摆在一起，照样可能拼出原文没有的意思，这要靠审分镜时人看。
 
+#### 音效
+
+组件入场、退场、切换状态时自动响起一个短促的 8-bit 音效，分镜可以在单个触发上关掉或替换（spec #16 用户故事 27–31）。
+
+- **登记表**：`video/src/sound/sounds.ts` 的 `SOUNDS`（音效 ID → 文件，以 `video/public/` 为起点）。它是纯 TypeScript 模块、不读文件系统，分镜检查（Node 里的时间轴导出命令）和 Remotion 播放共用这一份导入。现在有 7 个：`drop` 落下、`pop` 弹出、`blip` 轻点（切换状态）、`buzz` 嗡（出错、被改动）、`ding` 叮（点亮、提示牌亮起）、`leave` 退场、`crash` 崩溃。
+- **文件**：音效放在 `video/public/sfx/`，每个音效两份文件：`<ID>.wav`（16 位单声道 PCM，44.1 kHz）和生成它的 jsfxr 参数 `<ID>.sfxr.json`，都提交（`.gitignore` 全局忽略 `*.wav`，对这个目录开了例外）。不能放在 `video/public/episode/` 下：配音每次都会删掉那个目录。
+- **生成**：`cd video && npm run sfx` 用 jsfxr（devDependency，固定 1.4.1）的 `sfxr.toWave` 在 Node 里把登记表里每个音效的参数生成成 wav，并打印时长和削波的采样数。只在本机运行，CI 不重新生成。参数是**展开后的完整参数**（波形、包络、频率、音量 `sound_vol`、采样率和采样位数 `sample_size: 16` 都写明），不是预设名：jsfxr 的预设每次随机。新加音效：在登记表里加一项，写好同名的 `.sfxr.json`，再运行 `npm run sfx`。
+- **重新生成不保证逐字节相同**：噪声波形（`wave_type: 3`，现在是 `crash`）生成时用了随机数，重新生成只能做到听感一致；其余波形是确定的。
+- **组件声明的默认音效**：`sounds: { enter, exit, states }`，每个动作、每个状态各写一个音效 ID，或写 `null` 表示不用音效；`states` 必须为每个状态都写一项（少写类型检查会报错）。组件入场时处在初始状态，**只响入场音效**，不响初始状态的音效；之后切回初始状态时才响它。知识块：入场 `drop`、退场 `leave`，切到 `normal`、`highlight` 时 `blip`，切到 `changed` 时 `buzz`。小人：入场 `pop`、退场 `leave`，没有状态音效。
+- **规则**：触发上的 `sound` 替换的是这个触发的动作的音效。引用登记表里没有的音效 ID 时报错（报出第几个画面、第几个触发）。动画是 `none` 的入场和退场不放音效，在这样的触发上写音效 ID 也报错（写 `null` 可以）。同一帧的同一个音效只放一次（比如三个知识块同时落下，只响一声 `drop`，不会叠得更响）；同一帧的不同音效都放。
+- **播放**：`planEpisode` 输出音效列表 `sounds`（帧、音效 ID，按帧排序），Episode 和样张页在对应的帧播放（`video/src/sound/SoundCues.tsx`）。时间轴导出命令也把它写进 `timeline.json` 的 `sounds`。
+- **音量**：旁白、音效、配乐的音量常量在 `video/src/style/volume.ts` 的 `VOLUME_DB`，用 dB 写（相对旁白），换算成 Remotion 要的 0–1 线性值 `VOLUME`（以旁白为 1）。现在音效 -12 dB、配乐 -20 dB，到人工关口 3 再调。音效文件本身的峰值在 -6 到 -8 dBFS（`npm run test` 检查每个音效文件是 16 位单声道、有声音、峰值低于 -1 dBFS）。
+- `npm run test` 还检查：登记的每个音效的 wav 和参数文件都在、参数是 16 位采样，`sfx/` 里没有没登记的文件，每个组件声明的音效都已登记。`make smoke` 用静音的假旁白真实渲染一次，用 ffmpeg `silencedetect` 检查每个音效都在它的帧响起，并检查三个不同的音效同时响起时不削波。
+
 ### 时间轴、打点时间表与试听音轨
 
 停顿规则只在 TypeScript 的时间轴函数里（`video/src/episode/timeline.ts`）。想听逐句配音按停顿排好后的整体效果，先导出时间轴，再拼一条试听音轨（不是正式产物，渲染时 Remotion 仍逐句放音频）：
@@ -465,6 +480,7 @@ uv run pixelbook mix ../books/sample/ch01/ep01/timeline.json   # 拼到 out/mix/
 - 同一个命令还写出期目录里的打点时间表 `segments.txt`（不提交）：每段一行 `00:00 段标题`，时间是该段开始帧换算成秒后向下取整，不到 1 小时用 `mm:ss`，超过用 `h:mm:ss`，可以直接贴到视频平台的分段设置。固定片尾（段 `outro`）每期都一样，不列。用 `--out` 写到期目录以外时不写打点时间表，免得试听用的时间轴覆盖正式的。
 - 命令最后打印总时长（`m:ss`，含停顿，向下取整到秒）和 4:00–6:00 的判断（在范围内 / 太短 / 太长，两端都算在范围内，按显示的整秒判断）；判断也写进 `timeline.json` 的 `duration` 字段（`seconds`、`text`、`verdict`：`within` / `too-short` / `too-long`，`verdictText`：判断的说明文字，`pixelbook render` 的汇总原样打印它；`body`、`outro`：正文和片尾各自的 `seconds`、`text`，没有片尾时 `outro` 是 `null`）。判断按含片尾的总时长；命令和 `pixelbook render` 的汇总在总时长后面写「（正文 m:ss，片尾 m:ss）」。样片阶段只报告，不以非零码退出。
 - 只想听默认停顿、不要分镜里的覆盖时，加 `--no-storyboard`，再用 `--out` 写到别处，免得覆盖期目录里的 `timeline.json`：`npm run timeline -- ../books/sample/ch01/ep01 --no-storyboard --out ../out/mix/sample-ch01-ep01-default-pauses.timeline.json`，然后 `uv run pixelbook mix ../out/mix/sample-ch01-ep01-default-pauses.timeline.json --out ../out/mix/sample-ch01-ep01-default-pauses.wav`。
+- 试听音轨只有旁白，不含音效（音效只在 Remotion 渲染时放）。
 - `pixelbook mix` 只读 `timeline.json`，不知道停顿是多少秒：每句的 wav（`audio`，以 `video/public/` 为起点）从"开始帧 ÷ 帧率"秒处开始，其余是静音，补到时间轴的总时长。拼完测量音轨，和时间轴总时长相差超过一帧就报错。`timeline.json` 格式不对时逐个写明字段位置。它用的是 `video/public/episode/` 里的 wav，所以要在 `pixelbook voice` 之后、对同一期导出时间轴；重新配音后要重新导出。
 
 ## 风格表、字体与频道形象
@@ -496,7 +512,7 @@ GitHub Actions（`.github/workflows/check.yml`）在每个 PR 和推送到 main 
 make smoke
 ```
 
-它用 `tools/smoke/episode/` 里的固定小样例（4 句、带分镜和 `title`），把真实 TTS 和语音识别换成假引擎（静音 wav，不加载任何模型），在临时目录里经 `pixelbook render` 走完四步，再用 ffprobe 解码数出 MP4 视频流的帧数，和 `timeline.json` 的总帧数比，相差不超过一帧。它验证的是渲染管线和时长，不是音质；不比较音频流时长（最后一句的音频可能比视频短）。配音缓存、锁定音色、Remotion 静态目录和 MP4 都在临时目录里，不碰 `books/`、`video/public/episode/` 和 `out/`。改了配音流水线、时间轴或 Remotion 之后跑一次。
+它用 `tools/smoke/episode/` 里的固定小样例（4 句、带分镜和 `title`），把真实 TTS 和语音识别换成假引擎（静音 wav，不加载任何模型），在临时目录里经 `pixelbook render` 走完四步，再用 ffprobe 解码数出 MP4 视频流的帧数，和 `timeline.json` 的总帧数比，相差不超过一帧。它还用 ffmpeg `silencedetect` 检查分镜里的每个音效（样例用到了全部 7 个）都在它的帧响起（假旁白是静音，成片里的声音只有音效），并且三个不同的音效同时响起时峰值低于 -1 dBFS。它验证的是渲染管线、时长和音效的时机，不是音质；不比较音频流时长（最后一句的音频可能比视频短）。配音缓存、锁定音色、Remotion 静态目录和 MP4 都在临时目录里，不碰 `books/`、`video/public/episode/` 和 `out/`。改了配音流水线、时间轴或 Remotion 之后跑一次。
 
 ## 预览
 

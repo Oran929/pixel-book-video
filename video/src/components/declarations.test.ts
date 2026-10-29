@@ -8,6 +8,7 @@ import {
   unwrapOptional,
 } from "./declaration";
 import { COMPONENT_DECLARATIONS } from "./declarations";
+import { isSoundId } from "../sound/sounds";
 
 // 组件注册表一致性：分镜检查只依赖声明，每个组件的声明都要齐
 describe.each(
@@ -40,6 +41,21 @@ describe.each(
       );
     });
     expect(wrong).toEqual([]);
+  });
+
+  it("每个动作和每个状态都声明了默认音效（或 null），引用的音效都已登记", () => {
+    expect(Object.keys(declared.sounds.states).sort()).toEqual(
+      [...declared.states].sort(),
+    );
+    const sounds = [
+      declared.sounds.enter,
+      declared.sounds.exit,
+      ...Object.values(declared.sounds.states),
+    ];
+    const unregistered = sounds.filter(
+      (sound) => sound !== null && !isSoundId(sound),
+    );
+    expect(unregistered).toEqual([]);
   });
 
   it("声明了占几格和是否是连线类组件", () => {

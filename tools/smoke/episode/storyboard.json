@@ -6,17 +6,25 @@
         { "id": "rule", "component": "PixelBlock", "props": { "label": "一", "size": "medium", "color": "orange" }, "at": [0, 0] }
       ],
       "triggers": [
-        { "target": "rule", "line": "s01-l03", "offset": 0.4, "action": "enter", "animation": "slide" },
-        { "target": "rule", "line": "s01-l03", "offset": 1.2, "action": "exit", "animation": "fade" }
+        { "target": "rule", "line": "s01-l02", "offset": 0.2, "action": "enter", "animation": "slide" },
+        { "target": "rule", "line": "s01-l02", "offset": 0.7, "action": "state", "state": "highlight" },
+        { "target": "rule", "line": "s01-l03", "offset": 0, "action": "state", "state": "changed" },
+        { "target": "rule", "line": "s01-l03", "offset": 0.6, "action": "exit", "animation": "fade" }
       ]
     },
     {
       "scene": "s02-c01",
       "components": [
-        { "id": "once", "component": "PixelBlock", "props": { "label": "一次", "size": "medium", "color": "orange" }, "at": [4, 1] }
+        { "id": "each", "component": "PixelBlock", "props": { "label": "每条", "size": "medium", "color": "blue" }, "at": [0, 1] },
+        { "id": "knowledge", "component": "PixelBlock", "props": { "label": "知识", "size": "medium", "color": "green" }, "at": [4, 1] },
+        { "id": "once", "component": "PixelBlock", "props": { "label": "一次", "size": "medium", "color": "orange" }, "at": [8, 1] }
       ],
       "triggers": [
-        { "target": "once", "line": "s02-l01", "offset": 0.2, "action": "enter" }
+        { "target": "each", "line": "s02-l01", "offset": 0.2, "action": "enter" },
+        { "target": "knowledge", "line": "s02-l01", "offset": 0.2, "action": "enter", "sound": "pop" },
+        { "target": "once", "line": "s02-l01", "offset": 0.2, "action": "enter", "sound": "ding" },
+        { "target": "once", "line": "s02-l01", "offset": 1, "action": "state", "state": "changed", "sound": "crash" },
+        { "target": "knowledge", "line": "s02-l01", "offset": 1, "action": "state", "state": "highlight", "sound": null }
       ]
     }
   ],

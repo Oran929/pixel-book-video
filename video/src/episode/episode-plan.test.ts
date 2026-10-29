@@ -108,6 +108,7 @@ const DECLARATIONS = {
     enter: "fade",
     exit: "slide",
     connector: false,
+    sounds: { enter: null, exit: null, states: { off: null, on: null, broken: null } },
   }),
 };
 
@@ -158,8 +159,8 @@ describe("planEpisode: enter, exit and state", () => {
     ).cues;
 
     expect(cue!.states).toEqual([
-      { frame: 153, state: "on" },
-      { frame: 183, state: "broken" },
+      { frame: 153, state: "on", sound: null },
+      { frame: 183, state: "broken", sound: null },
     ]);
     expect(cue!.endFrame).toBe(210);
   });
@@ -293,6 +294,7 @@ const BOXES = {
     enter: "fade",
     exit: "slide",
     connector: false,
+    sounds: { enter: null, exit: null, states: { normal: null } },
   }),
 };
 
@@ -521,5 +523,203 @@ describe("planEpisode: knowledge block color and states", () => {
         { action: "state", offset: 0.5, state: "broken" },
       ]),
     ).toThrow(/没有状态 broken，声明过的状态：normal、highlight、changed/);
+  });
+});
+
+// 假的组件声明：每个动作、每个状态都有不同的默认音效，便于分辨响的是哪一个
+const NOISY = {
+  Lamp: declareComponent({
+    props: z.strictObject({}),
+    states: ["off", "on", "broken"],
+    cells: () => [1, 1],
+    enter: "fade",
+    exit: "slide",
+    connector: false,
+    sounds: {
+      enter: "pop",
+      exit: "leave",
+      states: { off: "blip", on: "ding", broken: "crash" },
+    },
+  }),
+  Quiet: declareComponent({
+    props: z.strictObject({}),
+    states: ["normal"],
+    cells: () => [1, 1],
+    enter: "fade",
+    exit: "fade",
+    connector: false,
+    sounds: { enter: null, exit: null, states: { normal: null } },
+  }),
+};
+const planSounds = (...triggers: Trigger[]) =>
+  planEpisode(MANIFEST, lampScene(...triggers), NOISY).sounds;
+
+describe("planEpisode: sound effects", () => {
+  it("plays each action's default sound on the trigger frame", () => {
+    // s02-l01 从第 138 帧开始：入场 138、切到 on 153、切到 broken 168、退场 183
+    expect(
+      planSounds(
+        { action: "enter", offset: 0 },
+        { action: "exit", offset: 1.5 },
+        { action: "state", offset: 1, state: "broken" },
+        { action: "state", offset: 0.5, state: "on" },
+      ),
+    ).toEqual([
+      { frame: 138, sound: "pop" },
+      { frame: 153, sound: "ding" },
+      { frame: 168, sound: "crash" },
+      { frame: 183, sound: "leave" },
+    ]);
+  });
+
+  it("does not sound the initial state when the component enters", () => {
+    expect(planSounds({ action: "enter", offset: 0 })).toEqual([
+      { frame: 138, sound: "pop" },
+    ]);
+  });
+
+  it("sounds the initial state when switching back to it", () => {
+    expect(
+      planSounds(
+        { action: "enter", offset: 0 },
+        { action: "state", offset: 0.5, state: "on" },
+        { action: "state", offset: 1, state: "off" },
+      ),
+    ).toEqual([
+      { frame: 138, sound: "pop" },
+      { frame: 153, sound: "ding" },
+      { frame: 168, sound: "blip" },
+    ]);
+  });
+
+  it("drops a trigger's sound with `sound: null`", () => {
+    expect(
+      planSounds(
+        { action: "enter", offset: 0, sound: null },
+        { action: "state", offset: 0.5, state: "on", sound: null },
+        { action: "exit", offset: 1, sound: null },
+      ),
+    ).toEqual([]);
+  });
+
+  it("replaces a trigger's sound with another registered one", () => {
+    expect(
+      planSounds(
+        { action: "enter", offset: 0, sound: "drop" },
+        { action: "state", offset: 0.5, state: "on", sound: "buzz" },
+        { action: "exit", offset: 1, sound: "pop" },
+      ),
+    ).toEqual([
+      { frame: 138, sound: "drop" },
+      { frame: 153, sound: "buzz" },
+      { frame: 168, sound: "pop" },
+    ]);
+  });
+
+  it("rejects an unregistered sound and says where", () => {
+    expect(() =>
+      planSounds(
+        { action: "enter", offset: 0 },
+        { action: "state", offset: 0.5, state: "on", sound: "boom" },
+      ),
+    ).toThrow(/第 1 个画面 第 2 个触发 sound: 音效 boom 没有登记，登记过的音效：drop、pop/);
+  });
+
+  it("plays no sound for a `none` entrance or exit", () => {
+    expect(
+      planSounds(
+        { action: "enter", offset: 0, animation: "none" },
+        { action: "exit", offset: 1, animation: "none" },
+      ),
+    ).toEqual([]);
+  });
+
+  it("rejects a sound written on a `none` entrance or exit", () => {
+    expect(() =>
+      planSounds(
+        { action: "enter", offset: 0 },
+        { action: "exit", offset: 1, animation: "none", sound: "leave" },
+      ),
+    ).toThrow(/第 1 个画面 第 2 个触发: 动画 none 不放音效，去掉 sound/);
+  });
+
+  it("plays nothing for a component that declares no sounds", () => {
+    const storyboard = {
+      scenes: [
+        {
+          scene: "s02-c01",
+          components: [{ id: "q", component: "Quiet", props: {}, at: [0, 0] }],
+          triggers: [
+            { target: "q", line: "s02-l01", offset: 0, action: "enter" },
+            { target: "q", line: "s02-l01", offset: 1, action: "exit" },
+          ],
+        },
+      ],
+      pauses: [],
+    };
+    expect(planEpisode(MANIFEST, storyboard, NOISY).sounds).toEqual([]);
+  });
+
+  it("lists the sounds of every scene and component in frame order", () => {
+    const storyboard = {
+      scenes: [
+        {
+          scene: "s02-c01",
+          components: [
+            { id: "late", component: "Lamp", props: {}, at: [0, 0] },
+            { id: "early", component: "Lamp", props: {}, at: [1, 0] },
+          ],
+          triggers: [
+            { target: "late", line: "s02-l01", offset: 1, action: "enter" },
+            { target: "early", line: "s02-l01", offset: 0, action: "enter" },
+          ],
+        },
+        {
+          scene: "s01-c01",
+          components: [{ id: "first", component: "Lamp", props: {}, at: [0, 0] }],
+          triggers: [
+            { target: "first", line: "s01-l01", offset: 0, action: "enter" },
+          ],
+        },
+      ],
+      pauses: [],
+    };
+    expect(planEpisode(MANIFEST, storyboard, NOISY).sounds).toEqual([
+      { frame: 0, sound: "pop" },
+      { frame: 138, sound: "pop" },
+      { frame: 168, sound: "pop" },
+    ]);
+  });
+
+  it("plays a sound once when several components make it on the same frame", () => {
+    // 像 ep01 s01-c03 那样三个方块同时入场：同一帧的同一个音效只放一次，叠起来不会更响；
+    // 同一帧的不同音效照样都放
+    const storyboard = {
+      scenes: [
+        {
+          scene: "s02-c01",
+          components: ["a", "b", "c"].map((id, i) => ({
+            id,
+            component: "Lamp",
+            props: {},
+            at: [i, 0],
+          })),
+          triggers: [
+            { target: "a", line: "s02-l01", offset: 0, action: "enter" },
+            { target: "b", line: "s02-l01", offset: 0, action: "enter" },
+            { target: "c", line: "s02-l01", offset: 0, action: "enter", sound: "drop" },
+          ],
+        },
+      ],
+      pauses: [],
+    };
+    expect(planEpisode(MANIFEST, storyboard, NOISY).sounds).toEqual([
+      { frame: 138, sound: "pop" },
+      { frame: 138, sound: "drop" },
+    ]);
+  });
+
+  it("without a storyboard plays no sounds", () => {
+    expect(planEpisode(MANIFEST, null).sounds).toEqual([]);
   });
 });

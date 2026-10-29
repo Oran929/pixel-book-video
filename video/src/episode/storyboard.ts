@@ -7,6 +7,7 @@ import {
   type ComponentDeclarations,
   displayTextFields,
 } from "../components/declaration";
+import { isSoundId, type Sound, type SoundCue, SOUNDS, type SoundId } from "../sound/sounds";
 import { LAYOUT } from "../style/grid";
 import { displayTextProblem, displayTextSources } from "./display-text";
 import type { EpisodeManifest } from "./manifest";
@@ -21,6 +22,11 @@ const Placement = {
   line: z.string(),
   /** 相对旁白句开始的秒数，可以为负 */
   offset: z.number(),
+  /**
+   * 替换这个动作的默认音效：登记过的音效 ID，或 null（不放）；不写就用组件声明的默认音效。
+   * 动画是 `none` 的入场和退场不放音效，不能写音效 ID。
+   */
+  sound: z.string().nullable().optional(),
 };
 
 // 触发只有三种动作（ADR-0011）：入场、退场、切换到组件声明过的状态
@@ -160,6 +166,12 @@ const storyboardSchema = (
       const entered = new Set<string>();
       const exited = new Set<string>();
       scene.triggers.forEach((trigger, j) => {
+        if (typeof trigger.sound === "string" && !isSoundId(trigger.sound)) {
+          issue(
+            at("triggers", j, "sound"),
+            `音效 ${trigger.sound} 没有登记，登记过的音效：${Object.keys(SOUNDS).join("、")}`,
+          );
+        }
         const used = scene.components.find((c) => c.id === trigger.target);
         if (!used) {
           issue(at("triggers", j, "target"), `本画面没有组件 ${trigger.target}`);
@@ -265,13 +277,14 @@ export type Cue = {
   key: string;
   component: string;
   props: Record<string, unknown>;
-  enter: { frame: number; animation: Animation };
+  /** `sound`：这个动作要放的音效，null 表示不放（见 `soundCues`） */
+  enter: { frame: number; animation: Animation; sound: Sound };
   /** 没有退场时为 null：显示到画面结束 */
-  exit: { frame: number; animation: Animation } | null;
-  /** 入场时的状态：组件声明的第一个状态 */
+  exit: { frame: number; animation: Animation; sound: Sound } | null;
+  /** 入场时的状态：组件声明的第一个状态（入场时不响它的音效） */
   initialState: string;
   /** 各次切换状态，按帧排序 */
-  states: { frame: number; state: string }[];
+  states: { frame: number; state: string; sound: Sound }[];
   /** 在网格上占的格：左上角 `at` 和占几格 `cells`；连线类组件为 null */
   area: { at: Cells; cells: Cells } | null;
 } & FrameSpan /* 从入场帧到退场动画结束（没有退场时到画面结束） */;
@@ -318,7 +331,9 @@ export const scheduleCues = (
       const exit = mine.find(({ trigger }) => trigger.action === "exit");
       const states = mine
         .flatMap(({ trigger, j, frame }) =>
-          trigger.action === "state" ? [{ j, frame, state: trigger.state }] : [],
+          trigger.action === "state"
+            ? [{ j, frame, state: trigger.state, sound: trigger.sound }]
+            : [],
         )
         .sort((a, b) => a.frame - b.frame);
       if (exit && exit.frame <= enter.frame) {
@@ -327,7 +342,7 @@ export const scheduleCues = (
         );
       }
       let current = declared.states[0];
-      let previous: (typeof states)[number] | undefined;
+      let previous: { j: number; frame: number } | undefined;
       for (const { j, frame, state } of states) {
         if (frame < enter.frame) {
           throw new Error(
@@ -348,7 +363,7 @@ export const scheduleCues = (
           throw new Error(`${where(j)}: 组件 ${used.id} 这时已经是状态 ${state}`);
         }
         current = state;
-        previous = { j, frame, state };
+        previous = { j, frame };
       }
       const exitAnimation =
         exit?.trigger.action === "exit"
@@ -362,19 +377,48 @@ export const scheduleCues = (
           `${where(exit.j)}: 组件 ${used.id} 的退场动画 ${exitAnimation} 到第 ${exitEnd} 帧才播完，晚于画面 ${scene.scene} 的结束帧 ${span.endFrame}`,
         );
       }
+      const enterAnimation =
+        (enter.trigger.action === "enter" && enter.trigger.animation) ||
+        declared.enter;
+      // 触发上写了 sound 就用它（null 是不放），否则用声明的默认音效；`none` 动画不放音效
+      const soundOf = (
+        { trigger, j }: { trigger: { sound?: string | null }; j: number },
+        fallback: Sound,
+        animation?: Animation,
+      ): Sound => {
+        if (animation === "none") {
+          if (typeof trigger.sound === "string") {
+            throw new Error(`${where(j)}: 动画 none 不放音效，去掉 sound`);
+          }
+          return null;
+        }
+        return trigger.sound === undefined ? fallback : (trigger.sound as SoundId | null);
+      };
       return {
         key: `${scene.scene}/${used.id}`,
         component: used.component,
         props: used.props,
         enter: {
           frame: enter.frame,
-          animation:
-            (enter.trigger.action === "enter" && enter.trigger.animation) ||
-            declared.enter,
+          animation: enterAnimation,
+          sound: soundOf(enter, declared.sounds.enter, enterAnimation),
         },
-        exit: exit ? { frame: exit.frame, animation: exitAnimation } : null,
+        exit: exit
+          ? {
+              frame: exit.frame,
+              animation: exitAnimation,
+              sound: soundOf(exit, declared.sounds.exit, exitAnimation),
+            }
+          : null,
         initialState: declared.states[0],
-        states: states.map(({ frame, state }) => ({ frame, state })),
+        states: states.map((switched) => ({
+          frame: switched.frame,
+          state: switched.state,
+          sound: soundOf(
+            { trigger: switched, j: switched.j },
+            declared.sounds.states[switched.state] ?? null,
+          ),
+        })),
         area: used.at
           ? { at: used.at, cells: declared.cells(declared.props.parse(used.props)) }
           : null,
@@ -389,6 +433,26 @@ export const scheduleCues = (
     );
     return cues;
   });
+
+/**
+ * 排期里要放的音效，按帧排序（同一帧的按分镜里的先后）：入场、切换状态、退场各自的音效。
+ * 同一帧的同一个音效只放一次（几个方块同时入场时不会叠得更响）；
+ * Remotion 渲染时本来也会把同一帧、同一文件的音频当成同一个合并掉，这里明确写出来，
+ * Studio 预览和成片才一致。
+ */
+export const soundCues = (cues: Cue[]): SoundCue[] => {
+  const seen = new Set<string>();
+  return cues
+    .flatMap((cue) => [cue.enter, ...cue.states, ...(cue.exit ? [cue.exit] : [])])
+    .flatMap(({ frame, sound }) => (sound ? [{ frame, sound }] : []))
+    .sort((a, b) => a.frame - b.frame)
+    .filter(({ frame, sound }) => {
+      const key = `${frame} ${sound}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+};
 
 /**
  * 同一时间都在画面上（帧区间 `[startFrame, endFrame)` 相交，含退场动画）的两个组件，

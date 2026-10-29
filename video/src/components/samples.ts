@@ -121,12 +121,13 @@ export const COMPONENT_SAMPLES: Record<ComponentName, ComponentSample> = {
         })),
       },
       {
-        description: "知识块 DRY 入场，切到高亮，再切到已改，然后退场",
+        description: "知识块 DRY 入场，切到高亮，再切到已改，切回正常，然后退场",
         lines: [
-          { text: "入场：正常 normal", seconds: 1.5 },
-          { text: "切到高亮 highlight", seconds: 1.5 },
-          { text: "切到已改 changed", seconds: 1.5 },
-          { text: "退场（默认 fade）", seconds: 1.5 },
+          { text: "入场：正常 normal（音效 drop）", seconds: 1.5 },
+          { text: "切到高亮 highlight（blip）", seconds: 1.5 },
+          { text: "切到已改 changed（buzz）", seconds: 1.5 },
+          { text: "切回正常 normal（blip）", seconds: 1.5 },
+          { text: "退场：默认 fade（leave）", seconds: 1.5 },
         ],
         components: [
           { id: "dry", component: "PixelBlock", props: { label: "DRY", size: "large", color: "orange" }, at: [4, 1] },
@@ -135,7 +136,8 @@ export const COMPONENT_SAMPLES: Record<ComponentName, ComponentSample> = {
           { target: "dry", line: 4, offset: 0, action: "enter" },
           { target: "dry", line: 5, offset: 0, action: "state", state: "highlight" },
           { target: "dry", line: 6, offset: 0, action: "state", state: "changed" },
-          { target: "dry", line: 7, offset: 0, action: "exit" },
+          { target: "dry", line: 7, offset: 0, action: "state", state: "normal" },
+          { target: "dry", line: 8, offset: 0, action: "exit" },
         ],
       },
     ],

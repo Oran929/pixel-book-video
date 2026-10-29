@@ -31,3 +31,5 @@ out/
 video/public/episode/
 # 选定的参考音频要提交（ADR-0005：音色一致）
 !voices/*.wav
+# 音效要提交（#37）：wav 和生成它的 jsfxr 参数放在一起
+!video/public/sfx/*.wav

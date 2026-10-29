@@ -28,6 +28,7 @@ const placeholder = (cells: readonly [number, number]) =>
     enter: "fade",
     exit: "fade",
     connector: false,
+    sounds: { enter: null, exit: null, states: { normal: null } },
   });
 
 // 占位尺寸（列数, 行数），每格 148×124 像素

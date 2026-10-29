@@ -18,7 +18,7 @@ export const RemotionRoot: React.FC = () => (
       component={Episode}
       calculateMetadata={calculateEpisodeMetadata}
       defaultProps={
-        { title: "", timeline: null, cues: [] } satisfies EpisodeProps
+        { title: "", timeline: null, cues: [], sounds: [] } satisfies EpisodeProps
       }
       // 占位值：实际总帧数由 calculateMetadata 从时间轴算出
       durationInFrames={1}

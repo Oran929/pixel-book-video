@@ -7,9 +7,12 @@ import {
   useCurrentFrame,
 } from "remotion";
 import { StagedCues } from "../components/Staged";
+import { SoundCues } from "../sound/SoundCues";
+import type { SoundCue } from "../sound/sounds";
 import { EpisodeTitle } from "../components/resident/EpisodeTitle";
 import { Subtitle } from "../components/resident/Subtitle";
 import { COLOR } from "../style/style";
+import { VOLUME } from "../style/volume";
 import { planEpisode } from "./episode-plan";
 import type { Cue } from "./storyboard";
 import { lineAt, type Timeline } from "./timeline";
@@ -23,6 +26,8 @@ export type EpisodeProps = {
   title: string;
   timeline: Timeline | null;
   cues: Cue[];
+  /** 要放的音效（帧、音效 ID） */
+  sounds: SoundCue[];
 };
 
 const readJson = async (file: string, signal: AbortSignal) => {
@@ -46,13 +51,13 @@ export const calculateEpisodeMetadata: CalculateMetadataFunction<
     );
   }
   const storyboardData = await readJson(STORYBOARD_FILE, abortSignal);
-  const { manifest, timeline, cues } = planEpisode(
+  const { manifest, timeline, cues, sounds } = planEpisode(
     manifestData,
     storyboardData,
   );
   return {
     durationInFrames: timeline.totalFrames,
-    props: { title: manifest.title, timeline, cues },
+    props: { title: manifest.title, timeline, cues, sounds },
   };
 };
 
@@ -62,7 +67,12 @@ export const CurrentSubtitle: React.FC<{ timeline: Timeline }> = ({ timeline }) 
   return line ? <Subtitle text={line.text} /> : null;
 };
 
-export const Episode: React.FC<EpisodeProps> = ({ title, timeline, cues }) => (
+export const Episode: React.FC<EpisodeProps> = ({
+  title,
+  timeline,
+  cues,
+  sounds,
+}) => (
   <AbsoluteFill style={{ backgroundColor: COLOR.background }}>
     {title ? <EpisodeTitle title={title} /> : null}
     <StagedCues cues={cues} />
@@ -74,9 +84,10 @@ export const Episode: React.FC<EpisodeProps> = ({ title, timeline, cues }) => (
         durationInFrames={line.endFrame - line.startFrame}
         layout="none"
       >
-        <Html5Audio src={staticFile(line.audio)} />
+        <Html5Audio src={staticFile(line.audio)} volume={VOLUME.narration} />
       </Sequence>
     ))}
+    <SoundCues sounds={sounds} />
     {timeline ? <CurrentSubtitle timeline={timeline} /> : null}
   </AbsoluteFill>
 );

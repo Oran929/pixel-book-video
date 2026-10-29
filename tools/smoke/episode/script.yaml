@@ -26,7 +26,7 @@ segments:
     title: 结尾
     scenes:
       - id: s02-c01
-        description: 一个方块淡入
+        description: 每条、知识、一次三个方块同时落下
         lines:
           - id: s02-l01
             text: 每条知识只写一次。

@@ -38,6 +38,7 @@ const COMPONENTS = {
     enter: "fade",
     exit: "fade",
     connector: false,
+    sounds: { enter: null, exit: null, states: { normal: null } },
   }),
 };
 
@@ -181,7 +182,7 @@ describe("scheduleCues", () => {
         key: "s01-c02/dry",
         component: "Box",
         props: { label: "DRY" },
-        enter: { frame: 177, animation: "slide" },
+        enter: { frame: 177, animation: "slide", sound: null },
         exit: null,
         initialState: "normal",
         states: [],
