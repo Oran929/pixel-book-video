@@ -7,6 +7,7 @@ from typing import Any
 
 from pixelbook import REPO_ROOT
 from pixelbook.audition import AuditionError, choose_voice, run_audition
+from pixelbook.convert import CHAPTERS_DIR, ConvertError, convert_book
 from pixelbook.episode_path import EpisodePath, EpisodePathError
 from pixelbook.mix import MixError, mix_timeline
 from pixelbook.pipeline import (
@@ -198,6 +199,12 @@ def main(argv: list[str] | None = None) -> int:
         help="试听音轨写到哪里，默认 out/mix/<书>-<章>-<期>.wav",
     )
 
+    convert = commands.add_parser(
+        "convert",
+        help="把书目录里的 source.epub 转成每章一份带段落编号的 Markdown（chapters/）",
+    )
+    convert.add_argument("book", type=Path, help="books/<书>/")
+
     args = parser.parse_args(argv)
     try:
         if args.command == "audition":
@@ -208,6 +215,11 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "choose-voice":
             chosen = choose_voice(args.audition_dir, args.name, REPO_ROOT)
             print(f"已写入 {REPO_ROOT / 'voice.yaml'}：{chosen}")
+        elif args.command == "convert":
+            book = args.book.resolve()
+            written = convert_book(book)
+            names = "、".join(path.stem for path in written)
+            print(f"{len(written)} 章（{names}），写到 {book / CHAPTERS_DIR}")
         elif args.command == "render":
             return _render(args.script.resolve(), args.out, args.revoice)
         elif args.command == "voice":
@@ -265,6 +277,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"已复制到 {VIDEO_PUBLIC / 'episode'}")
     except (
         AuditionError,
+        ConvertError,
         EpisodePathError,
         MixError,
         ScriptError,
