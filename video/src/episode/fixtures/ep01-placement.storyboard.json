@@ -1,0 +1,1189 @@
+{
+  "scenes": [
+    {
+      "scene": "s01-c01",
+      "components": [
+        {
+          "id": "m1",
+          "component": "Mascot",
+          "props": {},
+          "at": [
+            1,
+            2
+          ]
+        },
+        {
+          "id": "m2",
+          "component": "Mascot",
+          "props": {},
+          "at": [
+            5,
+            2
+          ]
+        },
+        {
+          "id": "m3",
+          "component": "Mascot",
+          "props": {},
+          "at": [
+            9,
+            2
+          ]
+        },
+        {
+          "id": "acronyms",
+          "component": "PixelBlock",
+          "props": {
+            "label": "缩略词",
+            "size": "small"
+          },
+          "at": [
+            1,
+            0
+          ]
+        },
+        {
+          "id": "lists",
+          "component": "PixelBlock",
+          "props": {
+            "label": "列表",
+            "size": "small"
+          },
+          "at": [
+            4,
+            0
+          ]
+        },
+        {
+          "id": "patterns",
+          "component": "PixelBlock",
+          "props": {
+            "label": "模式",
+            "size": "small"
+          },
+          "at": [
+            7,
+            0
+          ]
+        },
+        {
+          "id": "charts",
+          "component": "PixelBlock",
+          "props": {
+            "label": "图表",
+            "size": "small"
+          },
+          "at": [
+            10,
+            0
+          ]
+        }
+      ],
+      "triggers": [
+        {
+          "target": "m1",
+          "line": "s01-l01",
+          "offset": 0,
+          "action": "enter"
+        },
+        {
+          "target": "m2",
+          "line": "s01-l01",
+          "offset": 0.3,
+          "action": "enter"
+        },
+        {
+          "target": "m3",
+          "line": "s01-l01",
+          "offset": 0.6,
+          "action": "enter"
+        },
+        {
+          "target": "acronyms",
+          "line": "s01-l02",
+          "offset": 0,
+          "action": "enter"
+        },
+        {
+          "target": "lists",
+          "line": "s01-l02",
+          "offset": 0.5,
+          "action": "enter"
+        },
+        {
+          "target": "patterns",
+          "line": "s01-l02",
+          "offset": 1,
+          "action": "enter"
+        },
+        {
+          "target": "charts",
+          "line": "s01-l02",
+          "offset": 1.5,
+          "action": "enter"
+        }
+      ]
+    },
+    {
+      "scene": "s01-c02",
+      "components": [
+        {
+          "id": "tip",
+          "component": "HintSign",
+          "props": {},
+          "at": [
+            1,
+            1
+          ]
+        },
+        {
+          "id": "etc",
+          "component": "PixelBlock",
+          "props": {
+            "label": "ETC",
+            "size": "large"
+          },
+          "at": [
+            7,
+            1
+          ]
+        }
+      ],
+      "triggers": [
+        {
+          "target": "tip",
+          "line": "s01-l05",
+          "offset": 0,
+          "action": "enter"
+        },
+        {
+          "target": "etc",
+          "line": "s01-l08",
+          "offset": 0,
+          "action": "enter"
+        }
+      ]
+    },
+    {
+      "scene": "s01-c03",
+      "components": [
+        {
+          "id": "etc",
+          "component": "PixelBlock",
+          "props": {
+            "label": "ETC",
+            "size": "large"
+          },
+          "at": [
+            8,
+            1
+          ]
+        },
+        {
+          "id": "decouple",
+          "component": "PixelBlock",
+          "props": {
+            "label": "解耦",
+            "size": "medium"
+          },
+          "at": [
+            1,
+            0
+          ]
+        },
+        {
+          "id": "single",
+          "component": "PixelBlock",
+          "props": {
+            "label": "单一职责",
+            "size": "medium"
+          },
+          "at": [
+            1,
+            2
+          ]
+        },
+        {
+          "id": "naming",
+          "component": "PixelBlock",
+          "props": {
+            "label": "命名",
+            "size": "medium"
+          },
+          "at": [
+            1,
+            4
+          ]
+        }
+      ],
+      "triggers": [
+        {
+          "target": "etc",
+          "line": "s01-l09",
+          "offset": 0,
+          "action": "enter"
+        },
+        {
+          "target": "decouple",
+          "line": "s01-l11",
+          "offset": 0,
+          "action": "enter"
+        },
+        {
+          "target": "single",
+          "line": "s01-l12",
+          "offset": 0,
+          "action": "enter"
+        },
+        {
+          "target": "naming",
+          "line": "s01-l14",
+          "offset": 0,
+          "action": "enter"
+        }
+      ]
+    },
+    {
+      "scene": "s02-c01",
+      "components": [
+        {
+          "id": "fork",
+          "component": "Fork",
+          "props": {},
+          "at": [
+            5,
+            1
+          ]
+        },
+        {
+          "id": "guide",
+          "component": "Mascot",
+          "props": {},
+          "at": [
+            2,
+            2
+          ]
+        },
+        {
+          "id": "etc",
+          "component": "PixelBlock",
+          "props": {
+            "label": "ETC",
+            "size": "small"
+          },
+          "at": [
+            2,
+            1
+          ]
+        }
+      ],
+      "triggers": [
+        {
+          "target": "fork",
+          "line": "s02-l04",
+          "offset": 0,
+          "action": "enter"
+        },
+        {
+          "target": "guide",
+          "line": "s02-l04",
+          "offset": 0.5,
+          "action": "enter"
+        },
+        {
+          "target": "etc",
+          "line": "s02-l04",
+          "offset": 0.5,
+          "action": "enter"
+        }
+      ]
+    },
+    {
+      "scene": "s02-c02",
+      "components": [
+        {
+          "id": "m1",
+          "component": "Mascot",
+          "props": {},
+          "at": [
+            1,
+            1
+          ]
+        },
+        {
+          "id": "m2",
+          "component": "Mascot",
+          "props": {},
+          "at": [
+            5,
+            1
+          ]
+        },
+        {
+          "id": "m3",
+          "component": "Mascot",
+          "props": {},
+          "at": [
+            9,
+            1
+          ]
+        },
+        {
+          "id": "save",
+          "component": "PixelBlock",
+          "props": {
+            "label": "保存文件",
+            "size": "small"
+          },
+          "at": [
+            1,
+            4
+          ]
+        },
+        {
+          "id": "test",
+          "component": "PixelBlock",
+          "props": {
+            "label": "写测试",
+            "size": "small"
+          },
+          "at": [
+            5,
+            4
+          ]
+        },
+        {
+          "id": "fix",
+          "component": "PixelBlock",
+          "props": {
+            "label": "修复 Bug",
+            "size": "small"
+          },
+          "at": [
+            9,
+            4
+          ]
+        }
+      ],
+      "triggers": [
+        {
+          "target": "m1",
+          "line": "s02-l08",
+          "offset": 0,
+          "action": "enter"
+        },
+        {
+          "target": "m2",
+          "line": "s02-l08",
+          "offset": 0.2,
+          "action": "enter"
+        },
+        {
+          "target": "m3",
+          "line": "s02-l08",
+          "offset": 0.4,
+          "action": "enter"
+        },
+        {
+          "target": "save",
+          "line": "s02-l13",
+          "offset": 0,
+          "action": "enter"
+        },
+        {
+          "target": "test",
+          "line": "s02-l14",
+          "offset": 0,
+          "action": "enter"
+        },
+        {
+          "target": "fix",
+          "line": "s02-l14",
+          "offset": 1.5,
+          "action": "enter"
+        }
+      ]
+    },
+    {
+      "scene": "s03-c01",
+      "components": [
+        {
+          "id": "fork",
+          "component": "Fork",
+          "props": {},
+          "at": [
+            3,
+            1
+          ]
+        }
+      ],
+      "triggers": [
+        {
+          "target": "fork",
+          "line": "s03-l01",
+          "offset": 0,
+          "action": "enter"
+        }
+      ]
+    },
+    {
+      "scene": "s03-c02",
+      "components": [
+        {
+          "id": "fork",
+          "component": "Fork",
+          "props": {},
+          "at": [
+            0,
+            1
+          ]
+        },
+        {
+          "id": "old",
+          "component": "PixelBlock",
+          "props": {
+            "label": "代码",
+            "size": "medium"
+          },
+          "at": [
+            7,
+            1
+          ]
+        },
+        {
+          "id": "new",
+          "component": "PixelBlock",
+          "props": {
+            "label": "另一块",
+            "size": "medium"
+          },
+          "at": [
+            7,
+            1
+          ]
+        }
+      ],
+      "triggers": [
+        {
+          "target": "fork",
+          "line": "s03-l06",
+          "offset": 0,
+          "action": "enter"
+        },
+        {
+          "target": "old",
+          "line": "s03-l06",
+          "offset": 0.5,
+          "action": "enter"
+        },
+        {
+          "target": "old",
+          "line": "s03-l07",
+          "offset": 0,
+          "action": "exit"
+        },
+        {
+          "target": "new",
+          "line": "s03-l08",
+          "offset": 0,
+          "action": "enter"
+        }
+      ]
+    },
+    {
+      "scene": "s03-c03",
+      "components": [
+        {
+          "id": "log",
+          "component": "PixelBlock",
+          "props": {
+            "label": "工程日志",
+            "size": "large"
+          },
+          "at": [
+            0,
+            1
+          ]
+        },
+        {
+          "id": "choices",
+          "component": "PixelBlock",
+          "props": {
+            "label": "选择",
+            "size": "small"
+          },
+          "at": [
+            5,
+            1
+          ]
+        },
+        {
+          "id": "guesses",
+          "component": "PixelBlock",
+          "props": {
+            "label": "猜测",
+            "size": "small"
+          },
+          "at": [
+            5,
+            3
+          ]
+        },
+        {
+          "id": "source",
+          "component": "PixelBlock",
+          "props": {
+            "label": "源码",
+            "size": "medium"
+          },
+          "at": [
+            8,
+            1
+          ]
+        },
+        {
+          "id": "tag",
+          "component": "PixelBlock",
+          "props": {
+            "label": "标签",
+            "size": "small"
+          },
+          "at": [
+            8,
+            3
+          ]
+        }
+      ],
+      "triggers": [
+        {
+          "target": "log",
+          "line": "s03-l12",
+          "offset": 0,
+          "action": "enter"
+        },
+        {
+          "target": "choices",
+          "line": "s03-l13",
+          "offset": 0,
+          "action": "enter"
+        },
+        {
+          "target": "guesses",
+          "line": "s03-l13",
+          "offset": 1.5,
+          "action": "enter"
+        },
+        {
+          "target": "source",
+          "line": "s03-l14",
+          "offset": 0,
+          "action": "enter"
+        },
+        {
+          "target": "tag",
+          "line": "s03-l14",
+          "offset": 0.8,
+          "action": "enter"
+        }
+      ]
+    },
+    {
+      "scene": "s04-c01",
+      "components": [
+        {
+          "id": "kirk",
+          "component": "Mascot",
+          "props": {},
+          "at": [
+            1,
+            2
+          ]
+        },
+        {
+          "id": "name",
+          "component": "PixelBlock",
+          "props": {
+            "label": "柯克船长",
+            "size": "small"
+          },
+          "at": [
+            1,
+            1
+          ]
+        },
+        {
+          "id": "computer",
+          "component": "Computer",
+          "props": {},
+          "at": [
+            7,
+            1
+          ]
+        }
+      ],
+      "triggers": [
+        {
+          "target": "kirk",
+          "line": "s04-l01",
+          "offset": 0,
+          "action": "enter"
+        },
+        {
+          "target": "name",
+          "line": "s04-l01",
+          "offset": 0,
+          "action": "enter"
+        },
+        {
+          "target": "computer",
+          "line": "s04-l02",
+          "offset": 0,
+          "action": "enter"
+        }
+      ]
+    },
+    {
+      "scene": "s04-c02",
+      "components": [
+        {
+          "id": "coder",
+          "component": "Mascot",
+          "props": {},
+          "at": [
+            0,
+            2
+          ]
+        },
+        {
+          "id": "knowledge",
+          "component": "PixelBlock",
+          "props": {
+            "label": "知识",
+            "size": "medium"
+          },
+          "at": [
+            3,
+            1
+          ]
+        },
+        {
+          "id": "docs",
+          "component": "PixelBlock",
+          "props": {
+            "label": "文档",
+            "size": "small"
+          },
+          "at": [
+            3,
+            4
+          ]
+        },
+        {
+          "id": "spec",
+          "component": "PixelBlock",
+          "props": {
+            "label": "规范",
+            "size": "small"
+          },
+          "at": [
+            5,
+            4
+          ]
+        },
+        {
+          "id": "code",
+          "component": "PixelBlock",
+          "props": {
+            "label": "代码",
+            "size": "small"
+          },
+          "at": [
+            7,
+            4
+          ]
+        },
+        {
+          "id": "tests",
+          "component": "PixelBlock",
+          "props": {
+            "label": "测试",
+            "size": "small"
+          },
+          "at": [
+            9,
+            4
+          ]
+        }
+      ],
+      "triggers": [
+        {
+          "target": "coder",
+          "line": "s04-l04",
+          "offset": 0,
+          "action": "enter"
+        },
+        {
+          "target": "knowledge",
+          "line": "s04-l04",
+          "offset": 1,
+          "action": "enter"
+        },
+        {
+          "target": "docs",
+          "line": "s04-l06",
+          "offset": 0,
+          "action": "enter"
+        },
+        {
+          "target": "spec",
+          "line": "s04-l06",
+          "offset": 0.8,
+          "action": "enter"
+        },
+        {
+          "target": "code",
+          "line": "s04-l06",
+          "offset": 2,
+          "action": "enter"
+        },
+        {
+          "target": "tests",
+          "line": "s04-l07",
+          "offset": 0,
+          "action": "enter"
+        }
+      ]
+    },
+    {
+      "scene": "s04-c03",
+      "components": [
+        {
+          "id": "knowledge",
+          "component": "PixelBlock",
+          "props": {
+            "label": "知识",
+            "size": "large"
+          },
+          "at": [
+            4,
+            0
+          ]
+        },
+        {
+          "id": "client",
+          "component": "PixelBlock",
+          "props": {
+            "label": "客户开会",
+            "size": "small"
+          },
+          "at": [
+            5,
+            4
+          ]
+        },
+        {
+          "id": "rule",
+          "component": "PixelBlock",
+          "props": {
+            "label": "政府改规定",
+            "size": "small"
+          },
+          "at": [
+            5,
+            4
+          ]
+        },
+        {
+          "id": "algo",
+          "component": "PixelBlock",
+          "props": {
+            "label": "算法行不通",
+            "size": "small"
+          },
+          "at": [
+            5,
+            4
+          ]
+        }
+      ],
+      "triggers": [
+        {
+          "target": "knowledge",
+          "line": "s04-l08",
+          "offset": 0,
+          "action": "enter"
+        },
+        {
+          "target": "client",
+          "line": "s04-l09",
+          "offset": 0,
+          "action": "enter"
+        },
+        {
+          "target": "client",
+          "line": "s04-l09",
+          "offset": 2.5,
+          "action": "exit"
+        },
+        {
+          "target": "rule",
+          "line": "s04-l10",
+          "offset": 0,
+          "action": "enter"
+        },
+        {
+          "target": "rule",
+          "line": "s04-l10",
+          "offset": 2.6,
+          "action": "exit"
+        },
+        {
+          "target": "algo",
+          "line": "s04-l11",
+          "offset": 0,
+          "action": "enter"
+        }
+      ]
+    },
+    {
+      "scene": "s04-c04",
+      "components": [
+        {
+          "id": "timeline",
+          "component": "Timeline",
+          "props": {},
+          "at": [
+            1,
+            2
+          ]
+        },
+        {
+          "id": "release",
+          "component": "PixelBlock",
+          "props": {
+            "label": "发布",
+            "size": "small"
+          },
+          "at": [
+            6,
+            4
+          ]
+        },
+        {
+          "id": "maintain",
+          "component": "PixelBlock",
+          "props": {
+            "label": "维护",
+            "size": "small"
+          },
+          "at": [
+            1,
+            0
+          ]
+        }
+      ],
+      "triggers": [
+        {
+          "target": "timeline",
+          "line": "s04-l12",
+          "offset": 0,
+          "action": "enter"
+        },
+        {
+          "target": "release",
+          "line": "s04-l12",
+          "offset": 1.5,
+          "action": "enter"
+        },
+        {
+          "target": "maintain",
+          "line": "s04-l14",
+          "offset": 0,
+          "action": "enter"
+        }
+      ]
+    },
+    {
+      "scene": "s05-c01",
+      "components": [
+        {
+          "id": "capsule",
+          "component": "PixelBlock",
+          "props": {
+            "label": "知识胶囊",
+            "size": "medium"
+          },
+          "at": [
+            0,
+            2
+          ]
+        },
+        {
+          "id": "spec",
+          "component": "PixelBlock",
+          "props": {
+            "label": "规范",
+            "size": "medium"
+          },
+          "at": [
+            8,
+            0
+          ]
+        },
+        {
+          "id": "process",
+          "component": "PixelBlock",
+          "props": {
+            "label": "流程",
+            "size": "medium"
+          },
+          "at": [
+            8,
+            2
+          ]
+        },
+        {
+          "id": "program",
+          "component": "PixelBlock",
+          "props": {
+            "label": "程序",
+            "size": "medium"
+          },
+          "at": [
+            8,
+            4
+          ]
+        }
+      ],
+      "triggers": [
+        {
+          "target": "capsule",
+          "line": "s05-l01",
+          "offset": 0,
+          "action": "enter"
+        },
+        {
+          "target": "spec",
+          "line": "s05-l02",
+          "offset": 0,
+          "action": "enter"
+        },
+        {
+          "target": "process",
+          "line": "s05-l02",
+          "offset": 1,
+          "action": "enter"
+        },
+        {
+          "target": "program",
+          "line": "s05-l02",
+          "offset": 2,
+          "action": "enter"
+        }
+      ]
+    },
+    {
+      "scene": "s05-c02",
+      "components": [
+        {
+          "id": "tip",
+          "component": "HintSign",
+          "props": {},
+          "at": [
+            1,
+            1
+          ]
+        },
+        {
+          "id": "dry",
+          "component": "PixelBlock",
+          "props": {
+            "label": "DRY",
+            "size": "large"
+          },
+          "at": [
+            7,
+            1
+          ]
+        }
+      ],
+      "triggers": [
+        {
+          "target": "tip",
+          "line": "s05-l05",
+          "offset": 0,
+          "action": "enter"
+        },
+        {
+          "target": "dry",
+          "line": "s05-l06",
+          "offset": 1,
+          "action": "enter"
+        }
+      ]
+    },
+    {
+      "scene": "s05-c03",
+      "components": [
+        {
+          "id": "k1",
+          "component": "PixelBlock",
+          "props": {
+            "label": "知识",
+            "size": "medium"
+          },
+          "at": [
+            0,
+            0
+          ]
+        },
+        {
+          "id": "k2",
+          "component": "PixelBlock",
+          "props": {
+            "label": "知识",
+            "size": "medium"
+          },
+          "at": [
+            0,
+            3
+          ]
+        },
+        {
+          "id": "computer",
+          "component": "Computer",
+          "props": {},
+          "at": [
+            7,
+            1
+          ]
+        }
+      ],
+      "triggers": [
+        {
+          "target": "k1",
+          "line": "s05-l10",
+          "offset": 0,
+          "action": "enter"
+        },
+        {
+          "target": "k2",
+          "line": "s05-l10",
+          "offset": 1,
+          "action": "enter"
+        },
+        {
+          "target": "computer",
+          "line": "s05-l12",
+          "offset": 0,
+          "action": "enter"
+        }
+      ]
+    },
+    {
+      "scene": "s05-c04",
+      "components": [
+        {
+          "id": "copy",
+          "component": "PixelBlock",
+          "props": {
+            "label": "复制粘贴源码",
+            "size": "small"
+          },
+          "at": [
+            4,
+            4
+          ]
+        },
+        {
+          "id": "intent",
+          "component": "PixelBlock",
+          "props": {
+            "label": "知识和意图",
+            "size": "large"
+          },
+          "at": [
+            4,
+            1
+          ]
+        }
+      ],
+      "triggers": [
+        {
+          "target": "copy",
+          "line": "s05-l15",
+          "offset": 0.5,
+          "action": "enter"
+        },
+        {
+          "target": "intent",
+          "line": "s05-l17",
+          "offset": 0,
+          "action": "enter"
+        }
+      ]
+    },
+    {
+      "scene": "s05-c05",
+      "components": [
+        {
+          "id": "code",
+          "component": "PixelBlock",
+          "props": {
+            "label": "代码",
+            "size": "medium"
+          },
+          "at": [
+            0,
+            1
+          ]
+        },
+        {
+          "id": "docs",
+          "component": "PixelBlock",
+          "props": {
+            "label": "文档",
+            "size": "medium"
+          },
+          "at": [
+            4,
+            1
+          ]
+        },
+        {
+          "id": "schema",
+          "component": "PixelBlock",
+          "props": {
+            "label": "数据库 Schema",
+            "size": "medium"
+          },
+          "at": [
+            8,
+            1
+          ]
+        }
+      ],
+      "triggers": [
+        {
+          "target": "code",
+          "line": "s05-l21",
+          "offset": 0,
+          "action": "enter"
+        },
+        {
+          "target": "docs",
+          "line": "s05-l21",
+          "offset": 1,
+          "action": "enter"
+        },
+        {
+          "target": "schema",
+          "line": "s05-l21",
+          "offset": 2,
+          "action": "enter"
+        }
+      ]
+    }
+  ],
+  "pauses": []
+}

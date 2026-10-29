@@ -97,6 +97,8 @@ export const SIZE = {
   channelPaddingX: cells(4),
   /** 方块组件的边长 */
   block: cells(80),
+  /** 知识块的外框到标签之间的内边距 */
+  blockPadding: cells(4),
   /** 方块组件比画面中心高出的距离 */
   blockLift: cells(60),
   /** 落下动画的起点在终点上方多远 */

@@ -371,7 +371,9 @@ uv run pixelbook terms ../books/sample/ch01/ep01/script.yaml   # 每个新术语
   "scenes": [
     {
       "scene": "s01-c02",
-      "components": [{ "id": "dry", "component": "PixelBlock", "props": { "label": "DRY" } }],
+      "components": [
+        { "id": "dry", "component": "PixelBlock", "props": { "label": "DRY", "size": "large" }, "at": [4, 1] }
+      ],
       "triggers": [
         { "target": "dry", "line": "s01-l03", "offset": 1.2, "action": "enter", "animation": "slide" },
         { "target": "dry", "line": "s01-l04", "offset": 0.5, "action": "exit" }
@@ -383,6 +385,7 @@ uv run pixelbook terms ../books/sample/ch01/ep01/script.yaml   # 每个新术语
 ```
 
 - `scene`：合成清单里的画面 ID。`components`：本画面用的组件，`id` 是本画面里的名字，`component` 是组件名，`props` 按该组件的参数格式校验。
+- `at`：组件左上角所在的格 `[列, 行]`，从 0 开始（见下面的「网格」）。连线类组件（箭头）不写 `at`，其余组件必须写。组件占几格由组件按参数自己算，分镜只写位置。
 - 新组件要登记两处：**声明**在 `video/src/components/declarations.ts`（用 `declareComponent`，格式见 `declaration.ts`：参数格式 `props`（zod）、状态清单 `states`（第一个是初始状态）、占几格 `cells`（按参数算，`[列数, 行数]`）、入场和退场的默认动画 `enter`、`exit`、是否是连线类组件 `connector`），**实现**在 `video/src/components/registry.ts`；少登记一处，类型检查会报错。分镜检查只依赖声明，不含 JSX，时间轴导出命令在 Node 里也用它校验分镜。
 - `triggers`：每条触发让 `target` 组件在 `line` 这句开始后偏移 `offset` 秒做一个动作（ADR-0011），`action` 三选一：
   - `enter` 入场、`exit` 退场：可选 `animation`，不写就用组件声明的默认动画。
@@ -393,6 +396,32 @@ uv run pixelbook terms ../books/sample/ch01/ep01/script.yaml   # 每个新术语
 - `pauses`：覆盖 `after` 这句之后的停顿（秒，≥ 0），优先于默认规则（句间 0.3 秒、换画面 0.8 秒）。
 
 分镜在 Remotion 读取时和 `npm run timeline` 里校验（同一个 `planEpisode`），出错时报出第几个画面、第几个组件或触发、哪个字段。
+
+#### 网格
+
+组件摆在字幕框上方的 12 列 × 6 行粗网格里（`video/src/style/grid.ts` 的 `layoutGrid`，就放在风格表旁边）：
+
+- **区域**：左右各扣掉安全边距 `SIZE.margin`；上沿是左上角主题的下沿（`SIZE.margin` + 字幕字号的行高），下沿是字幕框外描边的上沿（画面高 − `SIZE.margin` − 字幕框高 − 外描边 `SIZE.stroke`，字幕框高 = 2 × `SIZE.stroke` + 2 × `SIZE.subtitlePaddingY` + 字幕字号的行高；字幕最多 20 字，总是一行）。
+- **每格**：区域宽 ÷ 12、区域高 ÷ 6，各自向下对齐到像素网格 `GRID`（4px）；余下的像素平均分到两侧（每侧也向下对齐到 4px）。
+- 1920×1080 下：区域 x 64–1856、y 128–880，每格 **148 × 124** 像素，第 0 列从 x = 72 开始，第 0 行从 y = 132 开始。
+- **越界**：`at` 加上组件占的格数超出 12 列或 6 行时报错（报出第几个画面、第几个组件、超出哪一边）。
+- **重叠**：同一时间都在画面上的两个组件，格子有重叠就报错，报出两个组件、第一个重叠的格和同时在画面上的帧。「同时在画面上」按排期的帧区间算：从入场帧到退场动画播完（没有退场的到画面结束），所以先退场、后入场的两个组件，后一个要等前一个的退场动画播完（`fade`、`slide` 0.4 秒；`none` 不用等）才能占同一格。连线类组件不参加重叠检查。
+
+**知识块**（`PixelBlock`）的参数是 `label`（一行字）和 `size`，`size` 同时决定占几格和标签的字号：
+
+| `size` | 占几格（列 × 行） | 字号 | 标签最多多宽 |
+| --- | --- | --- | --- |
+| `small` | 2 × 1 | 24（`FONT_SIZE.small`） | 216 像素（9 个汉字） |
+| `medium` | 3 × 2 | 48（`FONT_SIZE.subtitle`） | 364 像素（7 个汉字） |
+| `large` | 4 × 3 | 96（`FONT_SIZE.large`） | 512 像素（5 个汉字） |
+
+标签最多多宽 = 格子宽 − 两侧粗描边 `SIZE.strokeThick` − 硬阴影 `SIZE.shadowOffset` − 两侧内边距 `SIZE.blockPadding`。标签放不下时报错，不会悄悄溢出或换行：换大一号的 `size` 或缩短标签。标签宽度按像素字体估算（`video/src/style/text-width.ts` 的 `textWidth`）：
+
+- 汉字、全角符号和弯引号（ASCII 以外的字）按 1 个字号宽；
+- 拉丁字母、数字、空格和半角符号（U+0020–U+007E）按字体度量：`video/src/style/ascii-advances.json` 是从字体文件的 `hmtx` 表导出的每个字符的步进宽度（字体像素，乘以 字号 ÷ 12 就是屏幕像素），例如 `W` 10、`M` 8、`a` 6、`i` 4。`tools/tests/test_font_metrics.py` 核对这张表和字体文件一致；换字体时要重新导出。
+- 不算字距（知识块的标签不加字距）。例：`数据库 Schema` 在字号 48 下是 3 × 48 + 6 × 4 + 39 × 4 = 324 像素。
+
+`video/src/episode/ep01-placement.test.ts` 用 ch02 ep01 的合成清单（`fixtures/ep01-episode.json`，去掉了音频路径）和一份占位分镜，把 17 个画面各摆了一遍，作为摆放的参考。
 
 ### 时间轴、打点时间表与试听音轨
 
@@ -416,7 +445,7 @@ uv run pixelbook mix ../books/sample/ch01/ep01/timeline.json   # 拼到 out/mix/
 - 风格表在 `video/src/style/style.ts`：16 色调色板 `PALETTE` 和按用途取色的 `COLOR`、像素网格 `GRID`（4px，画面上一个"像素"）、字号 `FONT_SIZE` 与行高、尺寸 `SIZE`（都是网格的整数倍）、描边 `border`、硬阴影 `hardShadow`、描边字 `outlinedText`。组件（`src/components/`，包括子目录里的常驻组件）里的颜色和尺寸只能引用这些常量，`npm run test` 递归扫描这个目录，检查源码里有没有写死的颜色值和数字（0、1 除外）。
 - 字体：Fusion Pixel 12px 比例宽度简体（OFL 1.1，来源和许可在 `video/public/fonts/`）。字形画在 12×12 格上，字号只能是 12 的整数倍（现在用 24 / 48 / 96），否则会模糊；测试检查这一点。字体由 `src/style/font.ts` 在第一帧之前加载。
 - 画面左上角常驻这一期的主题：旁白稿顶层的 `title`（等于大纲里这一期的 `topic`），经合成清单 `episode.json` 的 `title` 传进成片，由常驻组件 `src/components/resident/EpisodeTitle.tsx` 显示（橙字深色描边）。代码里没有写死的频道名。
-- 频道小人不常驻画面，是一个通用组件 `Mascot`：分镜里需要"人物做什么"时才用，参数 `character`（Q 版角色，按外观起名：`dragon`、`reader`、`whale`、`gothic`，见 `style.ts` 的 `MASCOTS`）和 `position`（站在画面底部的 `left` / `center` / `right`），例如 `{ "id": "host", "component": "Mascot", "props": { "character": "reader", "position": "left" } }`。小人是从 `character/Q.png` 裁出的透明底 PNG（`video/public/character/`，裁图脚本 `character/crop_q.py`），按原尺寸、最近邻插值显示；暂时没有动效。
+- 频道小人不常驻画面，是一个通用组件 `Mascot`：分镜里需要"人物做什么"时才用，参数 `character`（Q 版角色，按外观起名：`dragon`、`reader`、`whale`、`gothic`，见 `style.ts` 的 `MASCOTS`）和 `position`（站在画面底部的 `left` / `center` / `right`），例如 `{ "id": "host", "component": "Mascot", "props": { "character": "reader", "position": "left" }, "at": [0, 1] }`。分镜里也要写 `at`，暂按原尺寸占 3 列 × 5 行参加越界和重叠检查，但画面上仍按 `position` 站在底部（改用 `at` 放置见 #35，尺寸由 #42 决定）。小人是从 `character/Q.png` 裁出的透明底 PNG（`video/public/character/`，裁图脚本 `character/crop_q.py`），按原尺寸、最近邻插值显示；暂时没有动效。
 - 字幕只在显示时去掉分句标点 `，。、；`：句中的换成一个空格，句末（和句首）的直接去掉，紧挨在右引号、右书名号、右括号前的也直接去掉（`他说：“好的。”` 显示为 `他说：“好的”`）；`：“”‘’《》（）——？！` 保留（`video/src/components/resident/subtitle-text.ts`）。旁白脚本、配音、语音识别核对、合成清单和缺字检查都用原句。
 - 中间帧格式是 PNG（`video/remotion.config.ts`），JPEG 会让像素边缘出现杂色。
 

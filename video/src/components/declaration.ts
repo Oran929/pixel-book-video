@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import type { GridPoint } from "../style/grid";
 import { MOTION } from "../style/style";
 
 // 组件声明的格式（ADR-0011）。分镜校验和排期只依赖声明，不依赖组件实现，
@@ -16,8 +17,8 @@ export type Animation = (typeof ANIMATIONS)[number];
 export const animationFrames = (animation: Animation, fps: number): number =>
   animation === "none" ? 0 : Math.round(MOTION.animationSeconds * fps);
 
-/** 占几格：[列数, 行数]（网格见 #34） */
-export type Cells = readonly [number, number];
+/** 占几格：[列数, 行数]（网格见 style/grid.ts） */
+export type Cells = GridPoint;
 
 export type ComponentDeclaration<Props extends z.ZodType = z.ZodType> = {
   /** 参数格式 */

@@ -45,7 +45,7 @@ const STORYBOARD = {
   scenes: [
     {
       scene: "s01-c02",
-      components: [{ id: "dry", component: "Box", props: { label: "DRY" } }],
+      components: [{ id: "dry", component: "Box", props: { label: "DRY" }, at: [0, 0] }],
       triggers: [
         {
           target: "dry",
@@ -184,6 +184,7 @@ describe("scheduleCues", () => {
         enter: { frame: 177, animation: "slide" },
         exit: null,
         states: [],
+        area: { at: [0, 0], cells: [1, 1] },
         startFrame: 177,
         endFrame: 237,
       },

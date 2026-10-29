@@ -82,7 +82,8 @@ def write_bad_storyboard(episode_dir):
                             {
                                 "id": "a",
                                 "component": "PixelBlock",
-                                "props": {"label": "A"},
+                                "props": {"label": "A", "size": "small"},
+                                "at": [0, 0],
                             }
                         ],
                         "triggers": [

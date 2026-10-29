@@ -34,7 +34,12 @@ const STORYBOARD = {
     {
       scene: "s02-c01",
       components: [
-        { id: "dry", component: "PixelBlock", props: { label: "DRY" } },
+        {
+          id: "dry",
+          component: "PixelBlock",
+          props: { label: "DRY", size: "medium" },
+          at: [0, 0],
+        },
       ],
       triggers: [
         {
@@ -108,7 +113,7 @@ const lampScene = (...triggers: Trigger[]) => ({
   scenes: [
     {
       scene: "s02-c01",
-      components: [{ id: "lamp", component: "Lamp", props: {} }],
+      components: [{ id: "lamp", component: "Lamp", props: {}, at: [0, 0] }],
       triggers: triggers.map((trigger) => ({
         target: "lamp",
         line: "s02-l01",
@@ -271,5 +276,198 @@ describe("planEpisode: enter, exit and state", () => {
     const [cue] = plan({ action: "enter", offset: 1 }).cues;
 
     expect(cue).toMatchObject({ startFrame: 168, endFrame: 213, exit: null });
+  });
+});
+
+// 假的组件声明：占几格由参数 `w`、`h` 决定
+const BOXES = {
+  Box: declareComponent({
+    props: z.strictObject({ w: z.number().int(), h: z.number().int() }),
+    states: ["normal"],
+    cells: ({ w, h }) => [w, h],
+    enter: "fade",
+    exit: "slide",
+    connector: false,
+  }),
+};
+
+type Box = { id: string; at: unknown; w?: number; h?: number };
+// 都在 s02-c01（第 138–213 帧）里；`triggers` 的 line 都是 s02-l01
+const boxScene = (boxes: Box[], triggers: Trigger[]) => ({
+  scenes: [
+    {
+      scene: "s02-c01",
+      components: boxes.map(({ id, at, w = 1, h = 1 }) => ({
+        id,
+        component: "Box",
+        props: { w, h },
+        at,
+      })),
+      triggers: triggers.map((trigger) => ({ line: "s02-l01", ...trigger })),
+    },
+  ],
+  pauses: [],
+});
+const enterAt = (target: string, offset = 0) => ({
+  target,
+  action: "enter",
+  offset,
+});
+const exitAt = (target: string, offset: number) => ({
+  target,
+  action: "exit",
+  offset,
+});
+const planBoxes = (boxes: Box[], triggers: Trigger[]) =>
+  planEpisode(MANIFEST, boxScene(boxes, triggers), BOXES);
+
+describe("planEpisode: the 12×6 grid", () => {
+  it("puts each component's area on the cue: top-left cell and cells taken", () => {
+    const [cue] = planBoxes(
+      [{ id: "a", at: [9, 4], w: 3, h: 2 }],
+      [enterAt("a")],
+    ).cues;
+
+    expect(cue!.area).toEqual({ at: [9, 4], cells: [3, 2] });
+  });
+
+  it.each([
+    ["past the right edge", [10, 0], 3, 1, /第 1 个画面 第 1 个组件 at: 组件 a 从 \[10, 0\] 起占 3×1 格，超出 12×6 网格的右边/],
+    ["past the bottom edge", [0, 5], 1, 2, /第 1 个画面 第 1 个组件 at: 组件 a 从 \[0, 5\] 起占 1×2 格，超出 12×6 网格的下边/],
+    ["at a negative cell", [-1, 0], 1, 1, /第 1 个画面 第 1 个组件 at/],
+    ["at a fractional cell", [0.5, 0], 1, 1, /第 1 个画面 第 1 个组件 at/],
+  ] as [string, unknown, number, number, RegExp][])(
+    "rejects a component %s",
+    (_, at, w, h, message) => {
+      expect(() => planBoxes([{ id: "a", at, w, h }], [enterAt("a")])).toThrow(
+        message,
+      );
+    },
+  );
+
+  it("rejects a component placed without `at`", () => {
+    const data = boxScene([{ id: "a", at: undefined }], [enterAt("a")]);
+
+    expect(() => planEpisode(MANIFEST, data, BOXES)).toThrow(
+      /第 1 个画面 第 1 个组件 at: 组件 a（Box）要写 at/,
+    );
+  });
+
+  it("accepts a component filling the whole grid", () => {
+    expect(() =>
+      planBoxes([{ id: "a", at: [0, 0], w: 12, h: 6 }], [enterAt("a")]),
+    ).not.toThrow();
+  });
+});
+
+describe("planEpisode: components on screen together must not overlap", () => {
+  it("rejects two components sharing a cell at the same time", () => {
+    expect(() =>
+      planBoxes(
+        [
+          { id: "a", at: [0, 0], w: 3, h: 2 },
+          { id: "b", at: [2, 1], w: 2, h: 2 },
+        ],
+        [enterAt("a"), enterAt("b", 1)],
+      ),
+    ).toThrow(
+      /分镜第 1 个画面: 第 2 个组件 b 和第 1 个组件 a 的格子重叠（格 \[2, 1\]），从第 168 帧到第 213 帧（不含）同时在画面上/,
+    );
+  });
+
+  it("accepts components side by side", () => {
+    expect(() =>
+      planBoxes(
+        [
+          { id: "a", at: [0, 0], w: 3, h: 2 },
+          { id: "b", at: [3, 0], w: 2, h: 2 },
+          { id: "c", at: [0, 2], w: 5, h: 1 },
+        ],
+        [enterAt("a"), enterAt("b"), enterAt("c")],
+      ),
+    ).not.toThrow();
+  });
+
+  // a 在第 168 帧退场，默认 slide 12 帧，到第 180 帧才离开画面
+  const takingOver = (offset: number) =>
+    planBoxes(
+      [
+        { id: "a", at: [0, 0] },
+        { id: "b", at: [0, 0] },
+      ],
+      [enterAt("a"), exitAt("a", 1), enterAt("b", offset)],
+    );
+
+  it("lets a component take the cells once the one before has finished exiting", () => {
+    const plan = takingOver(42 / 30);
+
+    expect(plan.cues.map((cue) => [cue.startFrame, cue.endFrame])).toEqual([
+      [138, 180],
+      [180, 213],
+    ]);
+  });
+
+  it("counts the exit animation: entering while it still plays is an overlap", () => {
+    expect(() => takingOver(41 / 30)).toThrow(
+      /第 2 个组件 b 和第 1 个组件 a 的格子重叠（格 \[0, 0\]），从第 179 帧到第 180 帧（不含）同时在画面上/,
+    );
+  });
+});
+
+// 知识块（PixelBlock，用组件注册表的声明）：`size` 决定占几格和字号
+const blockScene = (props: Record<string, unknown>) => ({
+  scenes: [
+    {
+      scene: "s02-c01",
+      components: [{ id: "k", component: "PixelBlock", props, at: [0, 0] }],
+      triggers: [{ target: "k", line: "s02-l01", offset: 0, action: "enter" }],
+    },
+  ],
+  pauses: [],
+});
+const planBlock = (props: Record<string, unknown>) =>
+  planEpisode(MANIFEST, blockScene(props));
+
+describe("planEpisode: knowledge block size and label", () => {
+  it.each([
+    ["small", [2, 1]],
+    ["medium", [3, 2]],
+    ["large", [4, 3]],
+  ])("size %s takes %j cells", (size, cells) => {
+    const [cue] = planBlock({ label: "知识", size }).cues;
+    expect(cue!.area!.cells).toEqual(cells);
+  });
+
+  it.each([
+    // 汉字按 1 个字号宽：5 × 48 = 240 ≤ 364
+    ["知识和意图", "medium"],
+    // 拉丁字母按字体度量：3 × 48 + 空格 24 + Schema 156 = 324 ≤ 364
+    // （要是也按 1 个字号宽，10 × 48 = 480，就放不下了）
+    ["数据库 Schema", "medium"],
+    // 9 × 24 = 216，正好放满
+    ["一二三四五六七八九", "small"],
+  ])("fits the label %s on a %s block", (label, size) => {
+    expect(() => planBlock({ label, size })).not.toThrow();
+  });
+
+  it.each([
+    [
+      "一二三四五六七八九十",
+      "small",
+      /第 1 个画面 第 1 个组件 props label: 标签「一二三四五六七八九十」估算宽 240 像素，size small 最多放 216 像素/,
+    ],
+    [
+      "数据库 Schema",
+      "large",
+      /标签「数据库 Schema」估算宽 648 像素，size large 最多放 512 像素/,
+    ],
+  ])("rejects the label %s that does not fit a %s block", (label, size, message) => {
+    expect(() => planBlock({ label, size })).toThrow(message);
+  });
+
+  it("rejects a block without a size", () => {
+    expect(() => planBlock({ label: "知识" })).toThrow(
+      /第 1 个画面 第 1 个组件 props size/,
+    );
   });
 });

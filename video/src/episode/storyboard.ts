@@ -3,8 +3,10 @@ import {
   type Animation,
   ANIMATIONS,
   animationFrames,
+  type Cells,
   type ComponentDeclarations,
 } from "../components/declaration";
+import { LAYOUT } from "../style/grid";
 import type { EpisodeManifest } from "./manifest";
 import type { FrameSpan, PauseOverrides, Timeline } from "./timeline";
 
@@ -53,6 +55,10 @@ const StoryboardShape = z.strictObject({
           /** 组件注册表里的组件名 */
           component: z.string(),
           props: z.record(z.string(), z.unknown()),
+          /** 左上角所在的格 `[列, 行]`，从 0 开始；连线类组件不写 */
+          at: z
+            .tuple([z.number().int().min(0), z.number().int().min(0)])
+            .optional(),
         }),
       ),
       triggers: z.array(TriggerShape),
@@ -108,6 +114,29 @@ const storyboardSchema = (
         result.error?.issues.forEach((problem) =>
           issue(at("components", j, "props", ...problem.path), problem.message),
         );
+        const where = at("components", j, "at");
+        const name = `组件 ${used.id}（${used.component}）`;
+        if (declared.connector) {
+          if (used.at) issue(where, `${name}是连线类组件，不写 at`);
+          return;
+        }
+        if (!used.at) {
+          issue(where, `${name}要写 at：左上角所在的格 [列, 行]`);
+          return;
+        }
+        if (!result.success) return;
+        const [column, row] = used.at;
+        const [columns, rows] = declared.cells(result.data);
+        const overflow = [
+          column + columns > LAYOUT.columns ? "右边" : null,
+          row + rows > LAYOUT.rows ? "下边" : null,
+        ].filter((side) => side !== null);
+        if (overflow.length > 0) {
+          issue(
+            where,
+            `组件 ${used.id} 从 [${column}, ${row}] 起占 ${columns}×${rows} 格，超出 ${LAYOUT.columns}×${LAYOUT.rows} 网格的${overflow.join("和")}`,
+          );
+        }
       });
 
       // 每个组件恰好一次入场、最多一次退场、任意次切换状态
@@ -224,13 +253,16 @@ export type Cue = {
   exit: { frame: number; animation: Animation } | null;
   /** 各次切换状态，按帧排序 */
   states: { frame: number; state: string }[];
+  /** 在网格上占的格：左上角 `at` 和占几格 `cells`；连线类组件为 null */
+  area: { at: Cells; cells: Cells } | null;
 } & FrameSpan /* 从入场帧到退场动画结束（没有退场时到画面结束） */;
 
 /**
  * 按时间轴排出每个组件的入场、退场和切换状态的帧，以及它在画面上的区间。
  * 触发帧 = 旁白句开始帧 + 偏移秒数 × 帧率，四舍五入到整帧；
  * 落在所在画面之外、帧顺序不是「入场 ≤ 切换状态 < 退场」、同一帧切两次状态、
- * 切到当前已经是的状态、退场动画在画面结束前播不完时报错，不悄悄截断。
+ * 切到当前已经是的状态、退场动画在画面结束前播不完时报错，不悄悄截断；
+ * 同一画面里同时在画面上的两个组件格子重叠时也报错。
  * `storyboard` 须已经过 `parseStoryboard` 和同一份合成清单、同一份组件声明核对。
  */
 export const scheduleCues = (
@@ -258,7 +290,7 @@ export const scheduleCues = (
       return frame;
     });
 
-    return scene.components.map((used): Cue => {
+    const cues = scene.components.map((used): Cue => {
       const declared = components[used.component]!;
       const mine = scene.triggers
         .map((trigger, j) => ({ trigger, j, frame: frames[j]! }))
@@ -323,8 +355,46 @@ export const scheduleCues = (
         },
         exit: exit ? { frame: exit.frame, animation: exitAnimation } : null,
         states: states.map(({ frame, state }) => ({ frame, state })),
+        area: used.at
+          ? { at: used.at, cells: declared.cells(declared.props.parse(used.props)) }
+          : null,
         startFrame: enter.frame,
         endFrame: exitEnd,
       };
     });
+    rejectOverlaps(
+      cues,
+      scene.components.map((used) => used.id),
+      `分镜第 ${i + 1} 个画面`,
+    );
+    return cues;
   });
+
+/**
+ * 同一时间都在画面上（帧区间 `[startFrame, endFrame)` 相交，含退场动画）的两个组件，
+ * 占的格子重叠时报错。连线类组件不占格子，不参加。
+ */
+const rejectOverlaps = (cues: Cue[], ids: string[], where: string) => {
+  cues.forEach((later, k) => {
+    cues.slice(0, k).forEach((earlier, j) => {
+      const [mine, theirs] = [later.area, earlier.area];
+      if (!mine || !theirs) return;
+      const from = Math.max(later.startFrame, earlier.startFrame);
+      const until = Math.min(later.endFrame, earlier.endFrame);
+      if (from >= until) return;
+      const cell = ([0, 1] as const).map((axis) => {
+        const start = Math.max(mine.at[axis], theirs.at[axis]);
+        const end = Math.min(
+          mine.at[axis] + mine.cells[axis],
+          theirs.at[axis] + theirs.cells[axis],
+        );
+        return start < end ? start : null;
+      });
+      if (cell[0] === null || cell[1] === null) return;
+      const name = (n: number) => `第 ${n + 1} 个组件 ${ids[n]}`;
+      throw new Error(
+        `${where}: ${name(k)} 和${name(j)} 的格子重叠（格 [${cell[0]}, ${cell[1]}]），从第 ${from} 帧到第 ${until} 帧（不含）同时在画面上`,
+      );
+    });
+  });
+};

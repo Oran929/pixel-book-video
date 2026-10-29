@@ -184,7 +184,7 @@ export const StyleSheet: React.FC = () => (
             height: SIZE.block + SIZE.blockLift + SIZE.margin,
           }}
         >
-          <PixelBlock label="DRY" />
+          <PixelBlock label="DRY" size="large" />
         </div>
         {/* 字幕框本身，按成片里的样子放在画框里 */}
         <div

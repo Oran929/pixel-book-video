@@ -1,16 +1,58 @@
 import { z } from "zod";
-import { MASCOTS } from "../style/style";
+import { layoutGrid } from "../style/grid";
+import { FONT_SIZE, MASCOTS, SIZE } from "../style/style";
+import { textWidth } from "../style/text-width";
+import { VIDEO } from "../video-config";
 import { type ComponentDeclarations, declareComponent } from "./declaration";
 
 // 各组件的声明（参数格式、状态、占几格、默认动画）。单独放在不含 JSX、
 // 不引用 remotion 的文件里，这样时间轴导出命令（Node 里运行）校验分镜时
 // 不用加载 React 组件。组件实现在 registry.ts 里按同样的名字登记。
 
-/** PixelBlock：一个带字的像素方块 */
-export const PixelBlockProps = z.strictObject({
-  /** 方块上的字，例如 "DRY" */
-  label: z.string().min(1),
-});
+/**
+ * 知识块的大小 → 占几格、标签用哪个字号。标签只有一行，放不下时报错。
+ * 2:1 左右的横长条：ep01 的标签多是 2–6 个字（见 #34 的摆放试验）。
+ */
+export const BLOCK_SIZES = {
+  small: { cells: [2, 1], font: "small" },
+  medium: { cells: [3, 2], font: "subtitle" },
+  large: { cells: [4, 3], font: "large" },
+} as const satisfies Record<
+  string,
+  { cells: readonly [number, number]; font: keyof typeof FONT_SIZE }
+>;
+export type BlockSize = keyof typeof BLOCK_SIZES;
+
+/**
+ * 知识块里放标签的宽度（屏幕像素）：格子宽，减去两侧粗描边、右下的硬阴影和两侧内边距
+ */
+export const blockLabelRoom = (size: BlockSize): number =>
+  BLOCK_SIZES[size].cells[0] * layoutGrid(VIDEO.width, VIDEO.height).cellWidth -
+  2 * SIZE.strokeThick -
+  SIZE.shadowOffset -
+  2 * SIZE.blockPadding;
+
+/** PixelBlock：一个带字的像素方块（知识块） */
+export const PixelBlockProps = z
+  .strictObject({
+    /** 方块上的字，例如 "DRY"；只有一行 */
+    label: z.string().min(1),
+    /** 大小：决定占几格和标签的字号 */
+    size: z.enum(
+      Object.keys(BLOCK_SIZES) as [BlockSize, ...BlockSize[]],
+    ),
+  })
+  .superRefine(({ label, size }, ctx) => {
+    const width = textWidth(label, FONT_SIZE[BLOCK_SIZES[size].font]);
+    const room = blockLabelRoom(size);
+    if (width > room) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["label"],
+        message: `标签「${label}」估算宽 ${width} 像素，size ${size} 最多放 ${room} 像素：换大一号的 size 或缩短标签`,
+      });
+    }
+  });
 
 /** Mascot：一个 Q 版频道小人站在画面底部，分镜里需要"人物做什么"时才用 */
 export const MascotProps = z.strictObject({
@@ -27,8 +69,7 @@ export const COMPONENT_DECLARATIONS = {
   PixelBlock: declareComponent({
     props: PixelBlockProps,
     states: ["normal"],
-    // 占位：知识块的尺寸由 #34、#35 按 `size` 参数算
-    cells: () => [2, 2],
+    cells: ({ size }) => BLOCK_SIZES[size].cells,
     enter: "slide",
     exit: "fade",
     connector: false,
