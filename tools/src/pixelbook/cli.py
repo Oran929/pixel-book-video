@@ -12,17 +12,21 @@ from pixelbook.convert import CHAPTERS_DIR, ConvertError, convert_book
 from pixelbook.episode_path import EpisodePath, EpisodePathError
 from pixelbook.judge import JudgeError, prompt, record
 from pixelbook.mix import MixError, mix_timeline
+from pixelbook.music_check import MusicSchedule, check_music
 from pixelbook.outline import OutlineError, check_outline, format_warnings, unit_table
 from pixelbook.pipeline import (
     MANIFEST_NAME,
     REPORT_NAME,
     SUBTITLE_FONT,
+    AsrReportEntry,
     PipelineError,
+    VoicingReport,
+    VoicingSettings,
     stage_episode,
     voice_episode,
 )
 from pixelbook.pronunciation import PronunciationError, load_pronunciation
-from pixelbook.render import RenderError, render_episode
+from pixelbook.render import RenderError, render_episode, render_music_stem
 from pixelbook.script import ScriptError
 from pixelbook.sync_minutes import sync_minutes
 from pixelbook.term_audition import audition_terms
@@ -59,13 +63,12 @@ def _print_audition_report(report: dict[str, Any], out_dir: Path) -> None:
         print(f"  估算一期（100 句）：约 {minutes:.0f} 分钟")
 
 
-def _print_asr_report(report_path: Path) -> None:
-    report = json.loads(report_path.read_text())
-    if passes := report["asr_pinyin_passes"]:
+def _print_asr_report(report: VoicingReport, report_path: Path) -> None:
+    if passes := report.asr_pinyin_passes:
         print(f"\n{len(passes)} 句靠拼音通过（字不同、拼音相同，多半是同音字识别错）：")
         for item in passes:
-            print(f"  {item['id']}  {_rates(item)}\n{_texts(item)}")
-    if not (failures := report["asr_failures"]):
+            print(f"  {item.id}  {_rates(item)}\n{_texts(item)}")
+    if not (failures := report.asr_failures):
         return
     print(
         f"\n{len(failures)} 句复核未通过（已用差异率最低的一版；详见 {report_path}）："
@@ -78,27 +81,21 @@ def _print_asr_report(report_path: Path) -> None:
     )
 
 
-def _asr_failure(item: dict, indent: str) -> str:
+def _asr_failure(item: AsrReportEntry, indent: str) -> str:
     """一句复核未通过的句子：ID 和差异率、字幕/朗读/识别、缓存位置。"""
-    return (
-        f"{indent}{item['id']}  {_rates(item)}\n{_texts(item)}\n"
-        f"    缓存：{item['cache']}"
-    )
+    return f"{indent}{item.id}  {_rates(item)}\n{_texts(item)}\n    缓存：{item.cache}"
 
 
-def _rates(item: dict) -> str:
-    rates = f"字符差异率 {item['diff_rate']:.0%}"
+def _rates(item: AsrReportEntry) -> str:
+    rates = f"字符差异率 {item.diff_rate:.0%}"
     # 两步复核之前缓存的句子没有算过拼音
-    if item["pinyin_diff_rate"] is not None:
-        rates += f"  拼音差异率 {item['pinyin_diff_rate']:.0%}"
+    if item.pinyin_diff_rate is not None:
+        rates += f"  拼音差异率 {item.pinyin_diff_rate:.0%}"
     return rates
 
 
-def _texts(item: dict) -> str:
-    return (
-        f"    字幕：{item['text']}\n    朗读：{item['spoken']}\n"
-        f"    识别：{item['heard']}"
-    )
+def _texts(item: AsrReportEntry) -> str:
+    return f"    字幕：{item.text}\n    朗读：{item.spoken}\n    识别：{item.heard}"
 
 
 def _verifier() -> Verifier:
@@ -112,26 +109,19 @@ def _verifier() -> Verifier:
     )
 
 
-def _body_and_outro(duration: dict[str, Any]) -> str:
-    """正文和片尾分开写（时间轴导出命令算好的，ADR-0010）；没有片尾时不写。"""
-    outro = duration.get("outro")
-    if not outro:
-        return ""
-    return f"（正文 {duration['body']['text']}，片尾 {outro['text']}）"
-
-
 def _print_render_summary(summary: dict[str, Any]) -> None:
-    # 总时长的说明文字由时间轴导出命令写进 timeline.json，这里原样打印
+    # 总时长的说明文字和分开写的各部分（片头、正文、片尾）由时间轴导出命令写进
+    # timeline.json，这里原样打印（ADR-0004）
     duration = summary["duration"]
     print(
         f"\n成片 {summary['mp4']}\n"
         f"  帧数：视频流 {summary['frames']} 帧，时间轴 {summary['total_frames']} 帧"
         f"（{summary['fps']}fps，相差不超过一帧）\n"
-        f"  总时长 {duration['text']}：{duration['verdictText']}{_body_and_outro(duration)}\n"
+        f"  总时长 {duration['text']}：{duration['verdictText']}{duration['partsText']}\n"
         f"  打点时间表 {summary['segments']}"
     )
     if passes := summary["asr_pinyin_passes"]:
-        ids = "、".join(item["id"] for item in passes)
+        ids = "、".join(item.id for item in passes)
         print(
             f"  靠拼音通过（多半是同音字识别错，不用处理）：{len(passes)} 句（{ids}）"
         )
@@ -145,6 +135,21 @@ def _print_render_summary(summary: dict[str, Any]) -> None:
 
 def _book_voice(script: Path) -> Voice:
     return resolve_book_voice(EpisodePath.from_script(script).book_dir, REPO_ROOT)
+
+
+def _voicing_settings(script: Path, revoice: bool) -> VoicingSettings:
+    """`voice` 和 `render` 共用的配音配置：真实 TTS 和语音识别、书的音色、读音表。"""
+    from pixelbook.qwen_tts import QwenTtsEngine
+
+    return VoicingSettings(
+        engine=QwenTtsEngine(),
+        voice=_book_voice(script),
+        verifier=_verifier(),
+        pronunciation=load_pronunciation(PRONUNCIATION),
+        public_dir=VIDEO_PUBLIC,
+        font=VIDEO_PUBLIC / SUBTITLE_FONT,
+        revoice=revoice,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -193,6 +198,18 @@ def main(argv: list[str] | None = None) -> int:
         "--draft",
         action="store_true",
         help="同 `voice --draft`：给没有定稿的旁白稿出片",
+    )
+
+    trial = commands.add_parser(
+        "music-trial",
+        help="全长音频试验（#39、#52）：出片，再单独渲染配乐声轨，检查交叉淡化接缝、静音和淡出",
+    )
+    trial.add_argument("script", type=Path, help="books/<书>/<章>/<期>/script.yaml")
+    trial.add_argument("--draft", action="store_true", help="同 `render --draft`")
+    trial.add_argument(
+        "--storyboard",
+        type=Path,
+        help="试验用的分镜：出片期间临时放成期目录里的 storyboard.json，结束后恢复原样",
     )
 
     terms = commands.add_parser(
@@ -326,28 +343,21 @@ def main(argv: list[str] | None = None) -> int:
             )
         elif args.command == "render":
             return _render(args.script.resolve(), args.out, args.revoice, args.draft)
+        elif args.command == "music-trial":
+            return _music_trial(args.script.resolve(), args.draft, args.storyboard)
         elif args.command == "voice":
-            from pixelbook.qwen_tts import QwenTtsEngine
-
             script = args.script.resolve()
-            manifest = voice_episode(
-                script,
-                QwenTtsEngine(),
-                _book_voice(script),
-                VIDEO_PUBLIC,
-                load_pronunciation(PRONUNCIATION),
-                _verifier(),
-                revoice=args.revoice,
-                font=VIDEO_PUBLIC / SUBTITLE_FONT,
-                draft=args.draft,
+            voiced = voice_episode(
+                script, _voicing_settings(script, args.revoice), draft=args.draft
             )
+            manifest = voiced.manifest
             total = sum(line["seconds"] for line in manifest["lines"])
             print(
                 f"{len(manifest['lines'])} 句，配音共 {total:.1f} 秒（不含停顿）；"
                 f"合成清单 {args.script.parent / MANIFEST_NAME}，"
                 f"已复制到 {VIDEO_PUBLIC / 'episode'}"
             )
-            _print_asr_report(script.parent / REPORT_NAME)
+            _print_asr_report(voiced.report, script.parent / REPORT_NAME)
         elif args.command == "terms":
             table = load_pronunciation(PRONUNCIATION)
             script = args.script.resolve()
@@ -398,37 +408,78 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+def _music_trial(script: Path, draft: bool, storyboard: Path | None) -> int:
+    """出片到 out/<期>.mp4，配乐声轨到 out/<期>-music.wav，然后检查配乐
+    （参照写在 out/<期>-music-reference.wav）。
+
+    给了 `storyboard` 时，出片期间临时换上这份分镜，结束后把期目录里的分镜恢复原样
+    （原来没有就删掉）。
+    """
+    if storyboard is None:
+        return _run_music_trial(script, draft)
+    target = script.parent / "storyboard.json"
+    original = target.read_bytes() if target.exists() else None
+    target.write_bytes(storyboard.read_bytes())
+    try:
+        return _run_music_trial(script, draft)
+    finally:
+        if original is None:
+            target.unlink()
+        else:
+            target.write_bytes(original)
+
+
+def _run_music_trial(script: Path, draft: bool) -> int:
+    episode_id = EpisodePath.from_script(script).id
+    mp4 = REPO_ROOT / "out" / f"{episode_id}.mp4"
+    stem = REPO_ROOT / "out" / f"{episode_id}-music.wav"
+    if _render(script, mp4, revoice=False, draft=draft) != 0:
+        return 1
+    try:
+        render_music_stem(stem, VIDEO_PUBLIC)
+    except RenderError as error:
+        print(error)
+        return 1
+    timeline = json.loads((script.parent / "timeline.json").read_text())
+    if timeline.get("music") is None:
+        print("这一期没有分镜（或分镜没写 music），没有配乐可查")
+        return 1
+    report = check_music(mp4, stem, timeline, VIDEO_PUBLIC)
+    music = MusicSchedule.from_json(timeline["music"])
+    crossfade = music.crossfade_frames / timeline["fps"]
+    print(
+        f"\n配乐 {music.track}：曲长 {music.track_frames} 帧，放 {len(music.plays)} 次"
+        f"（每个接缝交叉淡化 {crossfade:g} 秒），第 {music.fade_from} 帧起淡出，"
+        f"到第 {music.end_frame} 帧（片尾开始）放完；配乐声轨 {stem}，参照 {report.reference}"
+    )
+    for line in report.seams:
+        print(f"  {line}")
+    if report.problems:
+        print(f"配乐检查未通过：{len(report.problems)} 处")
+        for problem in report.problems:
+            print(f"  {problem}")
+        return 1
+    print(
+        "配乐检查通过：音频流和视频流一样长，配乐声轨和参照逐帧一致"
+        "（交叉淡化处不掉音、不爆音，淡出照排期），接缝附近没有多出来的静音"
+    )
+    return 0
+
+
 def _render(script: Path, out: Path | None, revoice: bool, draft: bool) -> int:
     out = (
         out or REPO_ROOT / "out" / f"{EpisodePath.from_script(script).id}.mp4"
     ).resolve()
     try:
         try:
-            from pixelbook.qwen_tts import QwenTtsEngine
-
-            engine = QwenTtsEngine()
-            voice = _book_voice(script)
-            verifier = _verifier()
-            pronunciation = load_pronunciation(PRONUNCIATION)
+            settings = _voicing_settings(script, revoice)
         except (
             PronunciationError,
             VerificationConfigError,
             VoiceConfigError,
         ) as error:
             raise RenderError("配音", str(error)) from error
-        summary = render_episode(
-            script,
-            engine,
-            voice,
-            verifier,
-            pronunciation,
-            out=out,
-            public_dir=VIDEO_PUBLIC,
-            font=VIDEO_PUBLIC / SUBTITLE_FONT,
-            revoice=revoice,
-            draft=draft,
-            log=print,
-        )
+        summary = render_episode(script, settings, out=out, draft=draft, log=print)
     except RenderError as error:
         print(error)
         return 1

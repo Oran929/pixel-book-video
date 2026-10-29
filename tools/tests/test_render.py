@@ -12,25 +12,24 @@ from conftest import SCRIPT, VOICE
 
 from pixelbook import REPO_ROOT
 from pixelbook.asr import FakeAsrEngine
-from pixelbook.pipeline import SUBTITLE_FONT
+from pixelbook.pipeline import SUBTITLE_FONT, VoicingSettings
 from pixelbook.render import RenderError, check_frames, render_episode
 from pixelbook.tts import FakeTtsEngine
 from pixelbook.verification import Verifier
 from pixelbook.voice import Voice
 
 
-def render(script_path, tmp_path, voice=VOICE, **kwargs):
-    return render_episode(
-        script_path,
-        FakeTtsEngine(),
-        voice,
-        Verifier(FakeAsrEngine(), max_diff_rate=0, max_retries=0),
-        {},
-        out=tmp_path / "out.mp4",
+def render(script_path, tmp_path, voice=VOICE, revoice=False, **kwargs):
+    settings = VoicingSettings(
+        engine=FakeTtsEngine(),
+        voice=voice,
+        verifier=Verifier(FakeAsrEngine(), max_diff_rate=0, max_retries=0),
+        pronunciation={},
         public_dir=tmp_path / "public",
         font=REPO_ROOT / "video" / "public" / SUBTITLE_FONT,
-        **kwargs,
+        revoice=revoice,
     )
+    return render_episode(script_path, settings, out=tmp_path / "out.mp4", **kwargs)
 
 
 def test_voicing_refusal_stops_at_the_voicing_step(tmp_path, script_path):
@@ -83,7 +82,12 @@ def write_bad_storyboard(episode_dir):
                             {
                                 "id": "a",
                                 "component": "PixelBlock",
-                                "props": {"label": "A"},
+                                "props": {
+                                    "label": "A",
+                                    "size": "small",
+                                    "color": "orange",
+                                },
+                                "at": [0, 0],
                             }
                         ],
                         "triggers": [
@@ -97,6 +101,7 @@ def write_bad_storyboard(episode_dir):
                         ],
                     }
                 ],
+                "music": "forgotten-path",
                 "pauses": [],
             }
         )
@@ -111,6 +116,52 @@ def test_invalid_storyboard_stops_at_the_timeline_step(tmp_path, script_path):
 
     assert error.value.step == "时间轴"
     assert "s09-l09" in str(error.value)
+    assert not (tmp_path / "out.mp4").exists()
+
+
+def write_good_storyboard(episode_dir):
+    scenes = [
+        {
+            "scene": scene,
+            "components": [
+                {
+                    "id": scene,
+                    "component": "PixelBlock",
+                    # 显示文字要出自画面说明或旁白句
+                    "props": {"label": label, "size": "small", "color": "orange"},
+                    "at": [0, 0],
+                }
+            ],
+            "triggers": [
+                {
+                    "target": scene,
+                    "line": line,
+                    "offset": 0,
+                    "action": "enter",
+                    "animation": "none",
+                }
+            ],
+        }
+        for scene, line, label in (
+            ("s01-c01", "s01-l01", "封面"),
+            ("s02-c01", "s02-l01", "方块"),
+        )
+    ]
+    (episode_dir / "storyboard.json").write_text(
+        json.dumps({"scenes": scenes, "music": "forgotten-path", "pauses": []})
+    )
+
+
+def test_missing_music_file_stops_before_rendering(tmp_path, script_path):
+    # 曲子文件只留在本机（#53）：静态目录里没有分镜选的那首，在渲染一步停下并指向获取说明
+    write_good_storyboard(script_path.parent)
+
+    with pytest.raises(RenderError) as error:
+        render(script_path, tmp_path)
+
+    assert error.value.step == "渲染"
+    assert "music/forgotten-path.ogg" in str(error.value)
+    assert "video/public/music/README.md" in str(error.value)
     assert not (tmp_path / "out.mp4").exists()
 
 

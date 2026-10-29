@@ -8,13 +8,13 @@ segments:
     title: 开场
     scenes:
       - id: s01-c01
-        description: 只有字幕
+        description: 一个知识块写着一本书
         lines:
           - id: s01-l01
             text: 今天读一本书。
             cite: ch01-¶001
       - id: s01-c02
-        description: 一个方块落下
+        description: 一个方块落下，又淡出
         lines:
           - id: s01-l02
             text: 第一条原则。
@@ -26,7 +26,7 @@ segments:
     title: 结尾
     scenes:
       - id: s02-c01
-        description: 一个方块淡入
+        description: 每条、知识、一次三个方块同时落下
         lines:
           - id: s02-l01
             text: 每条知识只写一次。

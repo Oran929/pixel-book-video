@@ -1,10 +1,5 @@
 import { z } from "zod";
 
-// 固定片尾（ADR-0010）：配音时接在旁白稿后面，是合成清单里保留 ID 的最后一段，
-// 其余照普通的段处理（字幕、音频、时间轴）；只有时长报告把它单独列出来。
-// 和 tools/src/pixelbook/outro.py 的 OUTRO_SEGMENT 一致
-export const OUTRO_SEGMENT = "outro";
-
 // 合成清单（ADR-0004）：Python 生成，Remotion 只读这一份交接文件。
 // 字段与 tools/src/pixelbook/pipeline.py 写出的格式一一对应。
 export const EpisodeManifestSchema = z
@@ -14,7 +9,22 @@ export const EpisodeManifestSchema = z
   // 这一期的主题（旁白稿顶层的 `title`），显示在画面左上角
   title: z.string().min(1, "不能为空"),
   segments: z.array(z.object({ id: z.string(), title: z.string() })).min(1),
-  scenes: z.array(z.object({ id: z.string(), segment: z.string() })).min(1),
+  scenes: z
+    .array(
+      z.object({
+        id: z.string(),
+        segment: z.string(),
+        // 画面说明，原样抄自旁白稿。组件上显示的字要能在这里或
+        // 旁白句里找到（票 #32）。旧的合成清单没有这一项：重新配音会命中缓存
+        description: z.string({
+          error: (issue) =>
+            issue.input === undefined
+              ? "缺画面说明：重新运行 `pixelbook voice`（配音会命中缓存，不会重新生成）"
+              : "应为字符串",
+        }),
+      }),
+    )
+    .min(1),
   lines: z
     .array(
       z.object({

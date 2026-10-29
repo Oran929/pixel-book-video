@@ -12,7 +12,6 @@ import pytest
 import yaml
 
 from pixelbook import cli
-from pixelbook.outro import OUTRO_LINES
 
 # 单元 1：¶001–¶003 是文字段（¶002 是引文），¶004、¶005 是图片段（¶005 带图题）；
 # 单元 2：提示框标题后面是 ¶006；章末脚注 ¶007 不属于任何单元（它的标记在 ¶006 里）
@@ -790,14 +789,6 @@ def test_the_prompt_shows_what_is_actually_spoken_when_a_line_has_speech(
     # 没有 `speech` 的句子只有字幕一行
     assert f"s01-l01（出处：ch01-¶001）\n旁白：{LINE_TEXT}\n\n" in out
     assert out.count("朗读：念出来") == 1
-
-
-def test_the_fixed_outro_is_not_in_the_factcheck_prompt(pixelbook, episode):
-    # 片尾在配音时才接上，不在旁白稿里：没有出处，不进照搬检查和语义核对（票 #15）
-    code, out = pixelbook(["factcheck-prompt", str(episode)], script())
-
-    assert code == 0
-    assert not any(text in out for text in OUTRO_LINES)
 
 
 def test_the_prompt_is_refused_while_the_script_has_errors(pixelbook, episode):

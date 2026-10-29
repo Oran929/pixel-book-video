@@ -20,14 +20,25 @@ books/*/cache/
 *.wav
 *.mp4
 
-# 期目录里生成的合成清单、检查报告、时间轴和打点时间表
+# 期目录里生成的合成清单、检查报告、时间轴、打点时间表和配乐署名
 books/*/*/*/episode.json
 books/*/*/*/report.json
 books/*/*/*/timeline.json
 books/*/*/*/segments.txt
+books/*/*/*/credits.txt
 
 # Remotion 产物
 out/
 video/public/episode/
 # 选定的参考音频要提交（ADR-0005：音色一致）
 !voices/*.wav
+# 音效要提交（#37）：wav 和生成它的 jsfxr 参数放在一起
+!video/public/sfx/*.wav
+# 片头片尾的音轨要提交（#50、#51）：由各自目录里的 make_audio.py 生成，测试核对它和重新生成的一致
+!video/public/intro/*.wav
+!video/public/outro/*.wav
+# 片尾的配音是用户录好的，音轨脚本读它们
+!video/src/outro/*/voice/*.wav
+# 配乐文件只留在本机，不进 Git（spec #16 修订四，#53）；获取方法见目录里的 README.md
+video/public/music/*
+!video/public/music/README.md
