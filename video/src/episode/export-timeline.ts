@@ -9,14 +9,7 @@ import { type MusicPlan, planEpisode } from "./episode-plan";
 import { durationReport, segmentsText, type DurationReport } from "./rhythm";
 import { SOUNDS, type SoundCue } from "../sound/sounds";
 import type { Timeline } from "./timeline";
-import { OUT_DIR } from "./out-dir";
-
-// 文件名与 tools/src/pixelbook/episode_path.py 一致。分镜是内容，在期目录里；
-// 合成清单、时间轴、打点时间表在期目录的产物目录 out/ 里（ADR-0013）
-const MANIFEST_FILE = "episode.json";
-const STORYBOARD_FILE = "storyboard.json";
-export const TIMELINE_FILE = "timeline.json";
-export const SEGMENTS_FILE = "segments.txt";
+import { MANIFEST_FILE, OUT_DIR, SEGMENTS_FILE, STORYBOARD_FILE, TIMELINE_FILE } from "./out-dir";
 
 /**
  * 读产物目录 `out/` 里的合成清单（期目录里有分镜时也读分镜，取它的停顿覆盖），用 Remotion 里

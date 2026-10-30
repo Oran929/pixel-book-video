@@ -9,7 +9,7 @@ from pixelbook import REPO_ROOT
 from pixelbook.audition import AuditionError, choose_voice, run_audition
 from pixelbook.check import check_script, check_unjudged, format_report
 from pixelbook.convert import CHAPTERS_DIR, ConvertError, convert_book
-from pixelbook.episode_path import EpisodePath, EpisodePathError
+from pixelbook.episode_path import OUT_DIR, EpisodePath, EpisodePathError
 from pixelbook.judge import JudgeError, prompt, record
 from pixelbook.mix import MixError, mix_timeline
 from pixelbook.music_check import MusicSchedule, check_music
@@ -23,7 +23,11 @@ from pixelbook.pipeline import (
     stage_episode,
     voice_episode,
 )
-from pixelbook.pronunciation import PronunciationError, load_pronunciation
+from pixelbook.pronunciation import (
+    PRONUNCIATION_FILE,
+    PronunciationError,
+    load_pronunciation,
+)
 from pixelbook.render import RenderError, render_episode, render_music_stem
 from pixelbook.script import ScriptError
 from pixelbook.status import StatusError, episode_status
@@ -40,7 +44,7 @@ from pixelbook.voice_lock import resolve_book_voice
 AUDITION_PLAN = REPO_ROOT / "voices" / "audition.yaml"
 AUDITION_OUT = REPO_ROOT / "voices" / "audition"
 VIDEO_PUBLIC = REPO_ROOT / "video" / "public"
-PRONUNCIATION = REPO_ROOT / "pronunciation.yaml"
+PRONUNCIATION = REPO_ROOT / PRONUNCIATION_FILE
 VERIFICATION = REPO_ROOT / "verification.yaml"
 
 
@@ -235,7 +239,7 @@ def main(argv: list[str] | None = None) -> int:
     mix.add_argument(
         "--out",
         type=Path,
-        help="试听音轨写到哪里，默认期目录的 out/<书>-<章>-<期>-mix.wav",
+        help="试听音轨写到哪里，默认期目录的 out/mix.wav",
     )
 
     convert = commands.add_parser(
@@ -393,8 +397,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"听完把读法写进 {PRONUNCIATION}（读法不变就写成 `术语: 术语`）")
         elif args.command == "mix":
             timeline = args.timeline.resolve()
-            # timeline.json 在期目录的产物目录 out/ 里
-            out = (args.out or EpisodePath(timeline.parent.parent).mix).resolve()
+            out = (args.out or _default_mix(timeline)).resolve()
             seconds = mix_timeline(timeline, VIDEO_PUBLIC, out)
             print(f"试听音轨 {out}：{seconds:.2f} 秒")
         else:
@@ -417,6 +420,20 @@ def main(argv: list[str] | None = None) -> int:
         print(error)
         return 1
     return 0
+
+
+def _default_mix(timeline: Path) -> Path:
+    """时间轴在期目录或它的 out/ 里时，试听音轨默认写到这一期的 out/mix.wav。"""
+    episode_dir = timeline.parent
+    if episode_dir.name == OUT_DIR:
+        episode_dir = episode_dir.parent
+    try:
+        return EpisodePath(episode_dir).mix
+    except EpisodePathError:
+        raise MixError(
+            f"{timeline} 不在期目录 books/<书>/<章>/<期>/ 或它的 out/ 里，"
+            "推不出试听音轨写到哪里：用 --out 指定"
+        ) from None
 
 
 def _music_trial(script: Path, draft: bool, storyboard: Path | None) -> int:

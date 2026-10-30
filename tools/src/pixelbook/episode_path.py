@@ -19,7 +19,7 @@ FACTCHECK_NAME = "factcheck.yaml"
 STORYBOARD_NAME = "storyboard.json"
 
 # 产物目录：命令为这一期生成的文件都写在期目录的 `out/` 里，不提交（ADR-0013）。
-# 和 video/src/episode/out-dir.ts 的 OUT_DIR 一致（有测试核对）
+# 分镜、产物目录和下面 TS 也读写的文件名，和 video/src/episode/out-dir.ts 一致（有测试核对）
 OUT_DIR = "out"
 MANIFEST_NAME = "episode.json"
 # 检查报告：需要人看的问题（复核未通过的句子……），每次配音重写
@@ -28,6 +28,7 @@ REPORT_NAME = "report.json"
 TIMELINE_NAME = "timeline.json"
 SEGMENTS_NAME = "segments.txt"
 CREDITS_NAME = "credits.txt"
+MIX_NAME = "mix.wav"
 
 
 # 章目录名 `chNN`，和转换结果 `chapters/chNN.md` 同名
@@ -171,7 +172,7 @@ class EpisodePath:
     @property
     def mix(self) -> Path:
         """试听混音，`pixelbook mix` 写出。"""
-        return self.out_dir / f"{self.id}-mix.wav"
+        return self.out_dir / MIX_NAME
 
     @property
     def terms_dir(self) -> Path:

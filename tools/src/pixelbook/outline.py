@@ -76,8 +76,10 @@ class OutlineError(Exception):
     pass
 
 
-def load_outline(path: Path) -> Outline:
-    """只读格式，不看转换结果；格式不对时报第一处错。"""
+def load_outline(path: Path, text: str | None = None) -> Outline:
+    """只读格式，不看转换结果；格式不对时报第一处错。
+
+    `text` 给了时解析它（如 Git 里提交过的版本），`path` 只用来报错。"""
 
     def fail(where: str, field: str, problem: str) -> OutlineError:
         return OutlineError(f"{path}: {where}：`{field}` {problem}")
@@ -167,7 +169,9 @@ def load_outline(path: Path) -> Outline:
             ],
         )
 
-    data = mapping(yaml.safe_load(path.read_text()), "大纲", ["chapter", "episodes"])
+    if text is None:
+        text = path.read_text()
+    data = mapping(yaml.safe_load(text), "大纲", ["chapter", "episodes"])
     return Outline(
         chapter=integer(data, "chapter", "大纲"),
         episodes=[

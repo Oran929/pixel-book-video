@@ -2,9 +2,9 @@
 // 一行，可以直接贴进视频简介；CC0 的不写。只在 Node 里用（时间轴导出命令），Remotion 不加载。
 import { existsSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { CREDITS_FILE } from "../episode/out-dir";
 import { isCcBy, type MusicTrack } from "./tracks";
 
-export const CREDITS_FILE = "credits.txt";
 
 /**
  * 按这一期的配乐写出或删掉产物目录 `outDir` 里的 `credits.txt`：曲子要署名时写出并返回路径；

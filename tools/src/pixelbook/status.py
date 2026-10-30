@@ -10,7 +10,13 @@ from typing import Any
 
 import yaml
 
+from pixelbook.book import BOOK_CONFIG, load_book_config
 from pixelbook.episode_path import ChapterPath, EpisodePath, EpisodePathError
+from pixelbook.outline import Episode, OutlineError, load_outline
+from pixelbook.pronunciation import PRONUNCIATION_FILE
+from pixelbook.script import FINAL, ScriptError, load_script
+from pixelbook.voice import VoiceConfigError
+from pixelbook.voice_lock import DEFAULT_VOICE
 
 
 class StatusError(Exception):
@@ -75,11 +81,12 @@ def episode_status(path: Path) -> Status:
     def status(stage: str, label: str, **fields: Any) -> Status:
         return Status(rel(episode.dir), stage, label, **fields)
 
-    if name not in _outline_ids(episode.outline):
+    entry = _outline_entry(episode.outline, name)
+    if entry is None:
         return status(
             "not-in-outline", "大纲里没有这一期", next=[f"/outline {book} {chapter}"]
         )
-    if not _committed(root, episode.outline):
+    if _committed_outline_entry(root, episode.outline, name) != entry:
         return status(
             "outline-review",
             "大纲待审",
@@ -94,7 +101,7 @@ def episode_status(path: Path) -> Status:
         return status(
             "script-review", "旁白稿待审", next=[f"/factcheck {rel(episode.dir)}"]
         )
-    if _script_status(episode.script) != "final":
+    if _script_status(episode.script) != FINAL:
         return status(
             "script-review",
             "旁白稿待审",
@@ -119,7 +126,7 @@ def episode_status(path: Path) -> Status:
     voice = [f"pixelbook terms {script}", f"pixelbook voice {script}"]
     if not episode.manifest.exists():
         return status("ready-to-voice", "定稿待配音", next=voice)
-    old = stale(manifest, ("旁白稿", episode.script))
+    old = stale(manifest, *_voicing_inputs(root, episode))
     if old:
         return status(
             "ready-to-voice", "定稿待配音", next=voice, stale=old, rerun_from="配音"
@@ -195,23 +202,67 @@ def _committed(root: Path, path: Path) -> bool:
     return changes.stdout.strip() == ""
 
 
-def _outline_ids(outline: Path) -> list[str]:
-    if not outline.exists():
-        return []
-    data = _yaml(outline)
-    episodes = data.get("episodes") if isinstance(data, dict) else None
-    if not isinstance(episodes, list):
-        return []
-    return [str(e.get("id")) for e in episodes if isinstance(e, dict)]
-
-
-def _script_status(script: Path) -> Any:
-    data = _yaml(script)
-    return data.get("status") if isinstance(data, dict) else None
-
-
-def _yaml(path: Path) -> Any:
+def _voicing_inputs(root: Path, episode: EpisodePath) -> list[tuple[str, Path]]:
+    """配音读的文件：旁白稿、读音表、书配置、书用的音色配置（存在的才算）。"""
+    inputs = [
+        ("旁白稿", episode.script),
+        ("读音表", root / PRONUNCIATION_FILE),
+        ("书配置", episode.book_dir / BOOK_CONFIG),
+    ]
     try:
-        return yaml.safe_load(path.read_text())
-    except yaml.YAMLError as error:
-        raise StatusError(f"{path} 不是合法的 YAML：{error}") from error
+        voice = load_book_config(episode.book_dir).voice or DEFAULT_VOICE
+        inputs.append(("音色配置", root / voice))
+    except (VoiceConfigError, yaml.YAMLError):
+        pass  # 书配置格式不对时配音会报错；这里只比还能确定的输入
+    return [(name, path) for name, path in inputs if path.is_file()]
+
+
+def _outline_entry(outline: Path, name: str) -> Episode | None:
+    """工作区大纲里这一期的条目；没有大纲或没有这一期时是 None。"""
+    if not outline.exists():
+        return None
+    try:
+        loaded = load_outline(outline)
+    except (OutlineError, yaml.YAMLError) as error:
+        raise StatusError(
+            f"大纲格式不对，先跑 pixelbook outline 修好：{_reason(error, outline)}"
+        ) from error
+    return next((e for e in loaded.episodes if e.id == name), None)
+
+
+def _committed_outline_entry(root: Path, outline: Path, name: str) -> Episode | None:
+    """HEAD 里大纲中这一期的条目（审过才提交）；没提交过或格式不对时是 None。"""
+    shown = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(root),
+            "show",
+            f"HEAD:{outline.relative_to(root).as_posix()}",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if shown.returncode != 0:
+        return None
+    try:
+        loaded = load_outline(outline, shown.stdout)
+    except (OutlineError, yaml.YAMLError):
+        return None
+    return next((e for e in loaded.episodes if e.id == name), None)
+
+
+def _script_status(script: Path) -> str:
+    try:
+        return load_script(script).status
+    except (ScriptError, yaml.YAMLError) as error:
+        raise StatusError(
+            f"旁白稿格式不对，先跑 pixelbook check 修好：{_reason(error, script)}"
+        ) from error
+
+
+def _reason(error: Exception, path: Path) -> str:
+    if isinstance(error, yaml.YAMLError):
+        return f"{path} 不是合法的 YAML：{error}"
+    return str(error)

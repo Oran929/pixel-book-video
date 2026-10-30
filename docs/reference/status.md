@@ -8,7 +8,7 @@ uv run pixelbook status ../books/pragmatic-programmer/ch02/ep01          # 中�
 uv run pixelbook status ../books/pragmatic-programmer/ch02/ep01 --json   # 给 /episode 读的 JSON
 ```
 
-退出码：判断成功时为 0，不管有没有下一步；期目录不合法时为 1，并打印原因。不合法指：路径不是 `books/<书>/chNN/<期>/`，章目录不存在，路径是文件而不是目录，或者不在 Git 仓库里。期目录本身还没建（比如还没写旁白稿）是合法的。
+退出码：判断成功时为 0，不管有没有下一步；期目录不合法、或者要读的大纲和旁白稿格式不对时为 1，并打印原因。不合法指：路径不是 `books/<书>/chNN/<期>/`，章目录不存在，路径是文件而不是目录，或者不在 Git 仓库里。大纲和旁白稿用 `pixelbook outline`、`pixelbook check` 同一套加载规则读，格式不对时报第一处错，让你先跑对应的命令修好。期目录本身还没建（比如还没写旁白稿）是合法的。
 
 命令和 skill 里的路径都相对仓库根目录写；命令在 `tools/` 下用 `uv run` 跑时，路径前面加 `../`。
 
@@ -19,11 +19,11 @@ uv run pixelbook status ../books/pragmatic-programmer/ch02/ep01 --json   # 给 /
 | 阶段 ID | 阶段 | 条件 | 人工关口 | 下一步 |
 |---|---|---|---|---|
 | `not-in-outline` | 大纲里没有这一期 | 章目录里没有 `outline.yaml`，或者它的 `episodes[].id` 里没有期目录名 | | `/outline <书> <章>` |
-| `outline-review` | 大纲待审 | 大纲没提交进 Git，或者提交后又有改动（和 `/outline`「审过才提交」一致） | 1 | 人审大纲，审过后提交 |
+| `outline-review` | 大纲待审 | 大纲里**这一期的条目**没提交进 Git，或者提交后又改过（和 `/outline`「审过才提交」一致）。只比本期条目：HEAD 里的本期条目和工作区的一样就算审过；往大纲里加别的期、改别的期，不影响已经审过的期 | 1 | 人审大纲，审过后提交 |
 | `no-script` | 没有旁白稿 | 期目录里没有 `script.yaml` | | `/script <期目录>` |
 | `script-review` | 旁白稿待审 | 没有 `factcheck.yaml` | | `/factcheck <期目录>` |
 | `script-review` | 旁白稿待审 | 有 `factcheck.yaml`，`status` 不是 `final` | 2 | 人审旁白稿和语义核对结果，审过后按 `/script` 第 7 步定稿、提交 |
-| `ready-to-voice` | 定稿待配音 | 产物目录里没有合成清单 `episode.json`，或者它比旁白稿旧 | | `pixelbook terms <旁白稿>`，然后 `pixelbook voice <旁白稿>` |
+| `ready-to-voice` | 定稿待配音 | 产物目录里没有合成清单 `episode.json`，或者它比配音的输入旧（见下） | | `pixelbook terms <旁白稿>`，然后 `pixelbook voice <旁白稿>` |
 | `no-storyboard` | 没有分镜 | 期目录里没有 `storyboard.json` | | `/storyboard <期目录>` |
 | `ready-to-render` | 待渲染 | 没有时间轴 `timeline.json` 或成片 `<书>-<章>-<期>.mp4`，或者它们比输入旧 | | `pixelbook render <旁白稿>` |
 | `video-review` | 成片待审 | 分镜没提交进 Git，或者提交后又有改动 | 3 | 人看成片、配乐署名 `credits.txt`（有的话）和「表现不了」清单，审过后提交分镜 |
@@ -41,7 +41,7 @@ uv run pixelbook status ../books/pragmatic-programmer/ch02/ep01 --json   # 给 /
 
 | 产物 | 输入 | 从哪一步重跑 | 阶段 |
 |---|---|---|---|
-| 合成清单 `out/episode.json` | 旁白稿 `script.yaml` | 配音 | 定稿待配音 |
+| 合成清单 `out/episode.json` | 旁白稿 `script.yaml`、读音表 `pronunciation.yaml`、书配置 `books/<书>/book.yaml`、书用的音色配置（`book.yaml` 的 `voice` 引用的文件，没写就是 `voice.yaml`）；不存在的文件不比 | 配音 | 定稿待配音 |
 | 时间轴 `out/timeline.json` | 合成清单、分镜 `storyboard.json` | 时间轴 | 待渲染 |
 | 成片 `out/<书>-<章>-<期>.mp4` | 时间轴 | 渲染 | 待渲染 |
 

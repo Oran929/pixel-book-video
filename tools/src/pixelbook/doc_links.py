@@ -1,6 +1,6 @@
 """文档链接检查（#59）：skill、README、`docs/`（以及源码注释）里的相对链接，以及「文档路径「标题」」引用。
 
-- 相对链接 `[文字](路径)`（只在 Markdown 里）：按所在文件的目录解析，目标文件不存在就报。
+- 相对链接 `[文字](路径)`（只在 Markdown 里，代码块里的不查）：按所在文件的目录解析，目标文件不存在就报。
 - 标题引用 `docs/reference/storyboard.md「音效」`：路径按仓库根目录解析，`README` 指根目录的 README.md
   （也接受相对所在文件的写法），目标文件里没有这个标题就报。`「配乐 › 选曲」`这种写法
   每一级都要是目标文件里的标题。`『』` 和 `「」` 都认。
@@ -12,9 +12,10 @@ import re
 from pathlib import Path
 
 MARKDOWN_LINK = re.compile(r"\]\(([^)\s]+)\)")
-# 文档路径（`README` 或 `….md`，可以包在反引号里）紧跟一个或几个「标题」
+# 文档路径（`README` 或 `….md`，可以包在反引号里）紧跟一个或几个「标题」。
+# 路径只由 ASCII 字符组成，所以前面紧贴汉字（「见」）时也认得出
 TITLE_REFERENCE = re.compile(
-    r"(?<![\w./-])`?(?P<path>README|[\w./-]+\.md)`?"
+    r"(?<![A-Za-z0-9_./-])`?(?P<path>README|[A-Za-z0-9_./-]+\.md)`?"
     r"(?P<titles>(?:[「『][^」』]+[」』])+)"
 )
 HEADING = re.compile(r"^#{1,6}\s+(.+)$")
@@ -37,9 +38,13 @@ def broken_links(root: Path, files: list[Path]) -> list[str]:
     problems = []
     for file in files:
         where = file.relative_to(root).as_posix()
+        fenced = False
         for number, line in enumerate(file.read_text(encoding="utf-8").splitlines(), 1):
-            # 源码里的 `](…)` 多是正则或代码，相对链接只在 Markdown 里查
-            links = MARKDOWN_LINK.findall(line) if file.suffix == ".md" else []
+            if line.lstrip().startswith("```"):
+                fenced = not fenced
+            # 源码里、代码块里的 `](…)` 多是正则或代码，相对链接只在 Markdown 正文里查
+            markdown = file.suffix == ".md" and not fenced
+            links = MARKDOWN_LINK.findall(line) if markdown else []
             for target in links:
                 if _is_external(target):
                     continue

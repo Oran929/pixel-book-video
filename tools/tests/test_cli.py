@@ -259,9 +259,58 @@ def test_mix_writes_the_audition_track_into_the_episode_out_dir(
 
     assert cli.main(["mix", str(episode / "out" / "timeline.json")]) == 0
 
-    out = episode / "out" / "demo-ch01-ep01-mix.wav"
+    out = episode / "out" / "mix.wav"
     assert wav_seconds(out) == pytest.approx(3.0)
     assert str(out) in capsys.readouterr().out
+
+
+def _voiced_timeline(repo, engine, asr) -> str:
+    """配好音，返回只有一句（3 秒 = 90 帧）的时间轴内容。"""
+    assert cli.main(["voice", _script(repo)]) == 0
+    episode = repo / "books" / "demo" / "ch01" / "ep01"
+    manifest = json.loads((episode / "out" / "episode.json").read_text())
+    line = {"id": "s01-l01", "audio": manifest["lines"][0]["audio"], "startFrame": 0}
+    return json.dumps({"fps": 30, "totalFrames": 90, "lines": [line]})
+
+
+def test_mix_accepts_a_timeline_anywhere_when_given_an_output_path(
+    repo, engine, asr, tmp_path, capsys
+):
+    timeline = tmp_path / "elsewhere" / "default-pauses.timeline.json"
+    timeline.parent.mkdir()
+    timeline.write_text(_voiced_timeline(repo, engine, asr))
+    out = tmp_path / "audition.wav"
+
+    assert cli.main(["mix", str(timeline), "--out", str(out)]) == 0
+
+    assert wav_seconds(out) == pytest.approx(3.0)
+
+
+def test_mix_writes_next_to_a_timeline_in_the_episode_dir_itself(
+    repo, engine, asr, capsys
+):
+    episode = repo / "books" / "demo" / "ch01" / "ep01"
+    timeline = episode / "timeline.json"
+    timeline.write_text(_voiced_timeline(repo, engine, asr))
+
+    assert cli.main(["mix", str(timeline)]) == 0
+
+    assert wav_seconds(episode / "out" / "mix.wav") == pytest.approx(3.0)
+
+
+def test_mix_without_an_episode_asks_for_an_output_path(
+    repo, engine, asr, tmp_path, capsys
+):
+    timeline = tmp_path / "elsewhere" / "timeline.json"
+    timeline.parent.mkdir()
+    timeline.write_text(_voiced_timeline(repo, engine, asr))
+    capsys.readouterr()
+
+    assert cli.main(["mix", str(timeline)]) == 1
+
+    out = capsys.readouterr().out
+    assert "--out" in out
+    assert str(timeline) in out
 
 
 def test_mix_reports_a_malformed_timeline(repo, capsys):

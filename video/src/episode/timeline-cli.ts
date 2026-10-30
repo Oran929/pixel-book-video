@@ -2,8 +2,8 @@
 // 用 tsx 在 Node 里运行；相对路径按调用 npm 时的目录解析（INIT_CWD）。
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { exportTimeline, TIMELINE_FILE } from "./export-timeline";
-import { OUT_DIR } from "./out-dir";
+import { exportTimeline } from "./export-timeline";
+import { OUT_DIR, TIMELINE_FILE } from "./out-dir";
 import { segmentsText } from "./rhythm";
 
 const USAGE =

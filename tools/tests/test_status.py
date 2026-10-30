@@ -29,8 +29,8 @@ def _status(repo, capsys, *flags, episode=EPISODE):
     return code, capsys.readouterr().out
 
 
-def _json(repo, capsys):
-    code, out = _status(repo, capsys, "--json")
+def _json(repo, capsys, episode=EPISODE):
+    code, out = _status(repo, capsys, "--json", episode=episode)
     assert code == 0
     return json.loads(out)
 
@@ -55,10 +55,27 @@ def _write(repo, path, text=""):
     return file
 
 
-def _outline(repo, commit=True):
-    _write(
-        repo, "books/demo/ch01/outline.yaml", "chapter: 1\nepisodes:\n  - id: ep01\n"
-    )
+OUTLINE = "books/demo/ch01/outline.yaml"
+
+
+def _entry(episode="ep01", topic="主题"):
+    """大纲里一期的条目。"""
+    return f"""\
+  - id: {episode}
+    topic: {topic}
+    units: [1]
+    segments:
+      - title: 开场
+        minutes: 1
+    points:
+      - id: p01
+        text: 观点
+        cite: ch01-¶001
+"""
+
+
+def _outline(repo, commit=True, entries=None):
+    _write(repo, OUTLINE, "chapter: 1\nepisodes:\n" + (entries or _entry()))
     if commit:
         _commit(repo)
 
@@ -82,15 +99,49 @@ def test_an_uncommitted_outline_waits_at_gate_1(repo, capsys):
     assert "大纲待审（人工关口 1）" in out
 
 
-def test_an_outline_edited_after_commit_waits_at_gate_1_again(repo, capsys):
+def test_an_outline_entry_edited_after_commit_waits_at_gate_1_again(repo, capsys):
     _outline(repo)
-    _write(
-        repo,
-        "books/demo/ch01/outline.yaml",
-        "chapter: 1\nepisodes:\n  - id: ep01\n# 改\n",
-    )
+    _outline(repo, commit=False, entries=_entry(topic="改过的主题"))
 
     assert _json(repo, capsys)["stage"] == "outline-review"
+
+
+def test_only_this_episodes_outline_entry_decides_gate_1(repo, capsys):
+    # 大纲里加了别的期但还没提交，已经审过的这一期不退回关口 1
+    _outline(repo)
+    _outline(repo, commit=False, entries=_entry() + _entry("ep02"))
+    _write(repo, OUTLINE, (repo / OUTLINE).read_text() + "# 备注\n")
+
+    assert _json(repo, capsys)["stage"] == "no-script"
+    assert _json(repo, capsys, episode="books/demo/ch01/ep02")["stage"] == (
+        "outline-review"
+    )
+
+
+def test_an_episode_added_to_a_committed_outline_waits_at_gate_1(repo, capsys):
+    _outline(repo, entries=_entry("ep02"))
+    _outline(repo, commit=False, entries=_entry("ep02") + _entry())
+
+    assert _json(repo, capsys)["stage"] == "outline-review"
+
+
+def test_a_malformed_outline_exits_nonzero_naming_the_problem(repo, capsys):
+    _write(repo, OUTLINE, "chapter: 1\nepisodes:\n  - id: ep01\n")
+
+    code, out = _status(repo, capsys)
+
+    assert code != 0
+    assert "`topic` 缺失" in out
+    assert "pixelbook outline" in out
+
+
+def test_an_outline_that_is_not_yaml_exits_nonzero(repo, capsys):
+    _write(repo, OUTLINE, "chapter: [1\n")
+
+    code, out = _status(repo, capsys)
+
+    assert code != 0
+    assert "不是合法的 YAML" in out
 
 
 def test_a_committed_outline_without_a_script_needs_the_script_skill(repo, capsys):
@@ -106,7 +157,24 @@ def test_a_committed_outline_without_a_script_needs_the_script_skill(repo, capsy
 
 
 def _script(repo, status="draft"):
-    _write(repo, f"{EPISODE}/script.yaml", f"status: {status}\nsegments: []\n")
+    _write(
+        repo,
+        f"{EPISODE}/script.yaml",
+        f"""\
+title: 标题
+status: {status}
+segments:
+  - id: s01
+    title: 开场
+    scenes:
+      - id: s01-v01
+        description: 画面
+        lines:
+          - id: s01-l01
+            text: 一句话
+            cite: ch01-¶001
+""",
+    )
 
 
 def test_a_draft_without_factcheck_needs_the_factcheck_skill(repo, capsys):
@@ -134,6 +202,18 @@ def test_a_draft_with_factcheck_waits_at_gate_2(repo, capsys):
     assert f"{EPISODE}/factcheck.yaml" in result["review"]
     _, out = _status(repo, capsys)
     assert "旁白稿待审（人工关口 2）" in out
+
+
+def test_a_malformed_script_exits_nonzero_naming_the_problem(repo, capsys):
+    _outline(repo)
+    _write(repo, f"{EPISODE}/script.yaml", "status: final\nsegments: []\n")
+    _write(repo, f"{EPISODE}/factcheck.yaml", "round: 1\n")
+
+    code, out = _status(repo, capsys)
+
+    assert code != 0
+    assert "`title` 缺失" in out
+    assert "pixelbook check" in out
 
 
 def test_a_final_script_without_factcheck_needs_the_factcheck_skill(repo, capsys):
@@ -268,6 +348,42 @@ def test_a_script_newer_than_the_manifest_reruns_from_voicing(repo, capsys):
     _, out = _status(repo, capsys)
     assert "产物过期，从「配音」重跑" in out
     assert "已完成" not in out
+
+
+@pytest.mark.parametrize(
+    ("name", "path"),
+    [
+        ("读音表", "pronunciation.yaml"),
+        ("书配置", "books/demo/book.yaml"),
+        ("音色配置", "voice.yaml"),
+    ],
+)
+def test_a_voicing_config_newer_than_the_manifest_reruns_from_voicing(
+    repo, capsys, name, path
+):
+    _rendered(repo)
+    _write(repo, path, "{}\n")
+    _at(repo, path, 6_000)
+
+    result = _json(repo, capsys)
+
+    assert result["stage"] == "ready-to-voice"
+    assert result["rerun_from"] == "配音"
+    assert result["stale"] == [f"合成清单 {MANIFEST} 比{name} {path} 旧"]
+
+
+def test_a_book_voice_override_is_a_voicing_input(repo, capsys):
+    _rendered(repo)
+    _write(repo, "books/demo/book.yaml", "voice: voices/yujie.yaml\n")
+    _write(repo, "voices/yujie.yaml", "{}\n")
+    _write(repo, "voice.yaml", "{}\n")
+    _at(repo, "books/demo/book.yaml", 1_000)
+    _at(repo, "voice.yaml", 6_000)
+    _at(repo, "voices/yujie.yaml", 7_000)
+
+    result = _json(repo, capsys)
+
+    assert result["stale"] == [f"合成清单 {MANIFEST} 比音色配置 voices/yujie.yaml 旧"]
 
 
 def test_a_storyboard_newer_than_the_timeline_reruns_from_the_timeline(repo, capsys):

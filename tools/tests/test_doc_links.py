@@ -41,5 +41,32 @@ def test_reports_title_reference_to_missing_heading(tmp_path):
     ]
 
 
+def test_links_inside_code_fences_are_not_checked(tmp_path):
+    doc = write(
+        tmp_path,
+        "docs/a.md",
+        "# A\n\n```python\nre.compile(r'[x](y)')\n```\n\n再看 [C](missing.md)。\n",
+    )
+
+    assert broken_links(tmp_path, [doc]) == [
+        "docs/a.md:7: 链接的文件不存在：missing.md"
+    ]
+
+
+def test_a_reference_right_after_chinese_text_is_checked(tmp_path):
+    write(tmp_path, "README.md", "# 项目\n\n## 检查\n")
+    write(tmp_path, "docs/a.md", "# A\n\n## x\n")
+    skill = write(
+        tmp_path,
+        ".claude/skills/x/SKILL.md",
+        "见README「检查」，见README「没有」。\n见docs/a.md「x」，见docs/a.md「y」。\n",
+    )
+
+    assert broken_links(tmp_path, [skill]) == [
+        ".claude/skills/x/SKILL.md:1: README.md 里没有标题「没有」",
+        ".claude/skills/x/SKILL.md:2: docs/a.md 里没有标题「y」",
+    ]
+
+
 def test_repository_has_no_broken_links():
     assert broken_links(REPO_ROOT, scanned_files(REPO_ROOT)) == []
