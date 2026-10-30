@@ -2,7 +2,6 @@
 name: script
 description: 按大纲写一期旁白稿（status draft），跑 pixelbook check 直到没有报错，调用 /factcheck，给不支持和部分支持的句子写好验证过的建议改法，停在人工关口 2 交给用户决定。
 argument-hint: <期目录>
-disable-model-invocation: true
 ---
 
 # /script <期目录>

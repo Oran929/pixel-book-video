@@ -33,7 +33,7 @@ cd tools && uv run pixelbook status ../<期目录> --json
 
 ### 3. 执行 `next`
 
-- **skill**（`/outline`、`/script`、`/factcheck`、`/storyboard`）：读 `.claude/skills/<名>/SKILL.md`，把这一条里的参数当作 `$ARGUMENTS`，照它的步骤做完。子 skill 停在关口时，它的汇报就是关口的汇报，接着回到第 1 步。
+- **skill**（`/outline`、`/script`、`/factcheck`、`/storyboard`）：用 Skill 工具调用，这一条里的参数作为 `args` 传入，等它做完。子 skill 停在关口时，它的汇报就是关口的汇报，接着回到第 1 步。
 - **`pixelbook` 命令**：在 `tools/` 下用 `uv run` 跑，命令里的路径前面加 `../`。非零退出时按 `docs/reference/render.md`「出了问题」处理；处理不了就停下，把输出交给用户。
 - **`pixelbook terms`**：列出新术语时，按 `docs/reference/voice.md`「读音表与新术语」给每个术语定读法、登记进 `pronunciation.yaml`，记下这些术语，在关口 3 的汇报里列出（术语、读法、`out/terms/` 里的试听音频）。没有新术语就直接跑下一条。
 - **`pixelbook voice` 报音色和锁定不一致**：停下，把它列出的锁定值和当前值交给用户。音色按书锁定（[ADR-0005](../../../docs/adr/0005-voice-locked-per-book.md)），`--revoice` 只在用户明确说整本书换音色时用。

@@ -2,7 +2,6 @@
 name: storyboard
 description: 按定稿的旁白稿给一期写分镜 storyboard.json：选曲命令选配乐，把每个画面说明落到组件目录里的组件上，跑时间轴导出直到分镜检查通过，pixelbook render 出片，停在人工关口 3。
 argument-hint: <期目录>
-disable-model-invocation: true
 ---
 
 # /storyboard <期目录>

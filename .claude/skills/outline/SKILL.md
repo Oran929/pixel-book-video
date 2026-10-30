@@ -2,7 +2,6 @@
 name: outline
 description: 读一章的转换结果，写出覆盖整章的大纲（拆期、主题、段、带出处的核心观点），跑 pixelbook outline 直到通过，停在人工关口 1。
 argument-hint: <书> <章>
-disable-model-invocation: true
 ---
 
 # /outline <书> <章>
