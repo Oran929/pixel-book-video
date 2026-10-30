@@ -28,7 +28,7 @@ uv run hf download mlx-community/whisper-large-v3-turbo-asr-fp16   # asr: whispe
 
 每句配音缓存在 `books/<书>/cache/tts/<指纹>.wav`（不提交），指纹由朗读文本和音色指纹算出；音色指纹包括模型、参考音频的**文件内容**、参考文本、生成参数和引擎自身的设置（如参考音频补的静音），不包括随机种子。所以再次运行时只有改过的句子会重新生成，改了音色设置或换了参考音频的内容就全部重新生成。每个 wav 旁边的 `<指纹>.json` 记录生成信息。缓存可以随时删掉，删了就整期重新生成。
 
-只想重新复制合成清单和分镜、不重新配音时（比如改了分镜），用 `uv run pixelbook stage ../books/sample/ch01/ep01`。
+只想重新复制合成清单和分镜、不重新配音时（比如改了分镜），用 `uv run pixelbook stage ../books/pragmatic-programmer/ch02/ep01`。
 
 ## 书的音色与锁定
 
@@ -55,7 +55,7 @@ voice: voices/yujie.yaml
 
 ```sh
 cd tools
-uv run pixelbook terms ../books/sample/ch01/ep01/script.yaml   # 每个新术语一段试听音频，在期目录的 out/terms/
+uv run pixelbook terms ../books/pragmatic-programmer/ch02/ep01/script.yaml   # 每个新术语一段试听音频，在期目录的 out/terms/
 ```
 
 听完把读法写进 `pronunciation.yaml`。读法没问题的也要登记成原样不变的条目（如 `DRY: DRY`），表示"已确认"。

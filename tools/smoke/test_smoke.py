@@ -44,7 +44,7 @@ def repo(tmp_path, monkeypatch):
     monkeypatch.setattr("pixelbook.qwen_tts.QwenTtsEngine", FakeTtsEngine)
     monkeypatch.setattr("pixelbook.mlx_asr.MlxAsrEngine", lambda name: FakeAsrEngine())
     save_voice_config(
-        Voice(model="fake-model", speaker="Vivian"), tmp_path / "voice.yaml"
+        Voice(model="fake-model", speaker="Aria"), tmp_path / "voice.yaml"
     )
     (tmp_path / "pronunciation.yaml").write_text("{}\n")
     (tmp_path / "verification.yaml").write_text(

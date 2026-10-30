@@ -318,14 +318,15 @@ def test_text_over_20_characters_is_rejected(tmp_path, script_path, text):
     assert "21" in message
 
 
-def test_sample_book_script_is_valid(tmp_path):
-    sample = REPO_ROOT / "books" / "sample" / "ch01" / "ep01" / "script.yaml"
-    script_path = tmp_path / "books" / "sample" / "ch01" / "ep01" / "script.yaml"
+def test_the_committed_episode_script_voices_without_new_terms(tmp_path):
+    committed = REPO_ROOT / "books" / "pragmatic-programmer" / "ch02" / "ep01"
+    script_path = tmp_path / "books" / "pragmatic-programmer" / "ch02" / "ep01"
+    script_path = script_path / "script.yaml"
     script_path.parent.mkdir(parents=True)
-    shutil.copyfile(sample, script_path)
+    shutil.copyfile(committed / "script.yaml", script_path)
     table = load_pronunciation(REPO_ROOT / "pronunciation.yaml")
 
-    # 样例旁白稿在仓库的读音表下没有新术语，能正式配音
+    # 仓库里的旁白稿在仓库的读音表下没有新术语，能正式配音
     manifest = voice_episode(
         script_path,
         VoicingSettings(
@@ -337,9 +338,13 @@ def test_sample_book_script_is_valid(tmp_path):
         ),
     ).manifest
 
-    # 正文两段（不再追加片尾段，#51）
-    assert len(manifest["segments"]) == 2
-    assert 6 <= len(manifest["lines"]) <= 8
+    assert [s["id"] for s in manifest["segments"]] == [
+        "s01",
+        "s02",
+        "s03",
+        "s04",
+        "s05",
+    ]
 
 
 # ---- 按句配音缓存（票 05） ----

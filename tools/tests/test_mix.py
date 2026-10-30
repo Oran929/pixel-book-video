@@ -14,7 +14,7 @@ from pixelbook.mix import MixError, mix_timeline
 from pixelbook.tts import FakeTtsEngine
 from pixelbook.voice import Voice
 
-VOICE = Voice(model="base-model", speaker="Vivian")
+VOICE = Voice(model="base-model", speaker="Aria")
 
 
 def fake_wav(public, name, text):

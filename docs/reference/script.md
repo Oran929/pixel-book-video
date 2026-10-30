@@ -1,6 +1,6 @@
 # 旁白稿与检查
 
-旁白稿放在 `books/<书>/<章>/<期>/script.yaml`（样例：`books/sample/ch01/ep01/script.yaml`）。顶层的 `title` 必填，是这一期的主题，显示在画面左上角（样例里是示例值「读一本8bit像素书」），缺了或为空时 `voice` 报错。
+旁白稿放在 `books/<书>/<章>/<期>/script.yaml`（例：`books/pragmatic-programmer/ch02/ep01/script.yaml`）。顶层的 `title` 必填，是这一期的主题，显示在画面左上角（例：「优秀设计与 DRY」），缺了或为空时 `voice` 报错。
 
 ```yaml
 title: 读一本8bit像素书          # 主题：等于大纲里这一期的 topic，显示在画面左上角
@@ -88,4 +88,4 @@ uv run pixelbook sync-minutes ../books/pragmatic-programmer/ch02/ep01/script.yam
 
 段和大纲对不上，或全稿估算本身不在 4:00–6:00 内（`check` 也会报错，先改稿）时拒绝、不写文件。改完的大纲要照样通过 `pixelbook outline`。
 
-章目录名必须是 `chNN`，转换结果不存在时先跑 `pixelbook convert`。样例旁白稿的出处不指向真实原文（样例书没有转换结果），不用 `check` 检查。
+章目录名必须是 `chNN`，转换结果不存在时先跑 `pixelbook convert`。

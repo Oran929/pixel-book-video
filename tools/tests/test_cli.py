@@ -17,8 +17,8 @@ from pixelbook.render import RenderError
 from pixelbook.tts import FakeTtsEngine
 from pixelbook.voice import Voice, save_voice_config
 
-DEFAULT = Voice(model="base-model", speaker="Vivian")
-YUJIE = Voice(model="base-model", speaker="Serena")
+DEFAULT = Voice(model="base-model", speaker="Aria")
+YUJIE = Voice(model="base-model", speaker="Bella")
 
 # 一句、带读音表里的术语 DRY：命令行的测试数一数引擎调用、看朗读文本，一句最清楚
 DRY_SCRIPT = """\
@@ -114,7 +114,7 @@ def test_voice_uses_the_book_override(repo, engine, asr):
 
     # 每句用一次音色（片尾不再配音，#51）
     assert engine.voices == [YUJIE]
-    assert _locked_speaker(repo) == "Serena"
+    assert _locked_speaker(repo) == "Bella"
 
 
 def test_voice_refuses_a_changed_voice_until_revoice(repo, engine, asr, capsys):
@@ -123,10 +123,10 @@ def test_voice_refuses_a_changed_voice_until_revoice(repo, engine, asr, capsys):
 
     assert cli.main(["voice", _script(repo)]) == 1
     assert "--revoice" in capsys.readouterr().out
-    assert _locked_speaker(repo) == "Vivian"
+    assert _locked_speaker(repo) == "Aria"
 
     assert cli.main(["voice", _script(repo), "--revoice"]) == 0
-    assert _locked_speaker(repo) == "Serena"
+    assert _locked_speaker(repo) == "Bella"
     assert engine.voices == [DEFAULT, YUJIE]
 
 
@@ -189,7 +189,7 @@ def test_audition_and_choose_voice_default_to_voices_audition(monkeypatch, engin
     )
 
     assert cli.main(["audition"]) == 0
-    assert cli.main(["choose-voice", "serena"]) == 0
+    assert cli.main(["choose-voice", "yujie"]) == 0
 
     assert dirs == [REPO_ROOT / "voices" / "audition"] * 2
 
@@ -323,7 +323,7 @@ def test_render_passes_revoice_through_and_stops_at_the_failing_step(
     assert cli.main(["render", _script(repo), "--revoice"]) == 1
     out = capsys.readouterr().out
     assert "第 2 步「时间轴」失败" in out and "s09-l09" in out
-    assert _locked_speaker(repo) == "Serena"
+    assert _locked_speaker(repo) == "Bella"
     assert not (episode / "out" / "demo-ch01-ep01.mp4").exists()
 
 

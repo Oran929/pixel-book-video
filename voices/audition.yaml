@@ -9,18 +9,11 @@ reference_text: 今天我们一起读一本书，看看作者是怎样一步一�
 params:
   language: chinese
 candidates:
-  - name: vivian
-    model: mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-bf16
-    speaker: Vivian
-  - name: serena
-    model: mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-bf16
-    speaker: Serena
-  - name: uncle-fu
-    model: mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-bf16
-    speaker: Uncle_Fu
-  - name: design-calm-male
+  # 甜妹，最适合长时间讲解（当前默认音色）
+  - name: tianmei
     model: mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16
-    instruct: 沉稳温和的青年男声，普通话标准，语速适中，像在给朋友讲一本书，亲切但不夸张。
-  - name: design-bright-female
+    instruct: 甜美少女的台湾腔声音，声音颗粒感较为细腻柔和，语速中等，适合长时间讲解，偏活泼
+  # 御姐，娓娓道来
+  - name: yujie
     model: mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16
-    instruct: 清亮自然的青年女声，普通话标准，语速适中，吐字清晰，带一点轻松的讲解感。
+    instruct: 成熟温柔的御姐声，音色颗粒感细腻温润，像说故事一样，适合长时间讲解，娓娓道来

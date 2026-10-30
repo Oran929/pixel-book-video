@@ -7,11 +7,10 @@
 ```
 pronunciation.yaml   读音表（全频道共用）
 voice.yaml           项目默认音色配置（由 `pixelbook choose-voice` 写入）
-voices/              音色试听方案（audition*.yaml）、选定的参考音频、备用音色配置（如 yujie.yaml）
+voices/              音色试听方案（audition.yaml，候选 tianmei、yujie）、选定的参考音频、备用音色配置（如 yujie.yaml）
 books/<书>/          书配置、原书（不提交）、转换出的章（不提交）、锁定音色、配音缓存；书 → 章（大纲）→ 期
 tools/               Python 工具（uv 管理）：旁白稿 → 配音 → 合成清单
 video/               Remotion 项目（npm 管理）：合成清单 + 分镜 → MP4
-character/           频道形象设定图原图（Q.png、M.png）和裁图脚本
 docs/reference/      每种文件的格式和检查规则，以及生成的组件目录 components/
 docs/how-to/         不常用的操作，每篇一个
 ```

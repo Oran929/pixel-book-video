@@ -1,5 +1,6 @@
-"""片头 8-bit 音效 + 配乐：方波/三角波/噪声合成，时间点读 src/timing.json，与画面同帧对齐。
-用法：python3 audio/make_audio.py src/timing.json out/intro-audio.wav
+"""片头 8-bit 音效 + 配乐：方波/三角波/噪声合成，时间点读 同目录的 timing.json，与画面同帧对齐。
+用法（在仓库根目录）：tools/.venv/bin/python video/src/intro/load-pixel-book/make_audio.py \
+    video/src/intro/load-pixel-book/timing.json video/public/intro/load-pixel-book.wav
 """
 import json
 import sys
