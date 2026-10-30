@@ -37,10 +37,9 @@ from pixelbook.voice import Voice, VoiceConfigError
 from pixelbook.voice_lock import resolve_book_voice
 
 AUDITION_PLAN = REPO_ROOT / "voices" / "audition.yaml"
-AUDITION_OUT = REPO_ROOT / "out" / "audition"
+AUDITION_OUT = REPO_ROOT / "voices" / "audition"
 VIDEO_PUBLIC = REPO_ROOT / "video" / "public"
 PRONUNCIATION = REPO_ROOT / "pronunciation.yaml"
-TERMS_OUT = REPO_ROOT / "out" / "terms"
 VERIFICATION = REPO_ROOT / "verification.yaml"
 
 
@@ -185,7 +184,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     render.add_argument("script", type=Path, help="books/<书>/<章>/<期>/script.yaml")
     render.add_argument(
-        "--out", type=Path, help="MP4 写到哪里，默认 out/<书>-<章>-<期>.mp4"
+        "--out", type=Path, help="MP4 写到哪里，默认期目录的 out/<书>-<章>-<期>.mp4"
     )
     render.add_argument(
         "--revoice",
@@ -214,7 +213,9 @@ def main(argv: list[str] | None = None) -> int:
         "terms", help="为一期旁白稿的每个新术语生成一段试听音频（书的音色）"
     )
     terms.add_argument("script", type=Path, help="books/<书>/<章>/<期>/script.yaml")
-    terms.add_argument("--out", type=Path, default=TERMS_OUT)
+    terms.add_argument(
+        "--out", type=Path, help="试听音频写到哪里，默认期目录的 out/terms/"
+    )
 
     stage = commands.add_parser(
         "stage", help="只把期目录里的合成清单和分镜复制到 video/public/（不重新配音）"
@@ -233,7 +234,7 @@ def main(argv: list[str] | None = None) -> int:
     mix.add_argument(
         "--out",
         type=Path,
-        help="试听音轨写到哪里，默认 out/mix/<书>-<章>-<期>.wav",
+        help="试听音轨写到哪里，默认期目录的 out/<书>-<章>-<期>-mix.wav",
     )
 
     convert = commands.add_parser(
@@ -364,13 +365,12 @@ def main(argv: list[str] | None = None) -> int:
             book_voice = _book_voice(script)
             from pixelbook.qwen_tts import QwenTtsEngine
 
-            results = audition_terms(
-                script, table, QwenTtsEngine(), book_voice, args.out
-            )
+            out = args.out or EpisodePath.from_script(script).terms_dir
+            results = audition_terms(script, table, QwenTtsEngine(), book_voice, out)
             if not results:
                 print("没有新术语，可以直接 `pixelbook voice`")
             else:
-                print(f"{len(results)} 个新术语，试听音频在 {args.out}：")
+                print(f"{len(results)} 个新术语，试听音频在 {out}：")
                 for item in results:
                     print(
                         f"  {item['file'].name:<24} {item['term']}"
@@ -380,13 +380,7 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "mix":
             timeline = args.timeline.resolve()
             # timeline.json 在期目录的产物目录 out/ 里
-            out = (
-                args.out
-                or REPO_ROOT
-                / "out"
-                / "mix"
-                / f"{EpisodePath(timeline.parent.parent).id}.wav"
-            ).resolve()
+            out = (args.out or EpisodePath(timeline.parent.parent).mix).resolve()
             seconds = mix_timeline(timeline, VIDEO_PUBLIC, out)
             print(f"试听音轨 {out}：{seconds:.2f} 秒")
         else:
@@ -411,8 +405,8 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _music_trial(script: Path, draft: bool, storyboard: Path | None) -> int:
-    """出片到 out/<期>.mp4，配乐声轨到 out/<期>-music.wav，然后检查配乐
-    （参照写在 out/<期>-music-reference.wav）。
+    """出片到期目录的 out/<书>-<章>-<期>.mp4，配乐声轨到同一目录的
+    <书>-<章>-<期>-music.wav，然后检查配乐（参照写在它旁边的 -music-reference.wav）。
 
     给了 `storyboard` 时，出片期间临时换上这份分镜，结束后把期目录里的分镜恢复原样
     （原来没有就删掉）。
@@ -432,9 +426,8 @@ def _music_trial(script: Path, draft: bool, storyboard: Path | None) -> int:
 
 
 def _run_music_trial(script: Path, draft: bool) -> int:
-    episode_id = EpisodePath.from_script(script).id
-    mp4 = REPO_ROOT / "out" / f"{episode_id}.mp4"
-    stem = REPO_ROOT / "out" / f"{episode_id}-music.wav"
+    episode = EpisodePath.from_script(script)
+    mp4, stem = episode.video, episode.music_stem
     if _render(script, mp4, revoice=False, draft=draft) != 0:
         return 1
     try:
@@ -442,7 +435,7 @@ def _run_music_trial(script: Path, draft: bool) -> int:
     except RenderError as error:
         print(error)
         return 1
-    timeline = json.loads(EpisodePath.from_script(script).timeline.read_text())
+    timeline = json.loads(episode.timeline.read_text())
     if timeline.get("music") is None:
         print("这一期没有分镜（或分镜没写 music），没有配乐可查")
         return 1
@@ -469,9 +462,7 @@ def _run_music_trial(script: Path, draft: bool) -> int:
 
 
 def _render(script: Path, out: Path | None, revoice: bool, draft: bool) -> int:
-    out = (
-        out or REPO_ROOT / "out" / f"{EpisodePath.from_script(script).id}.mp4"
-    ).resolve()
+    out = (out or EpisodePath.from_script(script).video).resolve()
     try:
         try:
             settings = _voicing_settings(script, revoice)

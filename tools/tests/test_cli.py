@@ -13,6 +13,7 @@ from pixelbook import REPO_ROOT, cli
 from pixelbook.asr import FakeAsrEngine
 from pixelbook.audio import wav_seconds
 from pixelbook.pipeline import SUBTITLE_FONT
+from pixelbook.render import RenderError
 from pixelbook.tts import FakeTtsEngine
 from pixelbook.voice import Voice, save_voice_config
 
@@ -167,6 +168,32 @@ def test_term_audition_uses_the_book_voice_without_guard_or_lock(repo, engine):
     assert lock.read_text() == "model: base-model\nspeaker: Ryan\n"
 
 
+def test_term_audition_writes_into_the_episode_out_dir_by_default(repo, engine):
+    (repo / "pronunciation.yaml").write_text("{}\n")
+
+    assert cli.main(["terms", _script(repo)]) == 0
+
+    terms = repo / "books" / "demo" / "ch01" / "ep01" / "out" / "terms"
+    assert [path.suffix for path in terms.iterdir()] == [".wav"]
+
+
+def test_audition_and_choose_voice_default_to_voices_audition(monkeypatch, engine):
+    # 音色试听不属于任何一本书，默认目录在 voices/audition/（ADR-0013）
+    dirs = []
+    monkeypatch.setattr(
+        cli, "run_audition", lambda plan, engine, out: dirs.append(out) or {}
+    )
+    monkeypatch.setattr(cli, "_print_audition_report", lambda report, out: None)
+    monkeypatch.setattr(
+        cli, "choose_voice", lambda audition_dir, name, root: dirs.append(audition_dir)
+    )
+
+    assert cli.main(["audition"]) == 0
+    assert cli.main(["choose-voice", "serena"]) == 0
+
+    assert dirs == [REPO_ROOT / "voices" / "audition"] * 2
+
+
 def test_voice_verifies_with_the_configured_asr_and_retries(repo, engine, asr, capsys):
     asr.mishear = {"今天读一本 D R Y 的书": ["今天读一本书"] * 2}
 
@@ -207,7 +234,9 @@ def test_voice_lists_lines_that_passed_only_on_pinyin(repo, engine, asr, capsys)
     assert "拼音差异率 0%" in out
 
 
-def test_mix_writes_the_audition_track_under_out(repo, engine, asr, capsys):
+def test_mix_writes_the_audition_track_into_the_episode_out_dir(
+    repo, engine, asr, capsys
+):
     assert cli.main(["voice", _script(repo)]) == 0
     episode = repo / "books" / "demo" / "ch01" / "ep01"
     manifest = json.loads((episode / "out" / "episode.json").read_text())
@@ -230,7 +259,7 @@ def test_mix_writes_the_audition_track_under_out(repo, engine, asr, capsys):
 
     assert cli.main(["mix", str(episode / "out" / "timeline.json")]) == 0
 
-    out = repo / "out" / "mix" / "demo-ch01-ep01.wav"
+    out = episode / "out" / "demo-ch01-ep01-mix.wav"
     assert wav_seconds(out) == pytest.approx(3.0)
     assert str(out) in capsys.readouterr().out
 
@@ -295,7 +324,24 @@ def test_render_passes_revoice_through_and_stops_at_the_failing_step(
     out = capsys.readouterr().out
     assert "第 2 步「时间轴」失败" in out and "s09-l09" in out
     assert _locked_speaker(repo) == "Serena"
-    assert not (repo / "out" / "demo-ch01-ep01.mp4").exists()
+    assert not (episode / "out" / "demo-ch01-ep01.mp4").exists()
+
+
+def test_render_writes_the_mp4_into_the_episode_out_dir_by_default(
+    repo, monkeypatch, capsys
+):
+    outs = []
+
+    def render_episode(script, settings, out, draft, log):
+        outs.append(out)
+        raise RenderError("渲染", "不真的渲染")
+
+    monkeypatch.setattr(cli, "render_episode", render_episode)
+
+    assert cli.main(["render", _script(repo)]) == 1
+
+    episode = repo / "books" / "demo" / "ch01" / "ep01"
+    assert outs == [episode / "out" / "demo-ch01-ep01.mp4"]
 
 
 def test_render_refuses_a_draft_script_at_the_voicing_step(repo, engine, asr, capsys):

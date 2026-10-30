@@ -1,6 +1,6 @@
 # 御姐音色试听方案（只含新候选，不重跑 audition.yaml 里的五个）
-# 运行：cd tools && uv run pixelbook audition --plan ../voices/audition-yujie.yaml --out ../out/audition-yujie
-# 选定：cd tools && uv run pixelbook choose-voice <名字> --from ../out/audition-yujie
+# 运行：cd tools && uv run pixelbook audition --plan ../voices/audition-yujie.yaml --out ../voices/audition/yujie
+# 选定：cd tools && uv run pixelbook choose-voice <名字> --from ../voices/audition/yujie
 # 测试旁白和参考句与 audition.yaml 相同，方便横向对比。
 lines:
   - 这条原则叫 DRY，意思是不要重复你自己。

@@ -23,9 +23,12 @@ books/*/cache/
 # 期目录的产物目录：命令为这一期生成的全部文件（ADR-0013）
 books/*/*/*/out/
 
-# Remotion 产物
-out/
+# Remotion 读的这一期文件：`pixelbook stage` 从期目录复制过去
 video/public/episode/
+# 在 video/ 里手动渲染的样张、样片（npx remotion render/still 的默认目录）
+video/out/
+# 音色试听：不属于任何一本书（ADR-0013）
+voices/audition/
 # 选定的参考音频要提交（ADR-0005：音色一致）
 !voices/*.wav
 # 音效要提交（#37）：wav 和生成它的 jsfxr 参数放在一起

@@ -9,7 +9,7 @@
 三个方块同时入场、各放一个音效时不削波。
 真实 TTS 和语音识别换成假引擎（静音 wav），不加载任何模型；验证的是渲染管线和
 时长，不是音质。仓库根目录、Remotion 静态目录都换成临时目录：旁白稿、配音缓存、
-锁定音色和 MP4 都在里面，不碰 `books/`、`video/public/episode/` 和 `out/`。
+锁定音色和 MP4 都在里面，不碰 `books/` 和 `video/public/episode/`。
 """
 
 import json
@@ -103,7 +103,8 @@ def test_fixed_sample_renders_with_the_computed_number_of_frames(repo, capsys):
     assert cli.main(["render", str(episode / "script.yaml")]) == 0
 
     out = capsys.readouterr().out
-    mp4 = repo / "out" / "smoke-ch01-ep01.mp4"
+    # 成片写进期目录的产物目录，文件名保留完整 ID（ADR-0013）
+    mp4 = episode / "out" / "smoke-ch01-ep01.mp4"
     assert f"成片 {mp4}" in out
     assert "复核未通过：无" in out
     timeline = json.loads((episode / "out" / "timeline.json").read_text())
@@ -174,7 +175,7 @@ def test_fixed_sample_renders_with_the_computed_number_of_frames(repo, capsys):
         total,
         fps,
         public,
-        repo / "out" / "smoke-music-reference.wav",
+        episode / "out" / "smoke-music-reference.wav",
     )
     reference = frame_levels(reference_wav, fps)[:body_end]
     assert sound_problems(mix[:body_end], reference, [s["frame"] for s in sounds]) == []

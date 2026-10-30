@@ -153,6 +153,26 @@ class EpisodePath:
         return self.out_dir / SEGMENTS_NAME
 
     @property
+    def video(self) -> Path:
+        """成片 `<书>-<章>-<期>.mp4`，`pixelbook render` 写出；文件名带完整 ID，拖出去也不重名。"""
+        return self.out_dir / f"{self.id}.mp4"
+
+    @property
+    def music_stem(self) -> Path:
+        """配乐声轨，`pixelbook music-trial` 写出；参照在它旁边（`-reference.wav`）。"""
+        return self.out_dir / f"{self.id}-music.wav"
+
+    @property
+    def mix(self) -> Path:
+        """试听混音，`pixelbook mix` 写出。"""
+        return self.out_dir / f"{self.id}-mix.wav"
+
+    @property
+    def terms_dir(self) -> Path:
+        """新术语试听，`pixelbook terms` 写出。"""
+        return self.out_dir / "terms"
+
+    @property
     def id(self) -> str:
         """输出文件名用的 `书-章-期` 标识。"""
         return f"{self.book_dir.name}-{self.chapter_dir.name}-{self.dir.name}"
