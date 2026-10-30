@@ -10,7 +10,7 @@ disable-model-invocation: true
 参数：`$ARGUMENTS`，形如 `books/<书>/chNN/epNN`。
 
 - **输入**：同一章的大纲 `books/<书>/chNN/outline.yaml` 里和期目录同名的那一期（主题、`units`、段、核心观点），以及这一期覆盖的原文：转换结果 `books/<书>/chapters/chNN.md` 里本期范围内的编号段落。
-- **输出**：`<期目录>/script.yaml`（`status: draft`）、`/factcheck` 写出的 `<期目录>/factcheck.yaml`，和给用户的建议改法（临时目录里的草稿副本，不改正式稿）。格式和全部机械规则以 README「旁白稿与检查」「语义核对」为准，由 `pixelbook check` 判定；这份 skill 只管写稿和改稿。
+- **输出**：`<期目录>/script.yaml`（`status: draft`）、`/factcheck` 写出的 `<期目录>/factcheck.yaml`，和给用户的建议改法（临时目录里的草稿副本，不改正式稿）。格式和全部机械规则以 `docs/reference/script.md`「旁白稿与检查」和 `docs/reference/factcheck.md`「语义核对」为准，由 `pixelbook check` 判定；这份 skill 只管写稿和改稿。
 - 术语以 `GLOSSARY.md` 为准：期、主题、段、画面、旁白句、出处、大纲、核心观点。
 
 ## 防编造
@@ -21,7 +21,7 @@ disable-model-invocation: true
 - **出处要够**：`cite` 列出这句话依赖的全部段落，一句概括了几段就列几段。裁判只看 `cite` 里的段落，漏列的依据等于没有依据。
 - **用自己的话**：改写原文，尽量不用原文措辞；提示框标题、术语和专有名词（DRY、ETC、曳光弹）照用。
 - **不念提示编号**：书里的「提示14」「提示15」对观众没有意义，字幕和 `speech` 只讲提示框的内容（可以照用 `提示N` 后面的标题），不写编号（阿拉伯数字和中文数字都不行）；`pixelbook check` 会报错。画面说明里可以写 `提示N` 指明是哪个提示框。
-- **画面只用书里的术语**：`description` 里的概念、名字、物件都在本章原文出现过。`pixelbook check` 只能查出其中的拉丁字母词、引号里的词语和 `提示N`（README「旁白稿与检查」），中文概念和名字要你自己对照原文。
+- **画面只用书里的术语**：`description` 里的概念、名字、物件都在本章原文出现过。`pixelbook check` 只能查出其中的拉丁字母词、引号里的词语和 `提示N`（`docs/reference/script.md`「旁白稿与检查」），中文概念和名字要你自己对照原文。
 
 ## 步骤
 
@@ -49,7 +49,7 @@ cd tools && uv run pixelbook outline ../books/<书>/chNN/outline.yaml
 - 段照大纲的段，顺序和标题照抄；按各段 `minutes` 分配字数（每分钟 250 字），全稿 1000–1500 字。
 - 一段分成几个画面，画面换在话题转折处；`points` 标出画面讲到的观点。
 - 一句话超过字幕长度就按意思切成几句，每句都有 `cite`；`speech` 只在朗读和字幕必须不同时写。
-- ID 照 README 样例的写法：段 `s01`，画面 `s01-c01`，旁白句 `s01-l01`（段内连续编号）。
+- ID 照 `docs/reference/script.md`「旁白稿与检查」里样例的写法：段 `s01`，画面 `s01-c01`，旁白句 `s01-l01`（段内连续编号）。
 
 **完成**：`script.yaml` 已写出。
 

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { COMPONENT_DECLARATIONS } from "./declarations";
 
-// 组件目录一致性（#44）：README「分镜 › 组件目录」是 `/storyboard` 写分镜的唯一输入，
+// 组件目录一致性（#44）：README「组件目录」是 `/storyboard` 写分镜的唯一输入，
 // 必须列出组件注册表里的每个组件（每个组件一个 `#### 中文名 \`组件名\`` 小节），
 // 每个小节里用反引号写出这个组件声明的每个状态名。
 const README = readFileSync(new URL("../../../README.md", import.meta.url), "utf8");

@@ -183,7 +183,7 @@ export const declareConnector = <
 
 /**
  * 显示文字的登记表：登记在这里的参数格式，值会显示在画面上，
- * 分镜检查要求它出自本画面的画面说明或旁白句（#36，见 README「显示文字」）
+ * 分镜检查要求它出自本画面的画面说明或旁白句（#36，见 `docs/reference/storyboard.md`「显示文字」）
  */
 export const DISPLAY_TEXT = z.registry<Record<string, never>>();
 

@@ -10,7 +10,7 @@ disable-model-invocation: true
 参数：`$ARGUMENTS`。`<书>` 是 `books/` 下的书目录名（如 `pragmatic-programmer`）；`<章>` 是 `chNN`，只给数字时补成两位（`2` → `ch02`）。
 
 - **输入**：转换结果 `books/<书>/chapters/chNN.md`。只读它，不读原书、不手改它。
-- **输出**：`books/<书>/chNN/outline.yaml`，覆盖整章；格式和检查规则以 README「大纲」为准。
+- **输出**：`books/<书>/chNN/outline.yaml`，覆盖整章；格式和检查规则以 `docs/reference/outline.md`「大纲」为准。
 - 术语以 `GLOSSARY.md` 为准：章、单元、期、主题、段、原文、出处、大纲。
 
 ## 步骤

@@ -9,7 +9,7 @@ argument-hint: <期目录>
 参数：`$ARGUMENTS`，形如 `books/<书>/chNN/epNN`。
 
 - **输入**：期目录里的 `script.yaml` 和它引用的转换结果。
-- **输出**：期目录里的 `factcheck.yaml`；格式、轮次、prompt 的内容和两条命令的行为以 README「语义核对」为准。
+- **输出**：期目录里的 `factcheck.yaml`；格式、轮次、prompt 的内容和两条命令的行为以 `docs/reference/factcheck.md`「语义核对」为准。
 - **你是传话人，判定交给裁判。** 写稿的上下文倾向于认为自己写的是对的（ADR-0008），所以判定由一个全新的 subagent（**裁判**）做。给裁判的完整 prompt（说明、原文、旁白句、校验码）由 `pixelbook factcheck-prompt` 生成，你原样转交、原样记下回答，不改动、不补充、不复核裁判的判定。
 
 ## 步骤

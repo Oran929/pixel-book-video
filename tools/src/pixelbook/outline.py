@@ -1,4 +1,4 @@
-"""大纲 `books/<书>/chNN/outline.yaml` 的读取与检查（格式见 README「大纲」）。
+"""大纲 `books/<书>/chNN/outline.yaml` 的读取与检查（格式见 `docs/reference/outline.md`「大纲」）。
 
 结构：章号 `chapter` → 期（`id`、`topic`、`units`、`segments`、`points`）。
 `units` 的每项是单元号，或带段落编号范围的 `{unit, from, to}`（长单元拆成两期时用）；

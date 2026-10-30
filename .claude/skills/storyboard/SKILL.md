@@ -9,15 +9,15 @@ disable-model-invocation: true
 
 参数：`$ARGUMENTS`，形如 `books/<书>/chNN/epNN`。
 
-- **输入**：`<期目录>/script.yaml`（`status: final`）的画面说明 `description` 和旁白句；README「分镜」（连同它下面的网格、字宽估算、嵌套、带序号的状态、显示文字、音效、配乐各小节）和「组件目录」。组件只从这两节了解，它们写全了参数、占几格、状态、动画和音效。
-- **输出**：`<期目录>/storyboard.json`、`pixelbook render` 出的 MP4，和交给用户的「表现不了」清单。格式和全部机械规则以 README「分镜」为准，由 `npm run timeline` 判定；这份 skill 只管选组件、摆位置、挂触发。
+- **输入**：`<期目录>/script.yaml`（`status: final`）的画面说明 `description` 和旁白句；`docs/reference/storyboard.md`「分镜」（整份，连同网格、字宽估算、嵌套、带序号的状态、显示文字、音效、配乐各节）和 README「组件目录」。组件只从这两处了解，它们写全了参数、占几格、状态、动画和音效。
+- **输出**：`<期目录>/storyboard.json`、`pixelbook render` 出的 MP4，和交给用户的「表现不了」清单。格式和全部机械规则以 `docs/reference/storyboard.md`「分镜」为准，由 `npm run timeline` 判定；这份 skill 只管选组件、摆位置、挂触发。
 - 术语以 `GLOSSARY.md` 为准：期、画面、旁白句、分镜、组件、触发、状态、配乐、合成清单、时间轴。
 
 ## 边界
 
 - **旁白稿是定稿，只读不改**：画面说明、旁白句、出处、`status` 都保持原样。配音和出处都由它定，用户在关口 3 提的意见也只落到分镜（或组件）上。
 - **只用现有组件**：只用组件目录里的组件，以及它们声明过的状态、动画和音效。画面说明里组件表现不了的部分，记进「表现不了」清单交给用户，由用户决定是改画面说明还是新做组件。
-- **显示文字只出自本画面**：组件上的每一段字（知识块 `label`、提示牌的 `label`、`number`、`title`，电脑的 `screen`）都取本画面画面说明或某个旁白句原句里的字，口径见 README「显示文字」。提示牌的 `title` 也照这条取：原书提示框的标题只有出现在画面说明或旁白句里时才能用。
+- **显示文字只出自本画面**：组件上的每一段字（知识块 `label`、提示牌的 `label`、`number`、`title`，电脑的 `screen`）都取本画面画面说明或某个旁白句原句里的字，口径见 `docs/reference/storyboard.md`「显示文字」。提示牌的 `title` 也照这条取：原书提示框的标题只有出现在画面说明或旁白句里时才能用。
 - 票的状态（GitHub issue 的标签、开关）保持原样。
 
 ## 步骤
@@ -46,13 +46,13 @@ uv run pixelbook voice ../<期目录>/script.yaml
 cd video && npm run music:pick -- ../<期目录>
 ```
 
-命令按 README「配乐 › 选曲」选一首写进 `storyboard.json`（还没有分镜时写一份只有 `music` 的骨架），已经有 `music` 时原样保留。配乐以它的结果为准：随机由命令完成，`music` 字段之后不再改。记下它打印的曲子、许可和是否要署名，交给用户时用。
+命令按 `docs/reference/storyboard.md`「配乐」里的选曲规则选一首写进 `storyboard.json`（还没有分镜时写一份只有 `music` 的骨架），已经有 `music` 时原样保留。配乐以它的结果为准：随机由命令完成，`music` 字段之后不再改。记下它打印的曲子、许可和是否要署名，交给用户时用。
 
 **完成**：`storyboard.json` 里有命令写的 `music`。
 
 ### 3. 读
 
-读 README「分镜」全节和「组件目录」全节；再读 `script.yaml` 里每个画面的画面说明和它的每个旁白句。
+读 `docs/reference/storyboard.md` 整份和 README「组件目录」全节；再读 `script.yaml` 里每个画面的画面说明和它的每个旁白句。
 
 **完成**：每个画面都知道画面说明要表现什么、旁白在哪一句讲到它。
 
@@ -74,7 +74,7 @@ cd video && npm run music:pick -- ../<期目录>
 cd video && npm run timeline -- ../<期目录>
 ```
 
-按报错改分镜再跑，直到退出码 0。报错写明第几个画面、第几个组件或触发、哪个字段；只改分镜，修法按 README「分镜」的对应规则来。
+按报错改分镜再跑，直到退出码 0。报错写明第几个画面、第几个组件或触发、哪个字段；只改分镜，修法按 `docs/reference/storyboard.md` 的对应规则来。
 
 **完成**：退出码 0。
 
