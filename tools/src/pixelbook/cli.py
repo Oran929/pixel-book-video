@@ -26,6 +26,7 @@ from pixelbook.pipeline import (
 from pixelbook.pronunciation import PronunciationError, load_pronunciation
 from pixelbook.render import RenderError, render_episode, render_music_stem
 from pixelbook.script import ScriptError
+from pixelbook.status import StatusError, episode_status
 from pixelbook.sync_minutes import sync_minutes
 from pixelbook.term_audition import audition_terms
 from pixelbook.verification import (
@@ -296,6 +297,13 @@ def main(argv: list[str] | None = None) -> int:
         "只有用户能授权",
     )
 
+    status = commands.add_parser(
+        "status",
+        help="只看文件判断一期做到哪一步、对应哪个人工关口、下一步跑什么（阶段见 docs/reference/status.md）",
+    )
+    status.add_argument("episode", type=Path, help="books/<书>/<章>/<期>/")
+    status.add_argument("--json", action="store_true", help="输出机器可读的 JSON")
+
     args = parser.parse_args(argv)
     try:
         if args.command == "audition":
@@ -340,6 +348,12 @@ def main(argv: list[str] | None = None) -> int:
                     user_edited=args.user_edited,
                 )
             )
+        elif args.command == "status":
+            result = episode_status(args.episode.resolve())
+            if args.json:
+                print(json.dumps(result.to_json(), ensure_ascii=False, indent=2))
+            else:
+                print(result.to_text())
         elif args.command == "render":
             return _render(args.script.resolve(), args.out, args.revoice, args.draft)
         elif args.command == "music-trial":
@@ -394,6 +408,7 @@ def main(argv: list[str] | None = None) -> int:
         MixError,
         OutlineError,
         ScriptError,
+        StatusError,
         PipelineError,
         PronunciationError,
         VerificationConfigError,

@@ -83,6 +83,7 @@ uv run pixelbook convert ../books/pragmatic-programmer   # 写出 books/pragmati
 - [旁白稿与检查](docs/reference/script.md)：`script.yaml` 和 `pixelbook check`
 - [语义核对](docs/reference/factcheck.md)：`factcheck.yaml`
 - [分镜](docs/reference/storyboard.md)：`storyboard.json`，连同网格、字宽估算、嵌套、带序号的状态、显示文字、音效、配乐
+- [进度判断](docs/reference/status.md)：`pixelbook status` 怎么只看文件判断一期的阶段、人工关口和下一步
 - [组件目录](docs/reference/components/index.md)：分镜能用的组件，目录页每个组件一行，每个组件一页详情；由 `cd video && npm run catalog` 从组件声明生成，不手改
 
 ## 从旁白稿到 MP4

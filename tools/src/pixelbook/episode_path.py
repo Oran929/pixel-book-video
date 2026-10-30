@@ -27,6 +27,7 @@ REPORT_NAME = "report.json"
 # 时间轴导出命令（`npm run timeline`）写出的时间轴和打点时间表
 TIMELINE_NAME = "timeline.json"
 SEGMENTS_NAME = "segments.txt"
+CREDITS_NAME = "credits.txt"
 
 
 # 章目录名 `chNN`，和转换结果 `chapters/chNN.md` 同名
@@ -151,6 +152,11 @@ class EpisodePath:
     def segments(self) -> Path:
         """打点时间表，时间轴导出命令写出。"""
         return self.out_dir / SEGMENTS_NAME
+
+    @property
+    def credits(self) -> Path:
+        """配乐署名，用了 CC-BY 曲子时时间轴导出命令写出。"""
+        return self.out_dir / CREDITS_NAME
 
     @property
     def video(self) -> Path:
