@@ -38,7 +38,7 @@ cd tools && uv run pixelbook check ../<期目录>/script.yaml
 uv run pixelbook voice ../<期目录>/script.yaml
 ```
 
-**完成**：旁白稿是定稿且检查通过；`<期目录>/episode.json` 是这次配音写出的；知道是新写还是修改。
+**完成**：旁白稿是定稿且检查通过；`<期目录>/out/episode.json` 是这次配音写出的；知道是新写还是修改。
 
 ### 2. 选配乐
 

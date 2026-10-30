@@ -3,6 +3,7 @@
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { exportTimeline, TIMELINE_FILE } from "./export-timeline";
+import { OUT_DIR } from "./out-dir";
 import { segmentsText } from "./rhythm";
 
 const USAGE =
@@ -32,7 +33,7 @@ const main = (argv: string[]): number => {
   const episodeDir = resolve(cwd, dir);
   const out = resolve(
     cwd,
-    parsed.values.out ?? resolve(episodeDir, TIMELINE_FILE),
+    parsed.values.out ?? resolve(episodeDir, OUT_DIR, TIMELINE_FILE),
   );
   try {
     const { timeline, segmentsFile, creditsFile } = exportTimeline(episodeDir, {
@@ -47,7 +48,7 @@ const main = (argv: string[]): number => {
     console.log(
       segmentsFile
         ? `已写出打点时间表 ${segmentsFile}：${segmentsText(timeline).split("\n").length - 1} 段`
-        : "未写打点时间表（只在写到期目录里的 timeline.json 时写）",
+        : "未写打点时间表（只在写到 out/timeline.json 时写）",
     );
     if (creditsFile) console.log(`配乐要署名，已写出 ${creditsFile}（贴进视频简介）`);
     // 样片阶段只报告，不以非零码退出

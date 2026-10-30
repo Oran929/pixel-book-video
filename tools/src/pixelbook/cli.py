@@ -15,8 +15,6 @@ from pixelbook.mix import MixError, mix_timeline
 from pixelbook.music_check import MusicSchedule, check_music
 from pixelbook.outline import OutlineError, check_outline, format_warnings, unit_table
 from pixelbook.pipeline import (
-    MANIFEST_NAME,
-    REPORT_NAME,
     SUBTITLE_FONT,
     AsrReportEntry,
     PipelineError,
@@ -230,7 +228,7 @@ def main(argv: list[str] | None = None) -> int:
     mix.add_argument(
         "timeline",
         type=Path,
-        help="`npm run timeline` 导出的 timeline.json（通常在期目录里）",
+        help="`npm run timeline` 导出的 timeline.json（通常在期目录的 out/ 里）",
     )
     mix.add_argument(
         "--out",
@@ -350,14 +348,15 @@ def main(argv: list[str] | None = None) -> int:
             voiced = voice_episode(
                 script, _voicing_settings(script, args.revoice), draft=args.draft
             )
+            episode = EpisodePath.from_script(script)
             manifest = voiced.manifest
             total = sum(line["seconds"] for line in manifest["lines"])
             print(
                 f"{len(manifest['lines'])} 句，配音共 {total:.1f} 秒（不含停顿）；"
-                f"合成清单 {args.script.parent / MANIFEST_NAME}，"
+                f"合成清单 {episode.manifest}，"
                 f"已复制到 {VIDEO_PUBLIC / 'episode'}"
             )
-            _print_asr_report(voiced.report, script.parent / REPORT_NAME)
+            _print_asr_report(voiced.report, episode.report)
         elif args.command == "terms":
             table = load_pronunciation(PRONUNCIATION)
             script = args.script.resolve()
@@ -380,10 +379,13 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"听完把读法写进 {PRONUNCIATION}（读法不变就写成 `术语: 术语`）")
         elif args.command == "mix":
             timeline = args.timeline.resolve()
-            # timeline.json 在期目录里
+            # timeline.json 在期目录的产物目录 out/ 里
             out = (
                 args.out
-                or REPO_ROOT / "out" / "mix" / f"{EpisodePath(timeline.parent).id}.wav"
+                or REPO_ROOT
+                / "out"
+                / "mix"
+                / f"{EpisodePath(timeline.parent.parent).id}.wav"
             ).resolve()
             seconds = mix_timeline(timeline, VIDEO_PUBLIC, out)
             print(f"试听音轨 {out}：{seconds:.2f} 秒")
@@ -417,7 +419,7 @@ def _music_trial(script: Path, draft: bool, storyboard: Path | None) -> int:
     """
     if storyboard is None:
         return _run_music_trial(script, draft)
-    target = script.parent / "storyboard.json"
+    target = EpisodePath.from_script(script).storyboard
     original = target.read_bytes() if target.exists() else None
     target.write_bytes(storyboard.read_bytes())
     try:
@@ -440,7 +442,7 @@ def _run_music_trial(script: Path, draft: bool) -> int:
     except RenderError as error:
         print(error)
         return 1
-    timeline = json.loads((script.parent / "timeline.json").read_text())
+    timeline = json.loads(EpisodePath.from_script(script).timeline.read_text())
     if timeline.get("music") is None:
         print("这一期没有分镜（或分镜没写 music），没有配乐可查")
         return 1

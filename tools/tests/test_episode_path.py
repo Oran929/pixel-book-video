@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from pixelbook.episode_path import EpisodePath, EpisodePathError
+from pixelbook.episode_path import OUT_DIR, EpisodePath, EpisodePathError
 
 ROOT = Path("/repo")
 
@@ -26,6 +26,28 @@ def test_a_script_path_gives_every_directory_file_and_the_episode_id():
         == ROOT / "books" / "pragprog" / "ch02" / "ep01" / "factcheck.yaml"
     )
     assert episode.id == "pragprog-ch02-ep01"
+
+
+def test_generated_files_are_all_in_the_episode_out_dir():
+    episode = EpisodePath(ROOT / "books" / "pragprog" / "ch02" / "ep01")
+    out = ROOT / "books" / "pragprog" / "ch02" / "ep01" / "out"
+
+    assert episode.storyboard == episode.dir / "storyboard.json"
+    assert episode.out_dir == out
+    assert episode.manifest == out / "episode.json"
+    assert episode.report == out / "report.json"
+    assert episode.timeline == out / "timeline.json"
+    assert episode.segments == out / "segments.txt"
+
+
+def test_the_out_dir_name_matches_the_timeline_export():
+    # 时间轴导出命令（TS）往同一个产物目录里读写
+    ts = (
+        Path(__file__).resolve().parents[2] / "video" / "src" / "episode" / "out-dir.ts"
+    ).read_text()
+
+    assert f'export const OUT_DIR = "{OUT_DIR}";' in ts
+    assert OUT_DIR == "out"
 
 
 @pytest.mark.parametrize(

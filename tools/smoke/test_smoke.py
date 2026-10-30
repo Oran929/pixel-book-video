@@ -106,7 +106,7 @@ def test_fixed_sample_renders_with_the_computed_number_of_frames(repo, capsys):
     mp4 = repo / "out" / "smoke-ch01-ep01.mp4"
     assert f"成片 {mp4}" in out
     assert "复核未通过：无" in out
-    timeline = json.loads((episode / "timeline.json").read_text())
+    timeline = json.loads((episode / "out" / "timeline.json").read_text())
     # 最前面是项目配置选的片头（#50，422 帧），最后是片尾（#51，324 帧）。
     # 假 TTS 每字 0.2 秒：正文 4 句共 30 字 = 6 秒；停顿 0.5（分镜覆盖）+ 0.3（同画面）
     # + 0.8（换画面）= 1.6 秒；正文 7.6 秒，30fps 约 228 帧（逐句取整到整帧）。
@@ -129,7 +129,7 @@ def test_fixed_sample_renders_with_the_computed_number_of_frames(repo, capsys):
         in out
     )
     # 打点时间表从 00:00 的片头开始，不列片尾（每期都一样）
-    assert (episode / "segments.txt").read_text().splitlines() == [
+    assert (episode / "out" / "segments.txt").read_text().splitlines() == [
         "00:00 片头",
         "00:14 开场",
         "00:19 结尾",

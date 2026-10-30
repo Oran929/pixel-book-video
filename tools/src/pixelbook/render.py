@@ -11,15 +11,13 @@ from pathlib import Path
 from typing import Any
 
 from pixelbook import REPO_ROOT
-from pixelbook.episode_path import EpisodePathError
+from pixelbook.episode_path import EpisodePath, EpisodePathError
 from pixelbook.pipeline import PipelineError, VoicingSettings, voice_episode
 from pixelbook.pronunciation import PronunciationError
 from pixelbook.script import ScriptError
 from pixelbook.voice import VoiceConfigError
 
 VIDEO_DIR = REPO_ROOT / "video"
-TIMELINE_NAME = "timeline.json"
-SEGMENTS_NAME = "segments.txt"
 # 曲子文件的获取方法（曲子文件只留在本机，#53）
 MUSIC_README = "video/public/music/README.md"
 STEPS = ("配音", "时间轴", "渲染", "核对时长")
@@ -49,8 +47,6 @@ def render_episode(
     汇总里的 `asr_failures`、`asr_pinyin_passes` 是配音返回的报告条目
     （`pipeline.AsrReportEntry`）。
     """
-    episode_dir = script_path.parent
-
     log(_progress("配音"))
     try:
         report = voice_episode(script_path, settings, draft=draft).report
@@ -62,14 +58,16 @@ def render_episode(
         VoiceConfigError,
     ) as error:
         raise RenderError("配音", str(error)) from error
+    # 配音时已经核对过旁白稿在期目录里
+    episode = EpisodePath.from_script(script_path)
 
     log(_progress("时间轴"))
     _run(
         "时间轴",
         ["npm", "--prefix", str(VIDEO_DIR), "run", "-s", "timeline", "--"]
-        + [str(episode_dir)],
+        + [str(episode.dir)],
     )
-    timeline_path = episode_dir / TIMELINE_NAME
+    timeline_path = episode.timeline
     timeline = json.loads(timeline_path.read_text())
 
     log(_progress("渲染"))
@@ -90,7 +88,7 @@ def render_episode(
         "total_frames": total_frames,
         "fps": timeline["fps"],
         "duration": timeline["duration"],
-        "segments": str(episode_dir / SEGMENTS_NAME),
+        "segments": str(episode.segments),
         "asr_failures": report.asr_failures,
         "asr_pinyin_passes": report.asr_pinyin_passes,
     }

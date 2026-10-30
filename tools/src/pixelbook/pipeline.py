@@ -11,7 +11,11 @@ from pathlib import Path
 from typing import Any
 
 from pixelbook.audio import wav_seconds
-from pixelbook.episode_path import EpisodePath
+from pixelbook.episode_path import (
+    MANIFEST_NAME,
+    STORYBOARD_NAME,
+    EpisodePath,
+)
 from pixelbook.glyphs import missing_glyphs
 from pixelbook.pronunciation import find_new_terms, spoken_text
 from pixelbook.script import DRAFT, Script, load_script
@@ -21,11 +25,6 @@ from pixelbook.verification import PassedBy, Verifier
 from pixelbook.voice import Voice
 from pixelbook.voice_lock import LOCK_NAME, lock_mismatch, lock_record, write_lock
 
-MANIFEST_NAME = "episode.json"
-# 分镜：Claude 手写、提交到 git，`stage` 原样复制给 Remotion（不由 Python 解析）
-STORYBOARD_NAME = "storyboard.json"
-# 检查报告：需要人看的问题（复核未通过的句子……），每次配音重写
-REPORT_NAME = "report.json"
 # Remotion 静态目录（video/public/）里存放本期文件的子目录
 STAGE_DIR = "episode"
 # 字幕用的像素字体，相对 Remotion 静态目录；和 video/src/style/style.ts 的 FONT.file 是同一个文件
@@ -105,7 +104,7 @@ class VoicingReport:
 
 @dataclass(frozen=True)
 class VoicedEpisode:
-    """配音的结果：写进期目录的合成清单（`episode.json` 的内容）和检查报告。"""
+    """配音的结果：写进产物目录 `out/` 的合成清单（`episode.json` 的内容）和检查报告。"""
 
     manifest: dict[str, Any]
     report: VoicingReport
@@ -127,7 +126,7 @@ class _Voiced:
 def voice_episode(
     script_path: Path, settings: VoicingSettings, draft: bool = False
 ) -> VoicedEpisode:
-    """为 `script_path` 这一期逐句配音，写出期目录里的合成清单和检查报告并返回。
+    """为 `script_path` 这一期逐句配音，写出产物目录 `out/` 里的合成清单和检查报告并返回。
 
     配音前守卫比较书的音色 `settings.voice` 和书的锁定音色，不一致就拒绝，除非
     `settings.revoice`；配音完成后写入锁定。朗读文本按读音表生成（手写的
@@ -157,7 +156,7 @@ def voice_episode(
         raise PipelineError(f"参考音频 {error.filename} 不存在，无法配音") from error
     if not settings.revoice and (differences := lock_mismatch(book_dir, locked)):
         raise PipelineError(voice_lock_message(script_path, book_dir, differences))
-    glyphs = _check_glyphs(script_path, script, settings.font, episode.dir)
+    glyphs = _check_glyphs(script_path, script, settings.font, episode)
 
     voiced = _voice_lines(script, settings.pronunciation, cache, book_dir)
     manifest = {
@@ -167,11 +166,12 @@ def voice_episode(
         "scenes": voiced.scenes,
         "lines": voiced.lines,
     }
-    (episode.dir / MANIFEST_NAME).write_text(
+    episode.out_dir.mkdir(exist_ok=True)
+    episode.manifest.write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n"
     )
     report = VoicingReport(voiced.failures, voiced.pinyin_passes, glyphs)
-    _write_report(episode.dir, report)
+    _write_report(episode, report)
     _stage_audio(settings.public_dir, voiced.wavs)
     stage_episode(episode.dir, settings.public_dir)
     write_lock(book_dir, locked)
@@ -194,7 +194,7 @@ def _guarded_script(
 
 
 def _check_glyphs(
-    script_path: Path, script: Script, font: Path | None, episode_dir: Path
+    script_path: Path, script: Script, font: Path | None, episode: EpisodePath
 ) -> list[dict[str, str]] | None:
     """缺字检查：返回缺字列表；不给字体返回 `None`。有缺字时写报告并拒绝配音。"""
     if font is None:
@@ -209,7 +209,7 @@ def _check_glyphs(
         texts.extend((line.id, line.text) for line in scene.lines)
     missing = missing_glyphs(texts, font)
     if missing:
-        _write_report(episode_dir, VoicingReport.missing_glyphs_only(missing))
+        _write_report(episode, VoicingReport.missing_glyphs_only(missing))
         raise PipelineError(missing_glyphs_message(script_path, missing, font))
     return missing
 
@@ -275,9 +275,10 @@ def _stage_audio(public_dir: Path, wavs: dict[str, Path]) -> None:
         shutil.copyfile(wav, public_dir / audio)
 
 
-def _write_report(episode_dir: Path, report: VoicingReport) -> None:
-    """检查报告只从这里写进 `report.json`，内容一律是 `VoicingReport.to_json`。"""
-    (episode_dir / REPORT_NAME).write_text(
+def _write_report(episode: EpisodePath, report: VoicingReport) -> None:
+    """检查报告只从这里写进 `out/report.json`，内容一律是 `VoicingReport.to_json`。"""
+    episode.out_dir.mkdir(exist_ok=True)
+    episode.report.write_text(
         json.dumps(report.to_json(), ensure_ascii=False, indent=2) + "\n"
     )
 
@@ -323,17 +324,18 @@ def voice_lock_message(
 
 
 def stage_episode(episode_dir: Path, public_dir: Path) -> None:
-    """把期目录里的合成清单和分镜复制到 Remotion 静态目录。
+    """把产物目录里的合成清单和期目录里的分镜复制到 Remotion 静态目录。
 
     分镜可以没有（只渲染字幕）；没有时删掉静态目录里上一期留下的分镜。
     """
-    manifest = episode_dir / MANIFEST_NAME
+    episode = EpisodePath(episode_dir)
+    manifest = episode.manifest
     if not manifest.is_file():
         raise PipelineError(f"{manifest} 不存在：先运行 `pixelbook voice` 配音")
     stage = public_dir / STAGE_DIR
     stage.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(manifest, stage / MANIFEST_NAME)
-    storyboard = episode_dir / STORYBOARD_NAME
+    storyboard = episode.storyboard
     if storyboard.is_file():
         shutil.copyfile(storyboard, stage / STORYBOARD_NAME)
     else:

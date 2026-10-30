@@ -15,6 +15,18 @@ BOOKS_DIR = "books"
 OUTLINE_NAME = "outline.yaml"
 SCRIPT_NAME = "script.yaml"
 FACTCHECK_NAME = "factcheck.yaml"
+# 分镜：Claude 手写、提交到 git，`stage` 原样复制给 Remotion（不由 Python 解析）
+STORYBOARD_NAME = "storyboard.json"
+
+# 产物目录：命令为这一期生成的文件都写在期目录的 `out/` 里，不提交（ADR-0013）。
+# 和 video/src/episode/out-dir.ts 的 OUT_DIR 一致（有测试核对）
+OUT_DIR = "out"
+MANIFEST_NAME = "episode.json"
+# 检查报告：需要人看的问题（复核未通过的句子……），每次配音重写
+REPORT_NAME = "report.json"
+# 时间轴导出命令（`npm run timeline`）写出的时间轴和打点时间表
+TIMELINE_NAME = "timeline.json"
+SEGMENTS_NAME = "segments.txt"
 
 
 # 章目录名 `chNN`，和转换结果 `chapters/chNN.md` 同名
@@ -110,6 +122,35 @@ class EpisodePath:
     @property
     def factcheck(self) -> Path:
         return self.dir / FACTCHECK_NAME
+
+    @property
+    def storyboard(self) -> Path:
+        return self.dir / STORYBOARD_NAME
+
+    @property
+    def out_dir(self) -> Path:
+        """产物目录 `out/`：这一期生成的文件都在这里（ADR-0013）。"""
+        return self.dir / OUT_DIR
+
+    @property
+    def manifest(self) -> Path:
+        """合成清单，`pixelbook voice` 写出。"""
+        return self.out_dir / MANIFEST_NAME
+
+    @property
+    def report(self) -> Path:
+        """检查报告，`pixelbook voice` 写出。"""
+        return self.out_dir / REPORT_NAME
+
+    @property
+    def timeline(self) -> Path:
+        """时间轴，时间轴导出命令写出。"""
+        return self.out_dir / TIMELINE_NAME
+
+    @property
+    def segments(self) -> Path:
+        """打点时间表，时间轴导出命令写出。"""
+        return self.out_dir / SEGMENTS_NAME
 
     @property
     def id(self) -> str:
