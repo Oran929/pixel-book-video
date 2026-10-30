@@ -9,7 +9,7 @@ disable-model-invocation: true
 
 参数：`$ARGUMENTS`，形如 `books/<书>/chNN/epNN`。
 
-- **输入**：`<期目录>/script.yaml`（`status: final`）的画面说明 `description` 和旁白句；`docs/reference/storyboard.md`「分镜」（整份，连同网格、字宽估算、嵌套、带序号的状态、显示文字、音效、配乐各节）和 README「组件目录」。组件只从这两处了解，它们写全了参数、占几格、状态、动画和音效。
+- **输入**：`<期目录>/script.yaml`（`status: final`）的画面说明 `description` 和旁白句；`docs/reference/storyboard.md`「分镜」（整份，连同网格、字宽估算、嵌套、带序号的状态、显示文字、音效、配乐各节），以及组件目录：目录页 `docs/reference/components/index.md`「组件目录」（每个组件一行：效果、适合表达）和选中组件的详情页 `docs/reference/components/<组件名>.md`。组件只从组件目录了解，详情页写全了参数、占几格、状态、动画、音效和调用示例。
 - **输出**：`<期目录>/storyboard.json`、`pixelbook render` 出的 MP4，和交给用户的「表现不了」清单。格式和全部机械规则以 `docs/reference/storyboard.md`「分镜」为准，由 `npm run timeline` 判定；这份 skill 只管选组件、摆位置、挂触发。
 - 术语以 `GLOSSARY.md` 为准：期、画面、旁白句、分镜、组件、触发、状态、配乐、合成清单、时间轴。
 
@@ -52,7 +52,7 @@ cd video && npm run music:pick -- ../<期目录>
 
 ### 3. 读
 
-读 `docs/reference/storyboard.md` 整份和 README「组件目录」全节；再读 `script.yaml` 里每个画面的画面说明和它的每个旁白句。
+先读 `script.yaml` 里每个画面的画面说明和它的每个旁白句；再读组件目录页 `docs/reference/components/index.md`「组件目录」，按画面说明挑出要用的组件，只读选中组件的详情页 `docs/reference/components/<组件名>.md`；最后读 `docs/reference/storyboard.md` 整份。
 
 **完成**：每个画面都知道画面说明要表现什么、旁白在哪一句讲到它。
 
@@ -63,7 +63,7 @@ cd video && npm run music:pick -- ../<期目录>
 - **落到组件上**：画面说明里的每个东西、每个变化，都找一个组件和它的状态、动作来表现。画面说明有几部分时，每一部分都要有着落；组件表现不了的部分（缺这样的组件、状态或动作），这个画面照样用能表现的组件写，把那部分记进「表现不了」清单：画面 ID、画面说明里的那段话、缺的是什么。
 - **触发挂在旁白上**：组件在旁白讲到它的那一句入场或切换状态，`line` 用本画面的旁白句，`offset` 按句子里讲到它的位置估秒数。画面一开始就要有的写本画面第一句、`offset: 0`（第一句上不能用负偏移）。
 - **接到下一个画面**：同一个东西要留到下一个画面时，本画面不写它的 `exit`，下一个画面里再放一个同样参数、同样位置的组件，在第一句 `offset: 0` 用 `animation: "none"` 入场，看起来就是没动。
-- **摆放**：按「网格」写 `at`，同时在画面上的组件格子错开；嵌套按「嵌套」写 `parent`，箭头按「组件目录 › 箭头」写 `from`、`to`，两端之间留出空档（检查不查箭杆是否穿过别的组件）。
+- **摆放**：按「网格」写 `at`，同时在画面上的组件格子错开；嵌套按「嵌套」写 `parent`，箭头按它的详情页 `docs/reference/components/Arrow.md`「占几格」写 `from`、`to`，两端之间留出空档（检查不查箭杆是否穿过别的组件）。
 - `pauses` 只在画面需要多停一会儿（比如等一个动画播完）时写。
 
 **完成**：每个画面都有一项、至少一个组件；每个画面说明的每一部分要么有组件表现，要么在「表现不了」清单里。

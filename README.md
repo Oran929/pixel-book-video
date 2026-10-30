@@ -12,7 +12,7 @@ books/<书>/          书配置、原书（不提交）、转换出的章（不�
 tools/               Python 工具（uv 管理）：旁白稿 → 配音 → 合成清单
 video/               Remotion 项目（npm 管理）：合成清单 + 分镜 → MP4
 character/           频道形象设定图原图（Q.png、M.png）和裁图脚本
-docs/reference/      每种文件的格式和检查规则（大纲、旁白稿、语义核对、分镜）
+docs/reference/      每种文件的格式和检查规则（大纲、旁白稿、语义核对、分镜），以及生成的组件目录 components/
 ```
 
 ## 安装
@@ -83,6 +83,7 @@ uv run pixelbook convert ../books/pragmatic-programmer   # 写出 books/pragmati
 - [旁白稿与检查](docs/reference/script.md)：`script.yaml` 和 `pixelbook check`
 - [语义核对](docs/reference/factcheck.md)：`factcheck.yaml`
 - [分镜](docs/reference/storyboard.md)：`storyboard.json`，连同网格、字宽估算、嵌套、带序号的状态、显示文字、音效、配乐
+- [组件目录](docs/reference/components/index.md)：分镜能用的组件，目录页每个组件一行，每个组件一页详情；由 `cd video && npm run catalog` 从组件声明生成，不手改
 
 ## 从旁白稿到 MP4
 
@@ -143,7 +144,7 @@ uv run pixelbook convert ../books/pragmatic-programmer   # 写出 books/pragmati
 **6. 分镜 `/storyboard <期目录>`**
 
 - 先确认配乐文件在本机（第 0 步），缺了第 5 步的渲染会报错并指向 `video/public/music/README.md`。
-- 输入：定稿的 `script.yaml` 里的画面说明和旁白句，`docs/reference/storyboard.md`「分镜」和 README「组件目录」。skill 先配音写出 `episode.json`（命中缓存），跑选曲命令 `cd video && npm run music:pick -- ../<期目录>`（把 `music` 写进 `storyboard.json`，之后不再改），再写分镜，跑 `npm run timeline -- ../<期目录>` 直到通过，最后 `pixelbook render` 出片、看样帧。
+- 输入：定稿的 `script.yaml` 里的画面说明和旁白句，`docs/reference/storyboard.md`「分镜」和组件目录 `docs/reference/components/index.md`「组件目录」（目录页挑组件，再读选中组件的详情页）。skill 先配音写出 `episode.json`（命中缓存），跑选曲命令 `cd video && npm run music:pick -- ../<期目录>`（把 `music` 写进 `storyboard.json`，之后不再改），再写分镜，跑 `npm run timeline -- ../<期目录>` 直到通过，最后 `pixelbook render` 出片、看样帧。
 - 输出：`<期目录>/storyboard.json`（每个画面至少一个组件）；重新写出的 `<期目录>/out/` 里的 `timeline.json`、`segments.txt`、`<书>-<章>-<期>.mp4`；用了 CC-BY 曲子时 `<期目录>/out/credits.txt`（CC0 曲子没有）；交给用户的「表现不了」清单。
 - 完成：`npm run timeline` 和 `render` 退出码 0；每个画面的样帧看过，没有遮挡和穿过；skill 停在关口 3。
 - 出了问题：`script.yaml` 不是 `final` 或检查不过，回到第 4 步；分镜检查不过，skill 自己改分镜；画面说明要的东西现有组件表现不了，列进清单交给用户（加组件是另开的票）。
@@ -209,7 +210,7 @@ npm run render -- ../<期目录>/out/<书>-<章>-<期>.mp4   # 渲染 MP4
 - **文件**：每个片头片尾一个目录，`video/src/intro/<ID>/`、`video/src/outro/<ID>/`：动画（`Intro.tsx` / `Outro.tsx`、`sprites.tsx`），时间点 `timing.json`（帧数 `total` 就是它的长度），音轨脚本 `make_audio.py`；片尾还有用户录好的三句配音 `voice/outro-l0{1,2,3}.wav`（24 kHz 单声道，提交）。生成的音轨 `video/public/intro/<ID>.wav`、`video/public/outro/<ID>.wav` 提交（44.1 kHz 双声道 16 位，长度正好是登记的帧数）。字体和四张角色图用 `video/public/` 里原有的（和用户原工程逐字节相同）；两个 `sprites.tsx` 内容相同，各放一份，每个目录自成一体，删掉或换掉一个不影响另一个。用户原工程的 `remotion.config.ts`、`Root.tsx`、`index.ts` 不搬。
 - **登记表**：片头 `video/src/intro/intros.ts`、片尾 `video/src/outro/outros.ts`，ID → 标题 `title`、帧数 `frames`（取自 `timing.json` 的 `total`）、音轨 `audio`；和配乐库一样，导入时 `defineBookendLibrary`（`video/src/bookend/library.ts`）校验：帧数是正整数，音轨固定是 `<intro|outro>/<ID>.wav`。登记表是纯 .ts，不引用 React（时间轴导出在 Node 里只要帧数）；动画组件按同样的 ID 登记在 `intro/intro-components.ts`、`outro/outro-components.ts`，类型是 `Record<ID, 组件>`，少登记一个类型检查就不过。Episode 和 Root 不直接引用这两对文件，只从 `video/src/bookend/bookends.tsx` 取（成片里放选中的那个用 `SelectedBookend`，Studio 里每个一个预览合成用 `BOOKEND_PREVIEWS`）。`npm run test` 还检查每个登记的音轨都在、格式和长度对，`public/intro/`、`public/outro/` 里没有没登记的文件。
 - **项目配置**：`video/src/project-config.ts` 的 `PROJECT` 写每期用哪个片头、哪个片尾（登记表的 ID），写 `null` 就是「不用」。`planEpisode` 默认用它；组件样张页两个都不用（`planEpisode(…, { intro: null, outro: null })`）。没登记的 ID 报错，并列出登记过的。
-- **用户的作品，不按组件规则改**：动画是用户定稿的，搬进来时只为 `make check` 的类型检查加了非空断言 `!`（`noUncheckedIndexedAccess`），配色、尺寸、时间点都没动。它们不在 `video/src/components/` 里，不受「组件只引用风格表」「组件不写死显示文字」两项检查约束（这两项只扫组件目录）；也不是分镜组件：不占网格、没有状态，不进组件目录。
+- **用户的作品，不按组件规则改**：动画是用户定稿的，搬进来时只为 `make check` 的类型检查加了非空断言 `!`（`noUncheckedIndexedAccess`），配色、尺寸、时间点都没动。它们不在 `video/src/components/` 里，不受「组件只引用风格表」「组件不写死显示文字」两项检查约束（这两项只扫 `video/src/components/`）；也不是分镜组件：不占网格、没有状态，不进组件目录。
 - **进时间轴**：`planEpisode` 把选中的片头的帧数记为时间轴的 `introFrames`，正文第一句从这一帧开始，组件的触发帧、音效帧整体后移；正文到最后一句音频结束为止（不加停顿），片尾紧接着开始，占最后 `outroFrames` 帧；最后一个画面和段到片尾开始为止。`totalFrames` = 片头 + 正文 + 片尾，帧数核对和总时长判断都按选中的那一个的帧数算，不写死。
 - **画面和声音**：片头、片尾期间不显示字幕和主题（`showsResidents`），盖在正片画面上面。它们自带的音轨原样放（`VOLUME.intro`、`VOLUME.outro`，都是 0 dB）。配乐从片头结束放到正文结束，在**正文**最后 2 秒淡出，不覆盖片头和片尾（见 `docs/reference/storyboard.md`「配乐」）。
 - **预览和对比**：Studio 里每个登记的片头片尾有一个合成 `Intro-<ID>`、`Outro-<ID>`，单独放它（带音轨）；`npx remotion render Outro-bye-bye out/outro.mp4` 渲染出来可以和用户的参考成片比（#50、#51 的评论里有 PSNR/SSIM 结果）。
@@ -280,146 +281,6 @@ uv run pixelbook terms ../books/sample/ch01/ep01/script.yaml   # 每个新术语
 
 听完把读法写进 `pronunciation.yaml`。读法没问题的也要登记成原样不变的条目（如 `DRY: DRY`），表示"已确认"。
 
-### 组件目录
-
-写分镜能用的 7 个组件（`/storyboard` 只读这一节和 `docs/reference/storyboard.md`「分镜」来写分镜，所以这里写全）。每个组件一个小节，依次写：用途、参数、占几格、状态、默认动画、默认音效，后面是细节。通用的规则不在这里重复：动作和 `animation` 的取值见 `docs/reference/storyboard.md`「分镜」，摆放见同一份的「网格」「嵌套」，字放不下怎么算见 `docs/reference/storyboard.md`「字宽估算」，显示文字的出处见 `docs/reference/storyboard.md`「显示文字」，音效 ID 见 `docs/reference/storyboard.md`「音效」。
-
-- 入场时组件处在**第一个状态**（初始状态），只响入场音效；之后切回初始状态时才响初始状态的音效。音效写「不放」的，切到那个状态时没有声音。
-- 入场、退场都能用通用动画 `fade`、`slide`、`none`；表里只写不写 `animation` 时用的默认动画，和组件自己的特殊效果。
-- 「显示文字」参数的值必须出自本画面的画面说明或旁白句。
-- `npm run test` 检查这一节列出了组件注册表里的每个组件（每个组件一个 `#### 中文名 \`组件名\`` 小节），并写出了它声明的每个状态名（`video/src/components/catalog.test.ts`）。
-- 7 个组件依次演一遍的样片：合成 `ComponentSamples`（把下面每个组件的 `Sample-<组件名>` 首尾相接），`cd video && npx remotion render ComponentSamples out/component-samples.mp4`。
-
-#### 知识块 `PixelBlock`
-
-- **用途**：书里的一个概念、一段知识、一份东西（代码、文档、数据库 Schema）。能表现落下、复制、高亮、只改了一处（spec #16 用户故事 32）。
-- **参数**：`label` 一行字（显示文字）；`size` 是 `small`、`medium`、`large`；`color` 是风格表 `BLOCK_COLORS` 里的名字：`orange`、`green`、`blue`、`purple`、`cream`、`stone`（黄色和红色留给状态）。
-- **占几格**：按 `size`，见下表。
-- **状态**：`normal`（初始，深色描边和阴影）、`highlight`（描边和阴影变黄）、`changed`（已改，描边和阴影变红）。切到后两种时跳一下（`SIZE.blockHop`，0.4 秒）。
-- **默认动画**：入场 `slide`（从上方落下），退场 `fade`。
-- **默认音效**：入场 `drop`、退场 `leave`，切到 `normal`、`highlight` 时 `blip`，切到 `changed` 时 `buzz`。
-- **嵌套**：`large` 的标签只占中间一行（`[0, 1]` 起 4×1 格；行高 128 像素居中，字形落在中间一行里），上下两行可以嵌子组件；`medium`、`small` 的标签占满整个方块，不能嵌子组件。
-
-方块占满格子，右下留出硬阴影的偏移，标签单行居中、不换行、不加字距。`size` 同时决定占几格和标签的字号：
-
-| `size` | 占几格（列 × 行） | 字号 | 标签最多多宽 |
-| --- | --- | --- | --- |
-| `small` | 2 × 1 | 24（`FONT_SIZE.small`） | 216 像素（9 个汉字） |
-| `medium` | 3 × 2 | 48（`FONT_SIZE.subtitle`） | 364 像素（7 个汉字） |
-| `large` | 4 × 3 | 96（`FONT_SIZE.large`） | 512 像素（5 个汉字） |
-
-标签最多多宽 = 格子宽 − 两侧粗描边 `SIZE.strokeThick` − 硬阴影 `SIZE.shadowOffset` − 两侧内边距 `SIZE.blockPadding`。放不下时报错：换大一号的 `size` 或缩短标签。
-
-样张：`Sample-PixelBlock`（三种入场和退场动画；六种颜色；入场、高亮、已改、切回、退场；最后一个画面演嵌套）。
-
-#### 小人 `Mascot`
-
-- **用途**：Q 版频道小人，一个或一群，分镜里需要「人物做什么」时才用：一群上师和大神、程序员头顶冒问题（spec #16 用户故事 37，修订 D1）。
-
-  ```json
-  { "id": "host", "component": "Mascot", "props": { "character": "reader" }, "at": [0, 1] }
-  { "id": "gurus", "component": "Mascot", "props": { "character": ["dragon", "whale", "gothic", "reader"], "count": 5, "formation": "crowd" }, "at": [3, 2] }
-  ```
-
-- **参数**：`character` 是 Q 版角色（按外观起名：`dragon`、`reader`、`whale`、`gothic`，见风格表 `MASCOTS`），一群人时可以写一串，从左往右一人一个，不够时从头循环；`count` 几个人（≥ 1，不写是 1）；`formation` 排法，`row`（不写时）或 `crowd`。没有显示文字。
-- **占几格**：一个小人 2 列 × 3 行。`row` 每人隔一块格子的宽，占 `2 × 人数` 列 × 3 行（一排最多 6 人占满 12 列）；`crowd` 每人只隔一列、左右挤着有一点遮挡，从 0 数的单数位站后排、比前排高一行、被前排挡住，占 `人数 + 1` 列 × 4 行（只有一个人时和 `row` 一样，2 × 3）。超出网格照常报越界。
-- **状态**：`normal`（初始，头顶没东西）、`question`（头顶冒问号）、`exclaim`（头顶冒感叹号）。一群人一起冒同一个符号。
-- **默认动画**：入场、退场都是 `fade`。
-- **默认音效**：入场 `pop`、退场 `leave`，冒问号 `blip`，冒感叹号 `ding`，切回 `normal` 不放。
-- **尺寸**（#42 人工关口，用户选了 1/2 缩小）：图片按原图的 1/2（风格表 `MASCOT_SCALE`、`mascotSize`，四舍五入到整数像素）、最近邻插值显示，约 187–220 × 280–296 像素。一个小人的格数由 `mascotCells()` 算：最宽、最高的角色按显示尺寸向上取整到整格，高度还要放下头顶的符号；在自己那块格子里底边对齐、水平居中。
-- **符号**：从下面升上来、淡入（一个通用动画的时长），之后每 0.5 秒（`MOTION.mascotSymbolBobSeconds`）上下浮动一格像素；切回 `normal` 时原地淡出。符号是风格表 `MASCOT_SYMBOLS` 里的 5×7 点阵（每点 `SIZE.mascotSymbolDot`，外面一圈 `ink` 描边），不是字体里的「？」「！」（组件不渲染参数以外的固定文字）；颜色 `COLOR.mascotQuestion`（黄）、`COLOR.mascotExclaim`（红）。符号画在小人自己的格子里，不压到上面的组件（`mascot-look.test.ts` 检查）。
-- 图片不是对齐网格的像素画，1/2 后「像素」大小不一，1 像素宽的描边有些地方断续（用户看过样帧认可）。图片是从 `character/Q.png` 裁出的透明底 PNG（`video/public/character/`，裁图脚本 `character/crop_q.py`）。
-
-样张：`Sample-Mascot`（四个角色四种入场和退场动画；一个小人冒问号、换感叹号、切回；三人一排一起冒问号，五人一群一起冒感叹号）。
-
-#### 箭头 `Arrow`
-
-- **用途**：从一个组件指到另一个组件，表现「指向 ETC」「改一处要连带改三处」（spec #16 用户故事 20、21、33）。
-
-  ```json
-  { "id": "dry-etc", "component": "Arrow", "props": {}, "from": "dry", "to": "etc" }
-  ```
-
-- **参数**：没有（`props` 写 `{}`）。是连线类组件：不写 `at`、不写 `parent`，`from`、`to` 必须都写，必须是本画面里两个不同的、按格子摆放的组件（不能指向另一个箭头）。不是连线类组件的写了 `from`、`to` 也报错。
-- **占几格**：不占格，不参加重叠检查；画法按两端组件的位置算。
-- **状态**：`normal`（初始，深色）、`highlight`（黄色的芯加深色描边）。
-- **默认动画**：入场、退场都是 `fade`。入场时箭杆从起点长到终点（按入场进度），外面再套入场动画。
-- **默认音效**：入场 `pop`、退场 `leave`，切到 `normal`、`highlight` 都是 `blip`。
-- **时间**：箭头在画面上的区间（从入场帧到退场动画播完，没有退场的到画面结束）必须完全落在两端组件各自的区间里：和端点同一帧入场、同一帧离开画面都合法；早于某一端入场，或某一端已经离开画面时箭头还在，都报错（报出第几个画面、第几个组件、箭头和那一端的帧区间）。端点退场时，箭头要一起退场（同样长的退场动画，或更早）。
-- **画法**：沿两端矩形中心的连线，从起点组件的边框外 `SIZE.arrowGap` 出发，尖停在终点组件边框外 `SIZE.arrowGap`；粗箭杆（`SIZE.strokeThick`）加三角形箭头头（`SIZE.arrowHeadLength`、`SIZE.arrowHeadHalfWidth`），坐标取整到像素网格，不抗锯齿。两端挨得太近、放不下箭头头时不画。端点在网格上怎么摆，箭头就怎么斜，所以摆放时两端之间要留出空档，箭杆不要穿过别的组件（这一条没有检查，靠看样帧）。
-- 箭头画在组件列表里它的位置上（后写的画在上面），一般写在两端组件后面。
-
-样张：`Sample-Arrow`（一个知识块指向另一个，高亮、切回、退场；一个知识块指向三个，三种入场和退场动画）。
-
-#### 提示牌 `HintSign`
-
-- **用途**：书里的提示框，显示编号和提示标题，带亮起的入场效果（spec #16 用户故事 34）。
-
-  ```json
-  { "id": "tip", "component": "HintSign", "props": { "label": "提示", "number": "14", "title": "ETC" }, "at": [1, 1] }
-  ```
-
-- **参数**：`label`、`number`、`title`，三个都是显示文字。上面一条橙色标题牌写 `label` 和 `number`（字号 `subtitle`），下面是大号的提示标题 `title`（字号 `large`，单行）。「提示」两个字也由 `label` 传入，组件里不写死；`number` 是字符串，例如 `"14"`，画面说明里写了「提示14」才能用。标题和标题牌最多 660 像素宽（格子宽减去两侧粗描边、硬阴影偏移和两侧内边距，大号字约 6 个汉字），放不下报错。
-- **占几格**：5 列 × 3 行。
-- **状态**：只有一个，`normal`。
-- **默认动画**：入场是它自己的特殊效果 `light`（亮起，`MOTION.hintLightSeconds` 0.8 秒）：牌子先是暗的（`COLOR.hintUnlit`），闪一下、灭掉，从一半起亮住，外面扩出一圈黄光（`COLOR.hintGlow`）后消失。退场 `fade`；退场写 `animation: "light"` 时倒着播，即熄灭。`light` 只有提示牌能用。
-- **默认音效**：入场 `ding`、退场 `leave`。
-- **嵌套**：整块都是字（`labelArea` 是整块），不能嵌子组件。
-
-样张：`Sample-HintSign`（亮起、亮着、熄灭；三块提示牌三种入场和退场动画）。
-
-#### 电脑 `Computer`
-
-- **用途**：一台老式显示器加底座，能正常也能崩溃，表现柯克船长的开场（s04-c01）和 s05-c03 前后呼应（spec #16 用户故事 36）。
-
-  ```json
-  { "id": "computer", "component": "Computer", "props": { "screen": ["两条", "自相矛盾的知识"] }, "at": [7, 1] }
-  ```
-
-- **参数**：只有 `screen`：屏幕上的字（显示文字，逐行检查），一项一行，最多 3 行，可以是空数组（屏幕上没有字）。每行字号 `subtitle`，最多 448 像素宽（约 9 个汉字），放不下报错。屏幕上要出现「ERROR」之类的字，也要写进 `screen`。
-- **占几格**：4 列 × 4 行。
-- **状态**：`normal`（初始，深色屏幕绿字，最后一行后面一个光标一亮一灭）、`crashed`（切过来的 0.8 秒里左右抖动、红白闪屏、冒出花屏横条，之后停在蓝屏，每行字比上一行往下错开一点，横向不动）。可以从 `crashed` 切回 `normal`（重启）。
-- **默认动画**：入场、退场都是 `fade`。
-- **默认音效**：入场 `pop`、退场 `leave`，切到 `crashed` 时 `crash`，切回 `normal` 时 `blip`。
-- **嵌套**：上面三行格是屏幕（`labelArea`），子组件只能嵌在底座那一行。
-- 颜色（`COLOR.computer*`）、尺寸（`SIZE.computer*`）、时长（`MOTION.computerCrashSeconds` 等）都在风格表里；提示牌和电脑增补的颜色在风格样张的「用途色」一节里能看到。
-
-样张：`Sample-Computer`（入场、崩溃、重启、退场；三台电脑三种入场和退场动画，最后一台屏幕上没有字）。
-
-#### 岔路 `Fork`
-
-- **用途**：一个路口加几条路，可以标出某条路，也可以给某条路放上或撤掉路障：ETC 向导站在分岔口、看不出哪条路好改、整块替换时没有路障（spec #16 用户故事 35）。
-
-  ```json
-  { "id": "fork", "component": "Fork", "props": { "roads": 3, "labels": ["好改", "难改", "看不出"] }, "at": [5, 1] }
-  ```
-
-- **参数**：`roads` 几条路（2–4 条，从上往下数，第 1 条在最上面）：左边一段路进路口，分岔的竖路往右分出这几条路。`labels` 可选：每条路的标签（显示文字，逐项检查），项数必须等于 `roads`；字号 `subtitle`，写在路障右边，最多 480 像素宽（`forkLabelRoom()`，约 10 个汉字），放不下报错。不写 `labels` 就是不带字的路。
-- **占几格**：6 列 × 4 行。
-- **状态**：`normal`（初始，什么都没有）；`mark-1`、`mark-2`、`mark-3`、`mark-4`（标出第 N 条路：路面从路口往右铺成黄色）；`block-1`、`block-2`、`block-3`、`block-4`（在第 N 条路上放路障：红白条纹的路障从上方落下）。序号不能超过 `roads`（见 `docs/reference/storyboard.md`「带序号的状态」）。一次只处在一个状态：从 `block-N` 切到别的状态就是撤掉路障（路障抬起消失），所以「标出一条路，同时另一条有路障」表现不了，要的话再加状态。动画都用一个通用动画的时长。
-- **默认动画**：入场、退场都是 `fade`。
-- **默认音效**：入场 `pop`、退场 `leave`，切到 `mark-N` 和 `normal` 时 `blip`，切到 `block-N` 时 `drop`。
-- **嵌套**：写了 `labels` 时整块都算标签（`labelArea`），不能嵌子组件；不写字时可以嵌。
-
-样张：`Sample-Fork`（四条带字的路逐条标出、逐条放路障、撤掉、退场；两条、三条不带字的路三种入场和退场动画）。
-
-#### 时间线 `Timeline`
-
-- **用途**：一条横轴加几个带字的节点，节点可以逐个点亮：开发时间线、工程日志（spec #16 用户故事 38）。
-
-  ```json
-  { "id": "timeline", "component": "Timeline", "props": { "nodes": ["起点", "开发过程", "发布"] }, "at": [3, 2] }
-  ```
-
-- **参数**：`nodes` 是节点下面的字（2–6 项，从左往右；显示文字，逐项检查）。字号 `subtitle`，每项最多 264 像素宽（`timelineLabelRoom()`，约 5 个汉字），放不下报错。
-- **占几格**：每个节点 2 列，所以 `2 × 节点数` 列 × 2 行（上一行横轴和节点，下一行字）。
-- **状态**：`normal`（初始，一个都没点亮）；`lit-1`、`lit-2`、`lit-3`、`lit-4`、`lit-5`、`lit-6`（点亮了前 N 个节点）。序号不能超过节点数（见 `docs/reference/storyboard.md`「带序号的状态」）。从点亮较少的状态切到 `lit-N` 时，横轴从上次亮到的地方沿着往右亮过去（每多一个节点多 0.4 秒），亮光走到的节点变黄、字变深；熄灭（切到较少的 `lit-N` 或 `normal`）是一下子变的。
-- **默认动画**：入场、退场都是 `fade`。
-- **默认音效**：入场 `pop`、退场 `leave`，切到 `lit-N` 时 `ding`，切回 `normal` 不放。
-- **嵌套**：下一行是字（`labelArea`），子组件只能嵌在横轴那一行。
-
-岔路、时间线的颜色（`COLOR.fork*`、`COLOR.timeline*`）、尺寸（`SIZE.fork*`、`SIZE.timeline*`）在风格表里，风格样张的「用途色」一节能看到。样张：`Sample-Timeline`（六个节点逐个点亮、全部熄灭、一口气点亮、退场；三条两节点的时间线三种入场和退场动画）。
-
 ### 时间轴、打点时间表与试听音轨
 
 停顿规则只在 TypeScript 的时间轴函数里（`video/src/episode/timeline.ts`）。想听逐句配音按停顿排好后的整体效果，先导出时间轴，再拼一条试听音轨（不是正式产物，渲染时 Remotion 仍逐句放音频）：
@@ -444,7 +305,7 @@ uv run pixelbook mix ../books/sample/ch01/ep01/out/timeline.json   # 拼到同�
 - 风格表在 `video/src/style/style.ts`：16 色调色板 `PALETTE` 和按用途取色的 `COLOR`、像素网格 `GRID`（4px，画面上一个"像素"）、字号 `FONT_SIZE` 与行高、尺寸 `SIZE`（都是网格的整数倍）、描边 `border`、硬阴影 `hardShadow`、描边字 `outlinedText`。组件（`src/components/`，包括子目录里的常驻组件）里的颜色和尺寸只能引用这些常量，`npm run test` 递归扫描这个目录，检查源码里有没有写死的颜色值和数字（0、1 除外）。
 - 字体：Fusion Pixel 12px 比例宽度简体（OFL 1.1，来源和许可在 `video/public/fonts/`）。字形画在 12×12 格上，字号只能是 12 的整数倍（现在用 24 / 48 / 96），否则会模糊；测试检查这一点。字体由 `src/style/font.ts` 在第一帧之前加载。
 - 画面左上角常驻这一期的主题：旁白稿顶层的 `title`（等于大纲里这一期的 `topic`），经合成清单 `episode.json` 的 `title` 传进成片，由常驻组件 `src/components/resident/EpisodeTitle.tsx` 显示（橙字深色描边）。代码里没有写死的频道名。
-- 频道小人不常驻画面，是一个通用组件 `Mascot`（见「组件目录 › 小人」）：分镜里需要"人物做什么"时才用。小人图不是对齐网格的像素画，只能按原尺寸、整数倍或 1/2 显示，最近邻插值；现在统一按 1/2（`MASCOT_SCALE`，#42）。
+- 频道小人不常驻画面，是一个通用组件 `Mascot`（见 `docs/reference/components/Mascot.md`「小人 `Mascot`」）：分镜里需要"人物做什么"时才用。小人图不是对齐网格的像素画，只能按原尺寸、整数倍或 1/2 显示，最近邻插值；现在统一按 1/2（`MASCOT_SCALE`，#42）。
 - 字幕只在显示时去掉分句标点 `，。、；`：句中的换成一个空格，句末（和句首）的直接去掉，紧挨在右引号、右书名号、右括号前的也直接去掉（`他说：“好的。”` 显示为 `他说：“好的”`）；`：“”‘’《》（）——？！` 保留（`video/src/components/resident/subtitle-text.ts`）。旁白脚本、配音、语音识别核对、合成清单和缺字检查都用原句。
 - 中间帧格式是 PNG（`video/remotion.config.ts`），JPEG 会让像素边缘出现杂色。
 
@@ -458,7 +319,7 @@ make check
 
 依次运行 pytest、ruff（lint + 格式）、`tsc`、ESLint、Vitest，任何一项失败就以非零码退出。"做完了"的标准就是这条命令通过。
 
-pytest 里包括文档链接检查（`tools/src/pixelbook/doc_links.py`）：skill、README、`docs/` 里的相对链接，以及 skill、文档、源码注释里「文档路径「标题」」这样的引用（如 `docs/reference/storyboard.md`「音效」、README「组件目录」），目标文件或标题不存在时失败，报出文件和行号。引用标题时就照这个写法，检查才认得出。
+pytest 里包括文档链接检查（`tools/src/pixelbook/doc_links.py`）：skill、README、`docs/` 里的相对链接，以及 skill、文档、源码注释里「文档路径「标题」」这样的引用（如 `docs/reference/storyboard.md`「音效」、`docs/reference/components/index.md`「组件目录」），目标文件或标题不存在时失败，报出文件和行号。引用标题时就照这个写法，检查才认得出。
 
 能写成代码的检查和统计都放在 `pixelbook` 命令里（`units`、`outline`、`check`、`factcheck-prompt` 等），带测试；skill 只跑这些命令，做需要判断的事（写大纲、写稿、语义核对），不让智能体写一次性脚本自查。
 

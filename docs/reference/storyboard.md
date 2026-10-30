@@ -1,6 +1,6 @@
 # 分镜
 
-每期可以有一份分镜 `books/<书>/<章>/<期>/storyboard.json`（提交到 git），写每个画面用哪些组件、在哪句旁白出现，不写绝对时间。旁白稿定稿后用 `/storyboard <期目录>` 写：它先跑选曲命令（见下面「配乐」里的选曲），按画面说明和 README「组件目录」写分镜，跑 `npm run timeline` 直到通过，再 `pixelbook render`，停在人工关口 3。`voice` 和 `stage` 把它复制到 `video/public/episode/`；没有分镜时照常渲染，只有字幕。
+每期可以有一份分镜 `books/<书>/<章>/<期>/storyboard.json`（提交到 git），写每个画面用哪些组件、在哪句旁白出现，不写绝对时间。旁白稿定稿后用 `/storyboard <期目录>` 写：它先跑选曲命令（见下面「配乐」里的选曲），按画面说明和组件目录 `docs/reference/components/index.md`「组件目录」 写分镜，跑 `npm run timeline` 直到通过，再 `pixelbook render`，停在人工关口 3。`voice` 和 `stage` 把它复制到 `video/public/episode/`；没有分镜时照常渲染，只有字幕。
 
 ```json
 {
@@ -25,8 +25,8 @@
 - `scene`：合成清单里的画面 ID。`components`：本画面用的组件，`id` 是本画面里的名字，`component` 是组件名，`props` 按该组件的参数格式校验。
 - **每个画面至少一个组件**（spec #16 用户故事 56，#46）：合成清单里的每个画面都要写进 `scenes`，`components` 不能为空，否则报「画面 … 没有组件」。片尾不是画面（#51），没有例外。
 - `at`：组件左上角所在的格 `[列, 行]`，从 0 开始（见下面的「网格」）。连线类组件（箭头）不写 `at`，改写 `from`、`to`；其余组件必须写 `at`。组件占几格由组件按参数自己算，分镜只写位置。
-- `parent`（可选）：父组件的 id，表示有意嵌套（大方块里占一小角）；`from`、`to`：连线类组件的起点和终点。见下面的「嵌套」和 README「组件目录」里的「箭头」。
-- 新组件要登记三处：**声明**放在组件自己的 `video/src/components/<组件>-declaration.ts`（连同参数格式和尺寸计算），再汇总进 `declarations.ts`。按格子摆放的组件用 `declareComponent`，连线类组件用 `declareConnector`（格式见 `declaration.ts`）。两种都有：参数格式 `props`（zod）、状态清单 `states`（第一个是初始状态）、入场和退场的默认动画 `enter`、`exit`（`exit` 不写是 `fade`）、可选的自己的特殊效果 `effects`（见下面的 `animation`）、默认音效 `sounds`（见下面的「音效」；退场音效 `exit` 不写是 `leave`）、可选的按参数能用的状态 `availableStates`（见下面的「带序号的状态」）。按格子摆放的组件还要写占几格 `cells`（按参数算，`[列数, 行数]`），可选的标签位置 `labelArea`（见下面的「嵌套」）；连线类组件不占格，没有这两项；会显示在画面上的参数用 `displayText` 标出，见下面的「显示文字」），**实现**在 `video/src/components/registry.ts`，**样张**在 `video/src/components/samples.ts`；少登记一处，类型检查会报错。还要在下面的「组件目录」里给它写一个小节，列出每个状态名（`npm run test` 检查）。分镜检查只依赖声明，不含 JSX，时间轴导出命令在 Node 里也用它校验分镜。
+- `parent`（可选）：父组件的 id，表示有意嵌套（大方块里占一小角）；`from`、`to`：连线类组件的起点和终点。见下面的「嵌套」和 `docs/reference/components/Arrow.md`「占几格」。
+- 新组件要登记三处：**声明**放在组件自己的 `video/src/components/<组件>-declaration.ts`（连同参数格式和尺寸计算），再汇总进 `declarations.ts`。按格子摆放的组件用 `declareComponent`，连线类组件用 `declareConnector`（格式见 `declaration.ts`）。两种都有：参数格式 `props`（zod）、状态清单 `states`（第一个是初始状态）、入场和退场的默认动画 `enter`、`exit`（`exit` 不写是 `fade`）、可选的自己的特殊效果 `effects`（见下面的 `animation`）、默认音效 `sounds`（见下面的「音效」；退场音效 `exit` 不写是 `leave`）、可选的按参数能用的状态 `availableStates`（见下面的「带序号的状态」）。按格子摆放的组件还要写占几格 `cells`（按参数算，`[列数, 行数]`），可选的标签位置 `labelArea`（见下面的「嵌套」）；连线类组件不占格，没有这两项；会显示在画面上的参数用 `displayText` 标出，见下面的「显示文字」），**实现**在 `video/src/components/registry.ts`，**样张**在 `video/src/components/samples.ts`；少登记一处，类型检查会报错。声明里还要写组件目录用的「效果」`effect`、「适合表达」`suitedFor`（必填，缺了登记时报错）和详情页的手写说明 `docs`（格式见 `declaration.ts` 的 `ComponentDocs`），然后 `cd video && npm run catalog` 重新生成组件目录 `docs/reference/components/index.md`「组件目录」 并提交（`npm run test` 检查生成结果和已提交的文件逐字一致）。分镜检查只依赖声明，不含 JSX，时间轴导出命令在 Node 里也用它校验分镜。
 - **渲染接口**（`video/src/components/stage.ts`）：组件实现是 `React.FC<RenderProps<参数>>`，拿到两样东西：
 
   ```ts
@@ -44,7 +44,7 @@
   ```
 
   Episode 按排期把组件放进它在网格上占的矩形（`cellRect`，连线类组件铺满画面），外面套上通用的入场和退场动画（`fade`、`slide`、`none`，带缓动；组件自己的特殊效果不套，由组件按 `enter`、`exit` 的进度自己画），组件自己只画「这个状态、这一帧」的样子，填满给它的矩形。排期在 `Cue` 里带上 `initialState`，入场和退场各带上动画播几帧 `frames`（特殊效果按声明的时长），`stageAt(cue, 帧)` 算出舞台信息；连线类组件的 `Cue.ends` 是两端组件占的格，Episode 换算成屏幕矩形交给组件。
-- **样张**：每个组件在 Studio 里有一页 `Sample-<组件名>`，用 `samples.ts` 里的假分镜（经同一个 `planEpisode` 排期）把它的每个状态、每种入场和退场动画、每个默认音效都演一遍，字幕位置写着这一刻在演什么，同时放出音效。`npm run test` 检查每个登记的组件都有样张、样张通过分镜检查、演到了每个状态和每种入场退场动画、放到了入场、退场和切到每个状态的默认音效。导出某一帧：`npx remotion still Sample-PixelBlock out/samples/pixelblock.png --frame=300`。7 个组件首尾相接的样片是合成 `ComponentSamples`（见「组件目录」）。
+- **样张**：每个组件在 Studio 里有一页 `Sample-<组件名>`，用 `samples.ts` 里的假分镜（经同一个 `planEpisode` 排期）把它的每个状态、每种入场和退场动画、每个默认音效都演一遍，字幕位置写着这一刻在演什么，同时放出音效。`npm run test` 检查每个登记的组件都有样张、样张通过分镜检查、演到了每个状态和每种入场退场动画、放到了入场、退场和切到每个状态的默认音效。导出某一帧：`npx remotion still Sample-PixelBlock out/samples/pixelblock.png --frame=300`。7 个组件首尾相接的样片是合成 `ComponentSamples`（见 `docs/reference/components/index.md`「组件目录」）。
 - `triggers`：每条触发让 `target` 组件在 `line` 这句开始后偏移 `offset` 秒做一个动作（ADR-0011），`action` 三选一：
   - `enter` 入场、`exit` 退场：可选 `animation`，不写就用组件声明的默认动画。
   - `state` 切换状态：必须写 `state: <状态名>`，状态名必须是组件声明过的；组件声明了 `availableStates` 时还必须是这组参数下能用的（比如 3 条路的岔路不能用 `block-4`），否则报错并列出能用的状态。组件入场时是初始状态。
@@ -71,7 +71,7 @@
 
 ## 字宽估算
 
-组件上的字（知识块的标签、提示牌的标题、电脑屏幕上的字、岔路和时间线的标签）不换行、不加字距，放不下时报错，不会悄悄溢出或换行。每个组件能放多宽见 README「组件目录」里它的小节。宽度按像素字体估算（`video/src/style/text-width.ts` 的 `textWidth`）：
+组件上的字（知识块的标签、提示牌的标题、电脑屏幕上的字、岔路和时间线的标签）不换行、不加字距，放不下时报错，不会悄悄溢出或换行。每个组件能放多宽见组件目录里它的详情页（`docs/reference/components/index.md`「组件目录」）。宽度按像素字体估算（`video/src/style/text-width.ts` 的 `textWidth`）：
 
 - 汉字、全角符号和弯引号（ASCII 以外的字）按 1 个字号宽；
 - 拉丁字母、数字、空格和半角符号（U+0020–U+007E）按字体度量：`video/src/style/ascii-advances.json` 是从字体文件的 `hmtx` 表导出的每个字符的步进宽度（字体像素，乘以 字号 ÷ 12 就是屏幕像素），例如 `W` 10、`M` 8、`a` 6、`i` 4。`tools/tests/test_font_metrics.py` 核对这张表和字体文件一致；换字体时要重新导出。
@@ -83,7 +83,7 @@
 
 - 父组件必须是本画面里按格子摆放的组件，**写在子组件前面**（后写的画在上面，子组件才不会被父组件盖住），不能是自己。
 - 子组件的格子必须完全落在父组件的格子里，区间也必须完全落在父组件的区间里（同一帧入场合法）；这时不算重叠。任一条不满足都报错。
-- 子组件不能压住父组件的标签：组件声明里的 `labelArea(props)` 给出标签占的格（相对组件自己的左上角），子组件的格子和它有公共格就报错。不写 `labelArea` 的组件没有要让开的字。每个组件哪里能嵌子组件，见 README「组件目录」里它的小节。
+- 子组件不能压住父组件的标签：组件声明里的 `labelArea(props)` 给出标签占的格（相对组件自己的左上角），子组件的格子和它有公共格就报错。不写 `labelArea` 的组件没有要让开的字。每个组件哪里能嵌子组件，见组件目录里它的详情页的「嵌套」。
 - 例：`知识和意图`（`large`，`at: [4, 1]`）的左上角嵌一个 `复制粘贴源码`（`small`，`at: [4, 1]`，`parent: "intent"`）。
 
 ## 带序号的状态
@@ -99,7 +99,7 @@
   - 例（ep01）：`s01-c03` 里「解耦」「单一职责」通过；`s05-c05` 里「数据库 Schema」和「数据库Schema」都通过；`s02-c02` 里「更容易改，还是更难改？」和「更容易改 还是更难改？」都通过；`s01-c02` 里「提示14」（画面说明「提示14 的标题牌亮起」）通过；`s05-c02` 里「DRY——不要重复自己」报错（旁白句是「DRY，就是不要重复自己。」）。
 - 显示文字不能是空串，去掉标点和空白后是空串也报错。
 - 报错写明第几个画面、第几个组件（id 和组件名）、哪个参数（数组还写第几项）、找不到的那段字，例如 `第 1 个画面 第 1 个组件 props label: 组件 k（PixelBlock）的显示文字「DRY——不要重复自己」不在画面 s05-c02 的画面说明和旁白句里`。
-- **组件不渲染参数以外的固定文字**。比如电脑屏幕上的「ERROR」，也要作为显示文字参数传进去，并且写进画面说明或旁白句。`npm run test` 扫描组件目录里的 `.tsx`（`findFixedText`，`video/src/style/hardcoded.ts`），找出 JSX 里直接写的字（`<b>ERROR</b>`、`{"ERROR"}`）；藏在常量里再引用的字认不出来，靠代码审查。
+- **组件不渲染参数以外的固定文字**。比如电脑屏幕上的「ERROR」，也要作为显示文字参数传进去，并且写进画面说明或旁白句。`npm run test` 扫描 `video/src/components/` 里的 `.tsx`（`findFixedText`，`video/src/style/hardcoded.ts`），找出 JSX 里直接写的字（`<b>ERROR</b>`、`{"ERROR"}`）；藏在常量里再引用的字认不出来，靠代码审查。
 - **强度有限**：这条检查只能挡住原文以外的词，挡不住拼凑。几项各自出自原文的字摆在一起，照样可能拼出原文没有的意思，这要靠审分镜时人看。
 
 ## 音效
@@ -110,7 +110,7 @@
 - **文件**：音效放在 `video/public/sfx/`，每个音效两份文件：`<ID>.wav`（16 位单声道 PCM，44.1 kHz）和生成它的 jsfxr 参数 `<ID>.sfxr.json`，都提交（`.gitignore` 全局忽略 `*.wav`，对这个目录开了例外）。不能放在 `video/public/episode/` 下：配音每次都会删掉那个目录。
 - **生成**：`cd video && npm run sfx` 用 jsfxr（devDependency，固定 1.4.1）的 `sfxr.toWave` 在 Node 里把登记表里每个音效的参数生成成 wav，并打印时长和削波的采样数。只在本机运行，CI 不重新生成。参数是**展开后的完整参数**（波形、包络、频率、音量 `sound_vol`、采样率和采样位数 `sample_size: 16` 都写明），不是预设名：jsfxr 的预设每次随机。新加音效：在登记表里加一项，写好同名的 `.sfxr.json`，再运行 `npm run sfx`。
 - **重新生成不保证逐字节相同**：噪声波形（`wave_type: 3`，现在是 `crash`）生成时用了随机数，重新生成只能做到听感一致；其余波形是确定的。
-- **组件声明的默认音效**：`sounds: { enter, exit, states }`，每个动作、每个状态各写一个音效 ID，或写 `null` 表示不用音效；`states` 必须为每个状态都写一项（少写类型检查会报错）。组件入场时处在初始状态，**只响入场音效**，不响初始状态的音效；之后切回初始状态时才响它。每个组件的默认音效见「组件目录」里它的小节。
+- **组件声明的默认音效**：`sounds: { enter, exit, states }`，每个动作、每个状态各写一个音效 ID，或写 `null` 表示不用音效；`states` 必须为每个状态都写一项（少写类型检查会报错）。组件入场时处在初始状态，**只响入场音效**，不响初始状态的音效；之后切回初始状态时才响它。每个组件的默认音效见组件目录里它的详情页。
 - **规则**：触发上的 `sound` 替换的是这个触发的动作的音效。引用登记表里没有的音效 ID 时报错（报出第几个画面、第几个触发）。动画是 `none` 的入场和退场不放音效，在这样的触发上写音效 ID 也报错（写 `null` 可以）。用到的音效的 wav 不在 `video/public/` 里时，时间轴导出命令（`npm run timeline`）也报错，报出音效 ID 和文件（spec #16 用户故事 30）。同一帧的同一个音效只放一次（#37 定的，`video/src/episode/storyboard.ts` 的 `soundCues` 去重；比如三个知识块同时落下，只响一声 `drop`，不会叠得更响，Studio 预览和成片一致）；同一帧的不同音效都放。
 - **播放**：`planEpisode` 输出音效列表 `sounds`（帧、音效 ID，按帧排序），Episode 和样张页在对应的帧播放（`video/src/sound/SoundCues.tsx`）。时间轴导出命令也把它写进 `timeline.json` 的 `sounds`。
 - **音量**：旁白、音效、配乐的音量常量在 `video/src/style/volume.ts` 的 `VOLUME_DB`，用 dB 写（相对旁白），换算成 Remotion 要的 0–1 线性值 `VOLUME`（以旁白为 1）。现在音效 -12 dB、配乐 -20 dB，到人工关口 3 再调。音效文件本身的峰值在 -6 到 -8 dBFS（`npm run test` 检查每个音效文件是 16 位单声道、有声音、峰值低于 -1 dBFS）。

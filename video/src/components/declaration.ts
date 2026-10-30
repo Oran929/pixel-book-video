@@ -59,12 +59,51 @@ export type ComponentSounds<State extends string = string> = {
   states: Record<State, Sound>;
 };
 
+/**
+ * 组件目录详情页里手写的部分（生成见 catalog.ts）。参数的类型和取值范围、默认动画、
+ * 默认音效、状态名都从声明本身生成，这里只写声明里读不出来的说明。
+ */
+export type ComponentDocs<Props extends z.ZodType = z.ZodType, State extends string = string> = {
+  /** 中文名，例如「知识块」 */
+  title: string;
+  /** 最小可用的分镜调用：按格子摆放的组件写 `at`，连线类组件写 `from`、`to` */
+  example: { id: string; props: z.input<Props>; at?: Cells; from?: string; to?: string };
+  /** 每个参数一句说明 */
+  params: { [Key in keyof z.input<Props>]-?: string };
+  /** 参数表后面的补充（Markdown） */
+  paramNotes?: string;
+  /** 占几格（Markdown）；连线类组件不写，详情页写固定的「不占格子」 */
+  cells?: string;
+  /** 每个状态的说明 */
+  states: Record<State, string>;
+  /** 状态表后面的补充 */
+  stateNotes?: string;
+  /** 入场和退场动画的补充 */
+  animationNotes?: string;
+  /** 哪里能嵌子组件；不写时按有没有 `labelArea` 生成 */
+  nesting?: string;
+  /** 其他细节（Markdown） */
+  notes?: string;
+  /** 样张 `Sample-<组件名>` 演了什么 */
+  sample: string;
+};
+
+/** 组件上的字最多多宽：「216 像素（约 9 个汉字）」，汉字按一个字号宽估算 */
+export const textRoom = (room: number, fontSize: number): string =>
+  `${room} 像素（约 ${Math.floor(room / fontSize)} 个汉字）`;
+
 /** 两种组件声明共有的部分 */
 type DeclarationBase<
   Props extends z.ZodType = z.ZodType,
   State extends string = string,
   Effect extends string = string,
 > = {
+  /** 组件目录里的「效果」：一句话，画面上看到什么（必填，见 `docs/reference/components/index.md`） */
+  effect: string;
+  /** 组件目录里的「适合表达」：一句话或几个关键词（必填） */
+  suitedFor: string;
+  /** 组件目录详情页里手写的说明；登记进注册表的组件都要写（生成组件目录时检查） */
+  docs?: ComponentDocs<NoInfer<Props>, NoInfer<State>>;
   /** 参数格式 */
   props: Props;
   /** 状态清单，第一个是初始状态 */
@@ -140,6 +179,18 @@ type DeclarationInput<Declaration extends DeclarationBase<z.ZodType, State>, Sta
     sounds: Omit<ComponentSounds<State>, "exit"> & { exit?: Sound };
   };
 
+/** 组件目录的两个必填说明字段，缺了或是空白就报错 */
+const CATALOG_FIELDS = { effect: "效果", suitedFor: "适合表达" } as const;
+
+const checkCatalogFields = (input: Partial<Record<keyof typeof CATALOG_FIELDS, unknown>>) => {
+  for (const [field, name] of Object.entries(CATALOG_FIELDS)) {
+    const value = input[field as keyof typeof CATALOG_FIELDS];
+    if (typeof value !== "string" || value.trim() === "") {
+      throw new Error(`组件声明缺「${name}」（${field}）：写一句话，组件目录要用`);
+    }
+  }
+};
+
 /**
  * 登记一个按格子摆放的组件，补上没写的默认值；`cells` 的参数类型从 `props` 推出，
  * `sounds.states` 必须为 `states` 里的每个状态都写一项（少写类型检查会报错）
@@ -154,12 +205,10 @@ export const declareComponent = <
   ...rest
 }: DeclarationInput<PlacedDeclaration<Props, State, Effect>, State> & {
   connector?: false;
-}): PlacedDeclaration<Props, State, Effect> => ({
-  ...rest,
-  exit,
-  connector: false,
-  sounds: { ...sounds, exit: exitSound },
-});
+}): PlacedDeclaration<Props, State, Effect> => {
+  checkCatalogFields(rest);
+  return { ...rest, exit, connector: false, sounds: { ...sounds, exit: exitSound } };
+};
 
 /** 登记一个连线类组件，补上没写的默认值；其余同 `declareComponent` */
 export const declareConnector = <
@@ -174,12 +223,10 @@ export const declareConnector = <
   Props,
   State,
   Effect
-> => ({
-  ...rest,
-  exit,
-  connector: true,
-  sounds: { ...sounds, exit: exitSound },
-});
+> => {
+  checkCatalogFields(rest);
+  return { ...rest, exit, connector: true, sounds: { ...sounds, exit: exitSound } };
+};
 
 /**
  * 显示文字的登记表：登记在这里的参数格式，值会显示在画面上，

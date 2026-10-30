@@ -4,6 +4,8 @@ import {
   ANIMATIONS,
   animationsOf,
   type ComponentDeclaration,
+  declareComponent,
+  declareConnector,
   DISPLAY_TEXT,
   displayTextFields,
   isConnector,
@@ -132,5 +134,38 @@ describe("Mascot 组件的参数", () => {
     [{ character: "reader", scale: 2 }, "多余的参数"],
   ] as [unknown, string][])("不接受 %j（%s）", (props) => {
     expect(schema.safeParse(props).success).toBe(false);
+  });
+});
+
+describe("组件目录的两个必填说明字段", () => {
+  const base = {
+    props: z.strictObject({}),
+    states: ["normal"] as const,
+    enter: "fade" as const,
+    sounds: { enter: null, states: { normal: null } },
+  };
+
+  it.each(Object.keys(COMPONENT_DECLARATIONS))("%s 写了效果和适合表达", (name) => {
+    const declared = COMPONENT_DECLARATIONS[name as keyof typeof COMPONENT_DECLARATIONS];
+    expect(declared.effect.length).toBeGreaterThan(0);
+    expect(declared.suitedFor.length).toBeGreaterThan(0);
+  });
+
+  it.each([
+    [{ suitedFor: "概念" }, "效果"],
+    [{ effect: "一个方块", suitedFor: " " }, "适合表达"],
+  ])("按格子摆放的组件缺字段 %j 时报错，写明缺「%s」", (fields, missing) => {
+    // 绕过类型检查，模拟忘了写
+    const input = { ...base, ...fields, cells: () => [1, 1] } as unknown as Parameters<
+      typeof declareComponent
+    >[0];
+    expect(() => declareComponent(input)).toThrow(missing);
+  });
+
+  it("连线类组件缺字段时也报错", () => {
+    const input = { ...base, effect: "一条线" } as unknown as Parameters<
+      typeof declareConnector
+    >[0];
+    expect(() => declareConnector(input)).toThrow("适合表达");
   });
 });

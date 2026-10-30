@@ -17,6 +17,8 @@ const MANIFEST = {
 
 const DECLARATIONS = {
   Lamp: declareComponent({
+    effect: "测试用",
+    suitedFor: "测试用",
     props: z.strictObject({}),
     states: ["off", "on", "broken"],
     cells: () => [1, 1],
@@ -27,6 +29,8 @@ const DECLARATIONS = {
   }),
   // 自己的特殊效果 flicker 播 1 秒 = 30 帧
   Glow: declareComponent({
+    effect: "测试用",
+    suitedFor: "测试用",
     props: z.strictObject({}),
     states: ["normal"],
     cells: () => [1, 1],
