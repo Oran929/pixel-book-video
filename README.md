@@ -14,16 +14,22 @@ make install
 
 配乐的曲子文件不进 Git，照 `video/public/music/README.md` 补到本机。配音模型第一次用时自动下载（每个约 4 GB），见 [配音模型](docs/reference/voice.md#配音模型)。
 
-## 出一期片子
+## 从零开始出片
 
-仓库里已经有 ep01 的旁白稿和分镜，装完直接出片：
+在 Claude Code 里调用 agent，两条命令：
 
-```sh
-cd tools
-uv run pixelbook render ../books/pragmatic-programmer/ch02/ep01/script.yaml
+```
+/new-book <EPUB 路径> <书>          # 例：/new-book ~/Downloads/xxx.epub pragmatic-programmer
+/episode books/<书>/chNN/epNN       # 也可以写成 /episode <书> chNN epNN
 ```
 
-成片写到 `books/pragmatic-programmer/ch02/ep01/out/pragmatic-programmer-ch02-ep01.mp4`。做新的一期：新书先 `/new-book`，然后 `/episode <期目录>` 一步步做到成片；做到哪一步看 `uv run pixelbook status <期目录>`。
+`/new-book` 建书目录、转换原书、写 `book.yaml`，音色用默认的 tianmei。`/episode` 每一步先跑 `pixelbook status` 判断做到哪了，再调对应的 skill 或命令，到三个人工关口停下来等你：
+
+1. **大纲**：`/outline` 写完整章的大纲。你审过说「通过」，它提交。
+2. **旁白稿和语义核对**：`/script` 写稿、`/factcheck` 逐句核对原文。哪些句子改、怎么改由你决定，你说「定稿」，它定稿并提交。
+3. **成片**：配音、`/storyboard` 写分镜、渲染。你看成片、听新术语的读法，说「通过」，它提交分镜。
+
+每次审完，再输入一次 `/episode <期目录>`，它从停下的地方接着做。进度只看文件，换了对话也能接上。成片在 `<期目录>/out/<书>-chNN-epNN.mp4`。
 
 ## 仓库结构
 
