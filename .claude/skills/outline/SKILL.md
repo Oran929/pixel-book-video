@@ -2,7 +2,6 @@
 name: outline
 description: 读一章的转换结果，写出覆盖整章的大纲（拆期、主题、段、带出处的核心观点），跑 pixelbook outline 直到通过，停在人工关口 1。
 argument-hint: <书> <章>
-disable-model-invocation: true
 ---
 
 # /outline <书> <章>
@@ -10,14 +9,14 @@ disable-model-invocation: true
 参数：`$ARGUMENTS`。`<书>` 是 `books/` 下的书目录名（如 `pragmatic-programmer`）；`<章>` 是 `chNN`，只给数字时补成两位（`2` → `ch02`）。
 
 - **输入**：转换结果 `books/<书>/chapters/chNN.md`。只读它，不读原书、不手改它。
-- **输出**：`books/<书>/chNN/outline.yaml`，覆盖整章；格式和检查规则以 README「大纲」为准。
+- **输出**：`books/<书>/chNN/outline.yaml`，覆盖整章；格式和检查规则以 `docs/reference/outline.md`「大纲」为准。
 - 术语以 `GLOSSARY.md` 为准：章、单元、期、主题、段、原文、出处、大纲。
 
 ## 步骤
 
 ### 1. 准备
 
-- 转换结果不存在时，按 README「原书转换」跑 `pixelbook convert`。
+- 转换结果不存在时，按 `docs/reference/convert.md`「原书转换」跑 `pixelbook convert`。
 - `outline.yaml` 已经存在时，先问用户是从头重写，还是按意见修改现有大纲。
 
 **完成**：转换结果在，并且知道是新写还是修改。

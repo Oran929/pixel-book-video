@@ -36,7 +36,7 @@ def test_manifest_lists_segments_scenes_and_lines_in_order(tmp_path, script_path
         ),
     )
 
-    manifest = json.loads((script_path.parent / "episode.json").read_text())
+    manifest = json.loads((script_path.parent / "out" / "episode.json").read_text())
     assert manifest["title"] == "程序员修炼之道"
     # 只有旁白稿里的段：片尾是 Remotion 一侧的固定动画（#51），配音不再追加片尾段
     assert manifest["segments"] == [
@@ -89,7 +89,7 @@ def test_public_dir_holds_only_this_episode_and_every_audio_exists(
     )
     assert json.loads((public / "episode" / "episode.json").read_text()) == manifest
     assert (public / "episode" / "episode.json").read_text() == (
-        script_path.parent / "episode.json"
+        script_path.parent / "out" / "episode.json"
     ).read_text()
 
 
@@ -120,6 +120,27 @@ def test_audio_file_name_changes_with_its_content(tmp_path, script_path):
     assert first["lines"][1]["audio"] == second["lines"][1]["audio"]
 
 
+def test_voicing_writes_generated_files_only_into_the_out_dir(tmp_path, script_path):
+    # 期目录里只剩内容（旁白稿），合成清单和检查报告都在产物目录 out/（ADR-0013）
+    voice_episode(
+        script_path,
+        VoicingSettings(
+            engine=FakeTtsEngine(),
+            voice=VOICE,
+            public_dir=tmp_path / "public",
+            pronunciation={},
+            verifier=fake_asr_verifier(),
+        ),
+    )
+
+    episode = script_path.parent
+    assert sorted(p.name for p in episode.iterdir()) == ["out", "script.yaml"]
+    assert sorted(p.name for p in (episode / "out").iterdir()) == [
+        "episode.json",
+        "report.json",
+    ]
+
+
 def test_stage_recopies_episode_json_and_leaves_audio_alone(tmp_path, script_path):
     public = tmp_path / "public"
     manifest = voice_episode(
@@ -132,7 +153,7 @@ def test_stage_recopies_episode_json_and_leaves_audio_alone(tmp_path, script_pat
             verifier=fake_asr_verifier(),
         ),
     ).manifest
-    edited = script_path.parent / "episode.json"
+    edited = script_path.parent / "out" / "episode.json"
     edited.write_text(edited.read_text().replace("开场", "序章"))
 
     stage_episode(script_path.parent, public)
@@ -186,7 +207,9 @@ def test_stage_drops_a_stale_storyboard_when_the_episode_has_none(
 
 def test_stage_without_a_manifest_says_to_voice_first(tmp_path):
     with pytest.raises(PipelineError, match="episode.json.*pixelbook voice"):
-        stage_episode(tmp_path / "ep01", tmp_path / "public")
+        stage_episode(
+            tmp_path / "books" / "demo" / "ch01" / "ep01", tmp_path / "public"
+        )
 
 
 def _rejected(script_path, public, text):
@@ -202,7 +225,7 @@ def _rejected(script_path, public, text):
                 verifier=fake_asr_verifier(),
             ),
         )
-    assert not (script_path.parent / "episode.json").exists()
+    assert not (script_path.parent / "out" / "episode.json").exists()
     assert not (public / "episode").exists()
     return str(error.value)
 
@@ -295,14 +318,15 @@ def test_text_over_20_characters_is_rejected(tmp_path, script_path, text):
     assert "21" in message
 
 
-def test_sample_book_script_is_valid(tmp_path):
-    sample = REPO_ROOT / "books" / "sample" / "ch01" / "ep01" / "script.yaml"
-    script_path = tmp_path / "books" / "sample" / "ch01" / "ep01" / "script.yaml"
+def test_the_committed_episode_script_voices_without_new_terms(tmp_path):
+    committed = REPO_ROOT / "books" / "pragmatic-programmer" / "ch02" / "ep01"
+    script_path = tmp_path / "books" / "pragmatic-programmer" / "ch02" / "ep01"
+    script_path = script_path / "script.yaml"
     script_path.parent.mkdir(parents=True)
-    shutil.copyfile(sample, script_path)
+    shutil.copyfile(committed / "script.yaml", script_path)
     table = load_pronunciation(REPO_ROOT / "pronunciation.yaml")
 
-    # 样例旁白稿在仓库的读音表下没有新术语，能正式配音
+    # 仓库里的旁白稿在仓库的读音表下没有新术语，能正式配音
     manifest = voice_episode(
         script_path,
         VoicingSettings(
@@ -314,9 +338,13 @@ def test_sample_book_script_is_valid(tmp_path):
         ),
     ).manifest
 
-    # 正文两段（不再追加片尾段，#51）
-    assert len(manifest["segments"]) == 2
-    assert 6 <= len(manifest["lines"]) <= 8
+    assert [s["id"] for s in manifest["segments"]] == [
+        "s01",
+        "s02",
+        "s03",
+        "s04",
+        "s05",
+    ]
 
 
 # ---- 按句配音缓存（票 05） ----
@@ -869,7 +897,7 @@ def test_failed_first_voicing_writes_no_lock(tmp_path, script_path):
 
 
 def _report(script_path):
-    return json.loads((script_path.parent / "report.json").read_text())
+    return json.loads((script_path.parent / "out" / "report.json").read_text())
 
 
 def _cache_records(script_path):
@@ -1417,7 +1445,7 @@ def test_missing_glyphs_fail_before_voicing_leaving_stage_and_lock_untouched(
         p.relative_to(public): p.read_bytes() for p in public.rglob("*") if p.is_file()
     }
     lock = _lock(script_path).read_text()
-    manifest = (script_path.parent / "episode.json").read_text()
+    manifest = (script_path.parent / "out" / "episode.json").read_text()
 
     script_path.write_text(SCRIPT.replace("它讲怎样写好代码", "它讲𠀀怎样写好代码"))
     engine = FakeTtsEngine()
@@ -1441,7 +1469,7 @@ def test_missing_glyphs_fail_before_voicing_leaving_stage_and_lock_untouched(
         p.relative_to(public): p.read_bytes() for p in public.rglob("*") if p.is_file()
     } == staged
     assert _lock(script_path).read_text() == lock
-    assert (script_path.parent / "episode.json").read_text() == manifest
+    assert (script_path.parent / "out" / "episode.json").read_text() == manifest
 
 
 def test_missing_glyphs_on_the_first_voicing_write_no_lock(tmp_path, script_path):
@@ -1492,5 +1520,5 @@ def test_voicing_returns_the_report_it_writes(tmp_path, script_path):
     assert voiced.report.missing_glyphs is None
     assert voiced.report.to_json() == _report(script_path)
     assert voiced.manifest == json.loads(
-        (script_path.parent / "episode.json").read_text()
+        (script_path.parent / "out" / "episode.json").read_text()
     )

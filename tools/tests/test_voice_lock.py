@@ -10,8 +10,8 @@ from pixelbook.tts import FakeTtsEngine
 from pixelbook.voice import Voice, VoiceConfigError, save_voice_config
 from pixelbook.voice_lock import resolve_book_voice
 
-DEFAULT = Voice(model="base-model", speaker="Vivian", params={"language": "chinese"})
-YUJIE = Voice(model="base-model", speaker="Serena", params={"language": "chinese"})
+DEFAULT = Voice(model="base-model", speaker="Aria", params={"language": "chinese"})
+YUJIE = Voice(model="base-model", speaker="Bella", params={"language": "chinese"})
 
 
 @pytest.fixture
@@ -103,7 +103,7 @@ def test_changing_the_project_default_voice_is_refused_for_a_locked_book(repo):
 
     with pytest.raises(PipelineError) as error:
         _voice(repo)
-    assert "speaker：锁定 Vivian，当前 Ryan" in str(error.value)
+    assert "speaker：锁定 Aria，当前 Ryan" in str(error.value)
 
 
 @pytest.mark.parametrize("change", ["add", "edit"])

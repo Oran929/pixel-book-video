@@ -150,7 +150,7 @@ def test_new_terms_refuse_voicing_and_name_the_lines(episode):
     assert "C++：s01-l03" in message
     # 手写了 speech 的句子不检查
     assert "I/O" not in message
-    assert not (episode.path.parent / "episode.json").exists()
+    assert not (episode.path.parent / "out" / "episode.json").exists()
     assert not (episode.public / "episode").exists()
     assert not (episode.path.parents[2] / "cache").exists()
 

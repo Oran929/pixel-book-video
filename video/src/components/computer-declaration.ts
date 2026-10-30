@@ -3,7 +3,7 @@ import { layoutGrid } from "../style/grid";
 import { FONT_SIZE, SIZE } from "../style/style";
 import { textWidth } from "../style/text-width";
 import { VIDEO } from "../video-config";
-import { declareComponent, displayText } from "./declaration";
+import { declareComponent, displayText, textRoom } from "./declaration";
 
 // 电脑 Computer 的声明、参数格式和尺寸计算（汇总在 declarations.ts）。
 
@@ -79,6 +79,26 @@ export const ComputerProps = z.strictObject({
 });
 
 export const ComputerDeclaration = declareComponent({
+  effect: "一台老式显示器加底座，屏幕上有字，能崩溃成蓝屏也能重启",
+  suitedFor: "电脑、程序出错或崩溃：柯克船长的开场（s04-c01）和 s05-c03 前后呼应",
+  docs: {
+    title: "电脑",
+    example: { id: "computer", props: { screen: ["两条", "自相矛盾的知识"] }, at: [7, 1] },
+    params: {
+      screen: `屏幕上的字，一项一行，可以是空数组（屏幕上没有字）。每行字号 \`${COMPUTER_FONT}\`，最多 ${textRoom(computerLineRoom(), FONT_SIZE[COMPUTER_FONT])}，放不下报错。屏幕上要出现「ERROR」之类的字，也要写进 \`screen\``,
+    },
+    cells: `${COMPUTER_CELLS[0]} 列 × ${COMPUTER_CELLS[1]} 行。`,
+    states: {
+      normal: "深色屏幕绿字，最后一行后面一个光标一亮一灭",
+      crashed:
+        "切过来的 0.8 秒里左右抖动、红白闪屏、冒出花屏横条，之后停在蓝屏，每行字比上一行往下错开一点，横向不动",
+    },
+    stateNotes: "可以从 `crashed` 切回 `normal`（重启）。",
+    nesting: "上面三行格是屏幕（`labelArea`），子组件只能嵌在底座那一行。",
+    notes:
+      "颜色（`COLOR.computer*`）、尺寸（`SIZE.computer*`）、时长（`MOTION.computerCrashSeconds` 等）都在风格表里；提示牌和电脑增补的颜色在风格样张的「用途色」一节里能看到。",
+    sample: "入场、崩溃、重启、退场；三台电脑三种入场和退场动画，最后一台屏幕上没有字。",
+  },
   props: ComputerProps,
   states: COMPUTER_STATES,
   cells: () => COMPUTER_CELLS,

@@ -1,4 +1,4 @@
-"""大纲 `books/<书>/chNN/outline.yaml` 的读取与检查（格式见 README「大纲」）。
+"""大纲 `books/<书>/chNN/outline.yaml` 的读取与检查（格式见 `docs/reference/outline.md`「大纲」）。
 
 结构：章号 `chapter` → 期（`id`、`topic`、`units`、`segments`、`points`）。
 `units` 的每项是单元号，或带段落编号范围的 `{unit, from, to}`（长单元拆成两期时用）；
@@ -76,8 +76,10 @@ class OutlineError(Exception):
     pass
 
 
-def load_outline(path: Path) -> Outline:
-    """只读格式，不看转换结果；格式不对时报第一处错。"""
+def load_outline(path: Path, text: str | None = None) -> Outline:
+    """只读格式，不看转换结果；格式不对时报第一处错。
+
+    `text` 给了时解析它（如 Git 里提交过的版本），`path` 只用来报错。"""
 
     def fail(where: str, field: str, problem: str) -> OutlineError:
         return OutlineError(f"{path}: {where}：`{field}` {problem}")
@@ -167,7 +169,9 @@ def load_outline(path: Path) -> Outline:
             ],
         )
 
-    data = mapping(yaml.safe_load(path.read_text()), "大纲", ["chapter", "episodes"])
+    if text is None:
+        text = path.read_text()
+    data = mapping(yaml.safe_load(text), "大纲", ["chapter", "episodes"])
     return Outline(
         chapter=integer(data, "chapter", "大纲"),
         episodes=[

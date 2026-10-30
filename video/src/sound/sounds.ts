@@ -1,6 +1,6 @@
 // 音效登记表（#37）：音效 ID → 文件（以 `video/public/` 为起点，交给 staticFile）。
 // 纯 .ts、不读文件系统：分镜检查（Node 里的时间轴导出命令）和 Remotion 播放共用这一份导入。
-// 每个音效旁边有一份展开后的 jsfxr 参数 `<ID>.sfxr.json`，由 `npm run sfx` 生成 wav（见 README「音效」）。
+// 每个音效旁边有一份展开后的 jsfxr 参数 `<ID>.sfxr.json`，由 `npm run sfx` 生成 wav（见 `docs/reference/storyboard.md`「音效」）。
 
 /** 音效文件所在的目录（`video/public/` 下）；不能放在 `episode/` 下，配音会删掉那个目录 */
 export const SOUND_DIR = "sfx";

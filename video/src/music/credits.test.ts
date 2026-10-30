@@ -2,7 +2,8 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
-import { CREDITS_FILE, writeCredits } from "./credits";
+import { CREDITS_FILE } from "../episode/out-dir";
+import { writeCredits } from "./credits";
 import type { MusicTrack } from "./tracks";
 
 const CC0: MusicTrack = {

@@ -3,7 +3,7 @@ import { layoutGrid, type Rect } from "../style/grid";
 import { FONT_SIZE, SIZE, snapToGrid } from "../style/style";
 import { textWidth } from "../style/text-width";
 import { VIDEO } from "../video-config";
-import { declareComponent, displayText } from "./declaration";
+import { declareComponent, displayText, textRoom } from "./declaration";
 
 // 岔路 Fork 的声明、参数格式和尺寸计算（汇总在 declarations.ts）。
 
@@ -126,6 +126,36 @@ export const ForkProps = z
   });
 
 export const ForkDeclaration = declareComponent({
+  effect: "一个路口分出几条路，可以把某条路铺成黄色，或在某条路上放下路障",
+  suitedFor: "选择、分岔、哪条路好走：ETC 向导站在分岔口、看不出哪条路好改、整块替换时没有路障",
+  docs: {
+    title: "岔路",
+    example: { id: "fork", props: { roads: 3, labels: ["好改", "难改", "看不出"] }, at: [5, 1] },
+    params: {
+      roads:
+        "几条路，从上往下数，第 1 条在最上面：左边一段路进路口，分岔的竖路往右分出这几条路",
+      labels: `每条路的标签，项数必须等于 \`roads\`；字号 \`${FORK_FONT}\`，写在路障右边，最多 ${textRoom(forkLabelRoom(), FONT_SIZE[FORK_FONT])}，按 \`forkLabelRoom()\` 算，放不下报错。不写就是不带字的路`,
+    },
+    cells: `${FORK_CELLS[0]} 列 × ${FORK_CELLS[1]} 行。`,
+    states: Object.fromEntries(
+      FORK_STATES.map((state) => {
+        const road = forkRoadOf(state);
+        if (!road) return [state, "什么都没有"];
+        return [
+          state,
+          road.kind === "mark"
+            ? `标出第 ${road.road} 条路：路面从路口往右铺成黄色`
+            : `在第 ${road.road} 条路上放路障：红白条纹的路障从上方落下`,
+        ];
+      }),
+    ) as Record<ForkState, string>,
+    stateNotes:
+      "序号不能超过 `roads`（见 `docs/reference/storyboard.md`「带序号的状态」）。一次只处在一个状态：从 `block-N` 切到别的状态就是撤掉路障（路障抬起消失），所以「标出一条路，同时另一条有路障」表现不了，要的话再加状态。动画都用一个通用动画的时长。",
+    nesting: "写了 `labels` 时整块都算标签（`labelArea`），不能嵌子组件；不写字时可以嵌。",
+    notes:
+      "颜色（`COLOR.fork*`）、尺寸（`SIZE.fork*`）在风格表里，风格样张的「用途色」一节能看到。",
+    sample: "四条带字的路逐条标出、逐条放路障、撤掉、退场；两条、三条不带字的路三种入场和退场动画。",
+  },
   props: ForkProps,
   states: FORK_STATES,
   cells: () => FORK_CELLS,

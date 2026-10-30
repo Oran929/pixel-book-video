@@ -1,5 +1,6 @@
-"""片尾音频：tianmei 片尾三句配音 + 8-bit 配乐（人声时压低）+ 音效。时间点读 src/timing.json。
-用法：python3 audio/make_audio.py src/timing.json audio/voice out/outro-audio.wav
+"""片尾音频：tianmei 片尾三句配音 + 8-bit 配乐（人声时压低）+ 音效。时间点读 同目录的 timing.json。
+用法（在仓库根目录）：tools/.venv/bin/python video/src/outro/bye-bye/make_audio.py \
+    video/src/outro/bye-bye/timing.json video/src/outro/bye-bye/voice video/public/outro/bye-bye.wav
 """
 import json
 import math

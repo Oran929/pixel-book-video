@@ -4,9 +4,9 @@
 // 随机数由代码生成，不让模型挑。选好的曲子写进期目录的 `storyboard.json`。
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
+import { STORYBOARD_FILE } from "../episode/out-dir";
 import { MUSIC } from "./tracks";
 
-export const STORYBOARD_FILE = "storyboard.json";
 
 export type MusicPick = {
   /** 选中（或保留）的曲子 ID */

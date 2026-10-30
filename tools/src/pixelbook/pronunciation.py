@@ -11,6 +11,8 @@ import yaml
 from pixelbook.script import Line, Script
 
 # 片段两端不算进片段的半角句读标点
+# 读音表在仓库根目录，所有书共用
+PRONUNCIATION_FILE = "pronunciation.yaml"
 _EDGE_PUNCTUATION = ",.!?:;\"'()"
 _PUNCT = re.escape(_EDGE_PUNCTUATION)
 # 除句读标点以外的 ASCII 可见字符：挨着它们说明还在同一个片段里

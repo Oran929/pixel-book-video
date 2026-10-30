@@ -63,7 +63,7 @@ const files = readdirSync(COMPONENTS_DIR, { recursive: true, encoding: "utf8" })
   .map((name) => name.split(sep).join("/"))
   .sort();
 
-describe("组件目录里没有写死的颜色和尺寸", () => {
+describe("video/src/components/ 里没有写死的颜色和尺寸", () => {
   it("扫描到子目录里的常驻组件", () => {
     expect(files).toEqual(
       expect.arrayContaining([
@@ -80,7 +80,7 @@ describe("组件目录里没有写死的颜色和尺寸", () => {
   });
 });
 
-describe("组件目录里没有写死的显示文字", () => {
+describe("video/src/components/ 里没有写死的显示文字", () => {
   it.each(files)("%s", (name) => {
     const source = readFileSync(new URL(name, COMPONENTS_DIR), "utf8");
     expect(findFixedText(source)).toEqual([]);

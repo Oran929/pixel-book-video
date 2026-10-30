@@ -25,14 +25,14 @@ def test_cloned_voice_round_trips(tmp_path):
 @pytest.mark.parametrize(
     ("content", "field"),
     [
-        ("speaker: Vivian\n", "model"),
+        ("speaker: Aria\n", "model"),
         ("model: m\n", "speaker"),
         ("model: m\nref_audio: voices/a.wav\n", "ref_text"),
-        ("model: m\nspeaker: Vivian\nref_audio: a.wav\nref_text: 你好\n", "speaker"),
+        ("model: m\nspeaker: Aria\nref_audio: a.wav\nref_text: 你好\n", "speaker"),
         ("model: m\ninstruct: 低沉的男声\n", "instruct"),
-        ("model: m\nspeaker: Vivian\nvoice: x\n", "voice"),
+        ("model: m\nspeaker: Aria\nvoice: x\n", "voice"),
         (
-            "model: m\nspeaker: Vivian\nparams:\n  temprature: 0.9\n",
+            "model: m\nspeaker: Aria\nparams:\n  temprature: 0.9\n",
             "params.temprature",
         ),
     ],
