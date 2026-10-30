@@ -85,6 +85,40 @@ def _commit(repo):
     _git(repo, "commit", "-q", "-m", "x")
 
 
+def _books_repo(repo):
+    """项目仓库忽略 books/，books/ 是它自己的书仓库（ADR-0014）。"""
+    _write(repo, ".gitignore", "/books/\n")
+    _commit(repo)
+    books = repo / "books"
+    _git(books, "init", "-q")
+    _git(books, "config", "user.email", "test@example.com")
+    _git(books, "config", "user.name", "test")
+    return books
+
+
+def test_an_outline_committed_to_the_books_repo_passes_gate_1(repo, capsys):
+    books = _books_repo(repo)
+    _outline(repo, commit=False)
+    assert _json(repo, capsys)["stage"] == "outline-review"
+
+    _commit(books)
+
+    result = _json(repo, capsys)
+    assert result["stage"] == "no-script"
+    # 路径仍然相对项目仓库
+    assert result["next"] == [f"/script {EPISODE}"]
+
+
+def test_a_book_ignored_by_the_project_repo_is_an_error(repo, capsys):
+    _write(repo, ".gitignore", "/books/\n")
+    _outline(repo)
+
+    code, out = _status(repo, capsys)
+
+    assert code != 0
+    assert "被 Git 忽略" in out
+
+
 def test_an_uncommitted_outline_waits_at_gate_1(repo, capsys):
     _outline(repo, commit=False)
 

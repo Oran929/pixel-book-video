@@ -1,6 +1,6 @@
 # 像素风书籍讲解视频
 
-把书的一章改编成约 5 分钟、像素风、配音与画面同步的讲解视频。
+本项目可以由用户输入EPUB电子书之后，按章节改编成约 5 分钟的像素风讲解视频。（欢迎clone之后交给你的Agent去调试自己的专属配方）
 
 ![ep01 片段：《程序员修炼之道》第 2 章，知识分到文档、规范、代码和测试](docs/media/ep01.gif)
 
@@ -33,10 +33,11 @@ make install
 
 ## 仓库结构
 
-所有书共用的在 `video/`、`voices/`、`tools/` 和根目录的几份配置里；一本书独有的都在 `books/<书>/` 下。
+所有书共用的在 `video/`、`voices/`、`tools/` 和根目录的几份配置里；一本书独有的都在 `books/<书>/` 下。`books/` 不进这个仓库：它是只在你本机的书仓库，人工关口审过的文件提交在那里（[ADR-0014](docs/adr/0014-own-books-in-local-books-repo.md)）。想先看看做好的一期长什么样，看范例 [examples/books/pragmatic-programmer/](examples/books/pragmatic-programmer/)（第 2 章第 1 期的大纲、旁白稿、语义核对结果和分镜）。
 
 ```
-books/<书>/          一本书独有的：书配置、原书和转换出的章（不提交）、锁定音色、配音缓存；书 → 章（大纲）→ 期，成片在期目录的 out/
+books/<书>/          一本书独有的，只在本机（书仓库）：书配置、原书和转换出的章（不提交）、锁定音色、配音缓存；书 → 章（大纲）→ 期，成片在期目录的 out/
+examples/books/      范例：一期做好的书目录，只有提交的那几份文件，CI 对它跑检查
 video/               共用：Remotion 项目（npm 管理），组件、片头片尾、音效、配乐；合成清单 + 分镜 → MP4
 voices/              共用：音色试听方案（audition.yaml，候选 tianmei、yujie）、参考音频、备用音色配置
 tools/               共用：Python 工具 pixelbook（uv 管理），转换、检查、配音、出片
@@ -48,16 +49,16 @@ verification.yaml    语音识别复核的配置
 
 ## 流程各阶段 → 文档
 
-| 阶段 | skill | 文档 |
-| --- | --- | --- |
-| 转换 | [/new-book](.claude/skills/new-book/SKILL.md) | [原书转换](docs/reference/convert.md) |
-| 大纲 | [/outline](.claude/skills/outline/SKILL.md) | [大纲](docs/reference/outline.md) |
-| 旁白稿 | [/script](.claude/skills/script/SKILL.md) | [旁白稿与检查](docs/reference/script.md) |
-| 语义核对 | [/factcheck](.claude/skills/factcheck/SKILL.md) | [语义核对](docs/reference/factcheck.md) |
-| 新术语 | — | [读音表与新术语](docs/reference/voice.md#读音表与新术语) |
-| 分镜与组件目录 | [/storyboard](.claude/skills/storyboard/SKILL.md) | [分镜](docs/reference/storyboard.md)、[组件目录](docs/reference/components/index.md) |
-| 配音 | — | [配音](docs/reference/voice.md) |
-| 渲染 | [/episode](.claude/skills/episode/SKILL.md) | [出片](docs/reference/render.md)、[进度判断](docs/reference/status.md) |
-| 片头片尾 | — | [片头和片尾](docs/reference/video.md#片头和片尾)、[换片头片尾](docs/how-to/change-bookend.md) |
+| 阶段           | skill                                            | 文档                                                                                        |
+| -------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| 转换           | [/new-book](.claude/skills/new-book/SKILL.md)     | [原书转换](docs/reference/convert.md)                                                        |
+| 大纲           | [/outline](.claude/skills/outline/SKILL.md)       | [大纲](docs/reference/outline.md)                                                            |
+| 旁白稿         | [/script](.claude/skills/script/SKILL.md)         | [旁白稿与检查](docs/reference/script.md)                                                     |
+| 语义核对       | [/factcheck](.claude/skills/factcheck/SKILL.md)   | [语义核对](docs/reference/factcheck.md)                                                      |
+| 新术语         | —                                               | [读音表与新术语](docs/reference/voice.md#读音表与新术语)                                     |
+| 分镜与组件目录 | [/storyboard](.claude/skills/storyboard/SKILL.md) | [分镜](docs/reference/storyboard.md)、[组件目录](docs/reference/components/index.md)          |
+| 配音           | —                                               | [配音](docs/reference/voice.md)                                                              |
+| 渲染           | [/episode](.claude/skills/episode/SKILL.md)       | [出片](docs/reference/render.md)、[进度判断](docs/reference/status.md)                        |
+| 片头片尾       | —                                               | [片头和片尾](docs/reference/video.md#片头和片尾)、[换片头片尾](docs/how-to/change-bookend.md) |
 
 其他不常用的操作（跑检查、在 Studio 里预览、发布、加配乐、加音色等）各一篇，在 [docs/how-to/](docs/how-to/)。

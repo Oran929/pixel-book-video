@@ -17,6 +17,6 @@
    ```
 
    第一期 `--revoice` 更新锁定，之后这本书其他配过的期也要各自再跑一次（锁定已经是 yujie，不用再加 `--revoice`）。
-4. 提交 `book.yaml` 和 `voice.lock`。
+4. 把 `book.yaml` 和 `voice.lock` 提交到书仓库（`git -C books`，见 [ADR-0014](../adr/0014-own-books-in-local-books-repo.md)）。
 
 音色按书锁定的理由见 [ADR-0005](../adr/0005-voice-locked-per-book.md)。

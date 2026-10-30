@@ -318,15 +318,17 @@ def test_text_over_20_characters_is_rejected(tmp_path, script_path, text):
     assert "21" in message
 
 
-def test_the_committed_episode_script_voices_without_new_terms(tmp_path):
-    committed = REPO_ROOT / "books" / "pragmatic-programmer" / "ch02" / "ep01"
+def test_the_example_script_voices_without_new_terms(tmp_path):
+    example = (
+        REPO_ROOT / "examples" / "books" / "pragmatic-programmer" / "ch02" / "ep01"
+    )
     script_path = tmp_path / "books" / "pragmatic-programmer" / "ch02" / "ep01"
     script_path = script_path / "script.yaml"
     script_path.parent.mkdir(parents=True)
-    shutil.copyfile(committed / "script.yaml", script_path)
+    shutil.copyfile(example / "script.yaml", script_path)
     table = load_pronunciation(REPO_ROOT / "pronunciation.yaml")
 
-    # 仓库里的旁白稿在仓库的读音表下没有新术语，能正式配音
+    # 范例的旁白稿在仓库的读音表下没有新术语，能正式配音
     manifest = voice_episode(
         script_path,
         VoicingSettings(

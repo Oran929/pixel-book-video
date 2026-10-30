@@ -10,7 +10,7 @@ disable-model-invocation: true
 参数：`$ARGUMENTS`。`<书>` 是书目录名，英文小写、单词之间用连字符（如 `pragmatic-programmer`）。
 
 - **输入**：一本 EPUB。
-- **输出**：书目录 `books/<书>/`：原书 `source.epub`、转换结果 `chapters/chNN.md`（都不提交）、书配置 `book.yaml`（提交）。
+- **输出**：书目录 `books/<书>/`：原书 `source.epub`、转换结果 `chapters/chNN.md`（都不提交）、书配置 `book.yaml`（提交到书仓库）。
 - **音色**：新书用项目默认音色 `voice.yaml`（tianmei），第一次配音时锁定（[ADR-0005](../../../docs/adr/0005-voice-locked-per-book.md)：音色按书锁定）。这份 skill 不试听、不挑选音色，`book.yaml` 里不写 `voice`。只有用户在对话里明确说这本书用 yujie 时，才写 `voice: voices/yujie.yaml`。
 
 ## 步骤
@@ -39,7 +39,7 @@ cd tools && uv run pixelbook convert ../books/<书>
 
 ### 4. 提交，交给用户
 
-只提交 `book.yaml`。用中文汇报：
+只把 `book.yaml` 提交到书仓库（`git -C books add …` 再 `git -C books commit`，见 ADR-0014）。书仓库是 `books/` 里只在本机的 Git 仓库，项目仓库忽略整个 `books/`；第一次 `convert` 时会建好。用中文汇报：
 
 - 书目录和转换出的章数（`chNN.md` 列表）；
 - `book.yaml` 的内容；
