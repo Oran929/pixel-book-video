@@ -9,19 +9,15 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
-# 原书与转换出的全文（版权内容，不提交）
-books/*/source.*
-books/*/*.epub
-books/*/*.pdf
-books/*/chapters/
+# 自己的书只留在本机，不提交；仓库里的范例在 examples/books/（#68）
+/books/
 
-# 配音缓存与生成的音视频
-books/*/cache/
+# 生成的音视频
 *.wav
 *.mp4
 
 # 期目录的产物目录：命令为这一期生成的全部文件（ADR-0013）
-books/*/*/*/out/
+examples/books/*/*/*/out/
 
 # Remotion 读的这一期文件：`pixelbook stage` 从期目录复制过去
 video/public/episode/

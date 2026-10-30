@@ -7,6 +7,7 @@ from typing import Any
 
 from pixelbook import REPO_ROOT
 from pixelbook.audition import AuditionError, choose_voice, run_audition
+from pixelbook.books_repo import ensure_books_repo
 from pixelbook.check import check_script, check_unjudged, format_report
 from pixelbook.convert import CHAPTERS_DIR, ConvertError, convert_book
 from pixelbook.episode_path import OUT_DIR, EpisodePath, EpisodePathError
@@ -320,6 +321,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"已写入 {REPO_ROOT / 'voice.yaml'}：{chosen}")
         elif args.command == "convert":
             book = args.book.resolve()
+            if ensure_books_repo(book.parent):
+                print(f"建好了书仓库 {book.parent}（只在本机，ADR-0014）")
             written = convert_book(book)
             names = "、".join(path.stem for path in written)
             print(f"{len(written)} 章（{names}），写到 {book / CHAPTERS_DIR}")

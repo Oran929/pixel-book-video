@@ -14,6 +14,8 @@ uv run pixelbook status ../books/pragmatic-programmer/ch02/ep01 --json   # 给 /
 
 ## 阶段
 
+下表的「提交」指提交进书目录所在的 Git 仓库：自己的书是 `books/` 里只在本机的书仓库，范例 `examples/books/` 是项目仓库（[ADR-0014](../adr/0014-own-books-in-local-books-repo.md)）。书目录被所在的仓库忽略时（书仓库还没建），`status` 报错，不会一直停在关口 1。
+
 按下表从上往下判断，停在第一个成立的阶段。
 
 | 阶段 ID | 阶段 | 条件 | 人工关口 | 下一步 |

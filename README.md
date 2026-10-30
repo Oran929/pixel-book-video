@@ -33,10 +33,11 @@ make install
 
 ## 仓库结构
 
-所有书共用的在 `video/`、`voices/`、`tools/` 和根目录的几份配置里；一本书独有的都在 `books/<书>/` 下。
+所有书共用的在 `video/`、`voices/`、`tools/` 和根目录的几份配置里；一本书独有的都在 `books/<书>/` 下。`books/` 不进这个仓库：它是只在你本机的书仓库，人工关口审过的文件提交在那里（[ADR-0014](docs/adr/0014-own-books-in-local-books-repo.md)）。想先看看做好的一期长什么样，看范例 [examples/books/pragmatic-programmer/](examples/books/pragmatic-programmer/)（第 2 章第 1 期的大纲、旁白稿、语义核对结果和分镜）。
 
 ```
-books/<书>/          一本书独有的：书配置、原书和转换出的章（不提交）、锁定音色、配音缓存；书 → 章（大纲）→ 期，成片在期目录的 out/
+books/<书>/          一本书独有的，只在本机（书仓库）：书配置、原书和转换出的章（不提交）、锁定音色、配音缓存；书 → 章（大纲）→ 期，成片在期目录的 out/
+examples/books/      范例：一期做好的书目录，只有提交的那几份文件，CI 对它跑检查
 video/               共用：Remotion 项目（npm 管理），组件、片头片尾、音效、配乐；合成清单 + 分镜 → MP4
 voices/              共用：音色试听方案（audition.yaml，候选 tianmei、yujie）、参考音频、备用音色配置
 tools/               共用：Python 工具 pixelbook（uv 管理），转换、检查、配音、出片

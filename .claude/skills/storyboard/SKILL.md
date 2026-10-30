@@ -104,4 +104,4 @@ cd video && npx remotion still Episode <scratchpad>/<画面 ID>.png --frame=<帧
 - 配乐：曲子 ID、曲名、作者、许可，避开了哪一期的哪首；要署名时附上 `credits.txt` 的路径。
 - 每个画面用了哪些组件，一行一个画面。
 
-用户的意见只改分镜（或用户同意的组件改动），改完从第 5 步跑起，再回到这一步。用户的意见如果是规则问题（怎么选组件、怎么摆、触发怎么挂），先改这份 skill，再按改过的 skill 改分镜。用户说通过时，提交 `storyboard.json`。
+用户的意见只改分镜（或用户同意的组件改动），改完从第 5 步跑起，再回到这一步。用户的意见如果是规则问题（怎么选组件、怎么摆、触发怎么挂），先改这份 skill，再按改过的 skill 改分镜。用户说通过时，把 `storyboard.json` 提交到书仓库（`git -C books add …` 再 `git -C books commit`，见 ADR-0014）。

@@ -11,6 +11,7 @@ from typing import Any
 import yaml
 
 from pixelbook.book import BOOK_CONFIG, load_book_config
+from pixelbook.books_repo import git_root, is_ignored
 from pixelbook.episode_path import ChapterPath, EpisodePath, EpisodePathError
 from pixelbook.outline import Episode, OutlineError, load_outline
 from pixelbook.pronunciation import PRONUNCIATION_FILE
@@ -70,7 +71,10 @@ class Status:
 def episode_status(path: Path) -> Status:
     """`path` 是期目录；不是合法的期目录时抛 StatusError。"""
     episode = _episode(path)
-    root = _repo_root(episode.chapter_dir)
+    # 关口看书目录所在的仓库（自己的书是 books/ 里的书仓库，ADR-0014）；
+    # 读音表、音色配置和显示的路径看项目仓库，即 books/ 的上一级所在的仓库
+    repo = _repo_root(episode.chapter_dir)
+    root = _repo_root(episode.book_dir.parent.parent)
 
     def rel(file: Path) -> str:
         return file.relative_to(root).as_posix()
@@ -86,7 +90,7 @@ def episode_status(path: Path) -> Status:
         return status(
             "not-in-outline", "大纲里没有这一期", next=[f"/outline {book} {chapter}"]
         )
-    if _committed_outline_entry(root, episode.outline, name) != entry:
+    if _committed_outline_entry(repo, episode.outline, name) != entry:
         return status(
             "outline-review",
             "大纲待审",
@@ -147,7 +151,7 @@ def episode_status(path: Path) -> Status:
                 "ready-to-render", "待渲染", next=render, stale=old, rerun_from=step
             )
 
-    if _committed(root, episode.storyboard):
+    if _committed(repo, episode.storyboard):
         return status("done", "已完成")
     credits = f"，配乐署名 {rel(episode.credits)}" if episode.credits.exists() else ""
     return status(
@@ -173,15 +177,15 @@ def _episode(path: Path) -> EpisodePath:
 
 
 def _repo_root(path: Path) -> Path:
-    result = subprocess.run(
-        ["git", "-C", str(path), "rev-parse", "--show-toplevel"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if result.returncode != 0:
+    root = git_root(path)
+    if root is None:
         raise StatusError(f"{path} 不在 Git 仓库里，没法判断大纲审过没有")
-    return Path(result.stdout.strip()).resolve()
+    if is_ignored(path):
+        raise StatusError(
+            f"{path} 被 Git 忽略，提交不了，没法判断审过没有；"
+            "自己的书要在 books/ 的书仓库里（`pixelbook convert` 会建好，见 ADR-0014）"
+        )
+    return root
 
 
 def _committed(root: Path, path: Path) -> bool:
