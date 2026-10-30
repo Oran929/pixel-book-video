@@ -2,7 +2,7 @@
 
 ### 工单追踪
 
-工单放在 GitHub Issues（Oran929/pixel-book-video），用 `gh` CLI 操作。切换前已完成的票留在 `.scratch/` 作历史记录。见 `docs/agents/issue-tracker.md`。
+工单放在 GitHub Issues（Oran929/pixel-book-video），用 `gh` CLI 操作。见 `docs/agents/issue-tracker.md`。
 
 ### 分诊标签
 
