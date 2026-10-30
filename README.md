@@ -14,7 +14,7 @@ make install
 
 配乐的曲子文件不进 Git，照 `video/public/music/README.md` 补到本机。配音模型第一次用时自动下载（每个约 4 GB），见 [配音模型](docs/reference/voice.md#配音模型)。
 
-## 从零开始出片
+## RE：从零开始出片
 
 在 Claude Code 里调用 agent，两条命令：
 
