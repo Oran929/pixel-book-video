@@ -9,14 +9,12 @@ from pixelbook import REPO_ROOT
 from pixelbook.audition import AuditionError, choose_voice, run_audition
 from pixelbook.check import check_script, check_unjudged, format_report
 from pixelbook.convert import CHAPTERS_DIR, ConvertError, convert_book
-from pixelbook.episode_path import EpisodePath, EpisodePathError
+from pixelbook.episode_path import OUT_DIR, EpisodePath, EpisodePathError
 from pixelbook.judge import JudgeError, prompt, record
 from pixelbook.mix import MixError, mix_timeline
 from pixelbook.music_check import MusicSchedule, check_music
 from pixelbook.outline import OutlineError, check_outline, format_warnings, unit_table
 from pixelbook.pipeline import (
-    MANIFEST_NAME,
-    REPORT_NAME,
     SUBTITLE_FONT,
     AsrReportEntry,
     PipelineError,
@@ -25,9 +23,14 @@ from pixelbook.pipeline import (
     stage_episode,
     voice_episode,
 )
-from pixelbook.pronunciation import PronunciationError, load_pronunciation
+from pixelbook.pronunciation import (
+    PRONUNCIATION_FILE,
+    PronunciationError,
+    load_pronunciation,
+)
 from pixelbook.render import RenderError, render_episode, render_music_stem
 from pixelbook.script import ScriptError
+from pixelbook.status import StatusError, episode_status
 from pixelbook.sync_minutes import sync_minutes
 from pixelbook.term_audition import audition_terms
 from pixelbook.verification import (
@@ -39,10 +42,9 @@ from pixelbook.voice import Voice, VoiceConfigError
 from pixelbook.voice_lock import resolve_book_voice
 
 AUDITION_PLAN = REPO_ROOT / "voices" / "audition.yaml"
-AUDITION_OUT = REPO_ROOT / "out" / "audition"
+AUDITION_OUT = REPO_ROOT / "voices" / "audition"
 VIDEO_PUBLIC = REPO_ROOT / "video" / "public"
-PRONUNCIATION = REPO_ROOT / "pronunciation.yaml"
-TERMS_OUT = REPO_ROOT / "out" / "terms"
+PRONUNCIATION = REPO_ROOT / PRONUNCIATION_FILE
 VERIFICATION = REPO_ROOT / "verification.yaml"
 
 
@@ -187,7 +189,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     render.add_argument("script", type=Path, help="books/<书>/<章>/<期>/script.yaml")
     render.add_argument(
-        "--out", type=Path, help="MP4 写到哪里，默认 out/<书>-<章>-<期>.mp4"
+        "--out", type=Path, help="MP4 写到哪里，默认期目录的 out/<书>-<章>-<期>.mp4"
     )
     render.add_argument(
         "--revoice",
@@ -216,7 +218,9 @@ def main(argv: list[str] | None = None) -> int:
         "terms", help="为一期旁白稿的每个新术语生成一段试听音频（书的音色）"
     )
     terms.add_argument("script", type=Path, help="books/<书>/<章>/<期>/script.yaml")
-    terms.add_argument("--out", type=Path, default=TERMS_OUT)
+    terms.add_argument(
+        "--out", type=Path, help="试听音频写到哪里，默认期目录的 out/terms/"
+    )
 
     stage = commands.add_parser(
         "stage", help="只把期目录里的合成清单和分镜复制到 video/public/（不重新配音）"
@@ -230,12 +234,12 @@ def main(argv: list[str] | None = None) -> int:
     mix.add_argument(
         "timeline",
         type=Path,
-        help="`npm run timeline` 导出的 timeline.json（通常在期目录里）",
+        help="`npm run timeline` 导出的 timeline.json（通常在期目录的 out/ 里）",
     )
     mix.add_argument(
         "--out",
         type=Path,
-        help="试听音轨写到哪里，默认 out/mix/<书>-<章>-<期>.wav",
+        help="试听音轨写到哪里，默认期目录的 out/mix.wav",
     )
 
     convert = commands.add_parser(
@@ -297,6 +301,13 @@ def main(argv: list[str] | None = None) -> int:
         "只有用户能授权",
     )
 
+    status = commands.add_parser(
+        "status",
+        help="只看文件判断一期做到哪一步、对应哪个人工关口、下一步跑什么（阶段见 docs/reference/status.md）",
+    )
+    status.add_argument("episode", type=Path, help="books/<书>/<章>/<期>/")
+    status.add_argument("--json", action="store_true", help="输出机器可读的 JSON")
+
     args = parser.parse_args(argv)
     try:
         if args.command == "audition":
@@ -341,6 +352,12 @@ def main(argv: list[str] | None = None) -> int:
                     user_edited=args.user_edited,
                 )
             )
+        elif args.command == "status":
+            result = episode_status(args.episode.resolve())
+            if args.json:
+                print(json.dumps(result.to_json(), ensure_ascii=False, indent=2))
+            else:
+                print(result.to_text())
         elif args.command == "render":
             return _render(args.script.resolve(), args.out, args.revoice, args.draft)
         elif args.command == "music-trial":
@@ -350,14 +367,15 @@ def main(argv: list[str] | None = None) -> int:
             voiced = voice_episode(
                 script, _voicing_settings(script, args.revoice), draft=args.draft
             )
+            episode = EpisodePath.from_script(script)
             manifest = voiced.manifest
             total = sum(line["seconds"] for line in manifest["lines"])
             print(
                 f"{len(manifest['lines'])} 句，配音共 {total:.1f} 秒（不含停顿）；"
-                f"合成清单 {args.script.parent / MANIFEST_NAME}，"
+                f"合成清单 {episode.manifest}，"
                 f"已复制到 {VIDEO_PUBLIC / 'episode'}"
             )
-            _print_asr_report(voiced.report, script.parent / REPORT_NAME)
+            _print_asr_report(voiced.report, episode.report)
         elif args.command == "terms":
             table = load_pronunciation(PRONUNCIATION)
             script = args.script.resolve()
@@ -365,13 +383,12 @@ def main(argv: list[str] | None = None) -> int:
             book_voice = _book_voice(script)
             from pixelbook.qwen_tts import QwenTtsEngine
 
-            results = audition_terms(
-                script, table, QwenTtsEngine(), book_voice, args.out
-            )
+            out = args.out or EpisodePath.from_script(script).terms_dir
+            results = audition_terms(script, table, QwenTtsEngine(), book_voice, out)
             if not results:
                 print("没有新术语，可以直接 `pixelbook voice`")
             else:
-                print(f"{len(results)} 个新术语，试听音频在 {args.out}：")
+                print(f"{len(results)} 个新术语，试听音频在 {out}：")
                 for item in results:
                     print(
                         f"  {item['file'].name:<24} {item['term']}"
@@ -380,11 +397,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"听完把读法写进 {PRONUNCIATION}（读法不变就写成 `术语: 术语`）")
         elif args.command == "mix":
             timeline = args.timeline.resolve()
-            # timeline.json 在期目录里
-            out = (
-                args.out
-                or REPO_ROOT / "out" / "mix" / f"{EpisodePath(timeline.parent).id}.wav"
-            ).resolve()
+            out = (args.out or _default_mix(timeline)).resolve()
             seconds = mix_timeline(timeline, VIDEO_PUBLIC, out)
             print(f"试听音轨 {out}：{seconds:.2f} 秒")
         else:
@@ -398,6 +411,7 @@ def main(argv: list[str] | None = None) -> int:
         MixError,
         OutlineError,
         ScriptError,
+        StatusError,
         PipelineError,
         PronunciationError,
         VerificationConfigError,
@@ -408,16 +422,30 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+def _default_mix(timeline: Path) -> Path:
+    """时间轴在期目录或它的 out/ 里时，试听音轨默认写到这一期的 out/mix.wav。"""
+    episode_dir = timeline.parent
+    if episode_dir.name == OUT_DIR:
+        episode_dir = episode_dir.parent
+    try:
+        return EpisodePath(episode_dir).mix
+    except EpisodePathError:
+        raise MixError(
+            f"{timeline} 不在期目录 books/<书>/<章>/<期>/ 或它的 out/ 里，"
+            "推不出试听音轨写到哪里：用 --out 指定"
+        ) from None
+
+
 def _music_trial(script: Path, draft: bool, storyboard: Path | None) -> int:
-    """出片到 out/<期>.mp4，配乐声轨到 out/<期>-music.wav，然后检查配乐
-    （参照写在 out/<期>-music-reference.wav）。
+    """出片到期目录的 out/<书>-<章>-<期>.mp4，配乐声轨到同一目录的
+    <书>-<章>-<期>-music.wav，然后检查配乐（参照写在它旁边的 -music-reference.wav）。
 
     给了 `storyboard` 时，出片期间临时换上这份分镜，结束后把期目录里的分镜恢复原样
     （原来没有就删掉）。
     """
     if storyboard is None:
         return _run_music_trial(script, draft)
-    target = script.parent / "storyboard.json"
+    target = EpisodePath.from_script(script).storyboard
     original = target.read_bytes() if target.exists() else None
     target.write_bytes(storyboard.read_bytes())
     try:
@@ -430,9 +458,8 @@ def _music_trial(script: Path, draft: bool, storyboard: Path | None) -> int:
 
 
 def _run_music_trial(script: Path, draft: bool) -> int:
-    episode_id = EpisodePath.from_script(script).id
-    mp4 = REPO_ROOT / "out" / f"{episode_id}.mp4"
-    stem = REPO_ROOT / "out" / f"{episode_id}-music.wav"
+    episode = EpisodePath.from_script(script)
+    mp4, stem = episode.video, episode.music_stem
     if _render(script, mp4, revoice=False, draft=draft) != 0:
         return 1
     try:
@@ -440,7 +467,7 @@ def _run_music_trial(script: Path, draft: bool) -> int:
     except RenderError as error:
         print(error)
         return 1
-    timeline = json.loads((script.parent / "timeline.json").read_text())
+    timeline = json.loads(episode.timeline.read_text())
     if timeline.get("music") is None:
         print("这一期没有分镜（或分镜没写 music），没有配乐可查")
         return 1
@@ -467,9 +494,7 @@ def _run_music_trial(script: Path, draft: bool) -> int:
 
 
 def _render(script: Path, out: Path | None, revoice: bool, draft: bool) -> int:
-    out = (
-        out or REPO_ROOT / "out" / f"{EpisodePath.from_script(script).id}.mp4"
-    ).resolve()
+    out = (out or EpisodePath.from_script(script).video).resolve()
     try:
         try:
             settings = _voicing_settings(script, revoice)

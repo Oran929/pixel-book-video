@@ -3,7 +3,7 @@ import { layoutGrid } from "../style/grid";
 import { FONT_SIZE, MOTION, SIZE } from "../style/style";
 import { textWidth } from "../style/text-width";
 import { VIDEO } from "../video-config";
-import { declareComponent, displayText } from "./declaration";
+import { declareComponent, displayText, textRoom } from "./declaration";
 
 // 提示牌 HintSign 的声明、参数格式和尺寸计算（汇总在 declarations.ts）。
 
@@ -57,6 +57,23 @@ export const HintSignProps = z
   });
 
 export const HintSignDeclaration = declareComponent({
+  effect: "书里的提示框：橙色标题牌写「提示」和编号，下面是大号的提示标题，入场时闪一下亮起",
+  suitedFor: "书里的某条提示（「提示14 ETC」）",
+  docs: {
+    title: "提示牌",
+    example: { id: "tip", props: { label: "提示", number: "14", title: "ETC" }, at: [1, 1] },
+    params: {
+      label: `标题牌上编号前的字（字号 \`${HINT_FONT.header}\`）。「提示」两个字也由它传入，组件里不写死`,
+      number: '提示的编号，字符串，例如 `"14"`；画面说明里写了「提示14」才能用',
+      title: `下面的大号提示标题（字号 \`${HINT_FONT.title}\`，单行）`,
+    },
+    paramNotes: `标题和标题牌最多 ${textRoom(hintTextRoom(), FONT_SIZE[HINT_FONT.title])}，放不下报错。这个宽度是格子宽减去两侧粗描边、硬阴影偏移和两侧内边距，汉字数按大号字算。`,
+    cells: `${HINT_CELLS[0]} 列 × ${HINT_CELLS[1]} 行。`,
+    states: { normal: "只有这一个状态" },
+    animationNotes: `入场默认是它自己的特殊效果 \`light\`（亮起，\`MOTION.hintLightSeconds\` ${MOTION.hintLightSeconds} 秒）：牌子先是暗的（\`COLOR.hintUnlit\`），闪一下、灭掉，从一半起亮住，外面扩出一圈黄光（\`COLOR.hintGlow\`）后消失。退场写 \`animation: "light"\` 时倒着播，即熄灭。`,
+    nesting: "整块都是字（`labelArea` 是整块），不能嵌子组件。",
+    sample: "亮起、亮着、熄灭；三块提示牌三种入场和退场动画。",
+  },
   props: HintSignProps,
   states: ["normal"],
   cells: () => HINT_CELLS,

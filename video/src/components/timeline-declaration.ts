@@ -3,7 +3,7 @@ import { layoutGrid } from "../style/grid";
 import { FONT_SIZE, SIZE, snapToGrid } from "../style/style";
 import { textWidth } from "../style/text-width";
 import { VIDEO } from "../video-config";
-import { declareComponent, displayText } from "./declaration";
+import { declareComponent, displayText, textRoom } from "./declaration";
 
 // 时间线 Timeline 的声明、参数格式和尺寸计算（汇总在 declarations.ts）。
 
@@ -93,6 +93,28 @@ export const TimelineProps = z.strictObject({
 });
 
 export const TimelineDeclaration = declareComponent({
+  effect: "一条横轴加几个带字的节点，节点从左往右逐个点亮",
+  suitedFor: "先后顺序、进度：开发时间线、工程日志",
+  docs: {
+    title: "时间线",
+    example: { id: "timeline", props: { nodes: ["起点", "开发过程", "发布"] }, at: [3, 2] },
+    params: {
+      nodes: `节点下面的字，从左往右一项一个节点。字号 \`${TIMELINE_FONT}\`，每项最多 ${textRoom(timelineLabelRoom(), FONT_SIZE[TIMELINE_FONT])}，按 \`timelineLabelRoom()\` 算，放不下报错`,
+    },
+    cells: `每个节点 ${TIMELINE_NODES.columns} 列，所以 \`${TIMELINE_NODES.columns} × 节点数\` 列 × 2 行（上一行横轴和节点，下一行字）。`,
+    states: Object.fromEntries(
+      TIMELINE_STATES.map((state) => {
+        const lit = timelineLitOf(state);
+        return [state, lit === 0 ? "一个都没点亮" : `点亮了前 ${lit} 个节点`];
+      }),
+    ) as Record<TimelineState, string>,
+    stateNotes:
+      "序号不能超过节点数（见 `docs/reference/storyboard.md`「带序号的状态」）。从点亮较少的状态切到 `lit-N` 时，横轴从上次亮到的地方沿着往右亮过去（每多一个节点多 0.4 秒），亮光走到的节点变黄、字变深；熄灭（切到较少的 `lit-N` 或 `normal`）是一下子变的。",
+    nesting: "下一行是字（`labelArea`），子组件只能嵌在横轴那一行。",
+    notes:
+      "颜色（`COLOR.timeline*`）、尺寸（`SIZE.timeline*`）在风格表里，风格样张的「用途色」一节能看到。",
+    sample: "六个节点逐个点亮、全部熄灭、一口气点亮、退场；三条两节点的时间线三种入场和退场动画。",
+  },
   props: TimelineProps,
   states: TIMELINE_STATES,
   cells: ({ nodes }) => timelineCells(nodes.length),

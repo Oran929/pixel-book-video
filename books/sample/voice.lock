@@ -1,8 +1,0 @@
-# 锁定音色（ADR-0005）：这本书第一次正式配音时写入，提交到 git。
-# 不要手改；要换音色，用 `pixelbook voice <旁白稿> --revoice` 整本书重新配音。
-model: mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16
-ref_audio: voices/tianmei.wav
-ref_audio_sha256: 48d03888a29d9a5aa4687b53494a60a664d0a1a95faf60810c0852fe0e62b5c6
-ref_text: 今天我们一起读一本书，看看作者是怎样一步一步，把一个复杂的问题讲清楚的。
-params:
-  language: chinese

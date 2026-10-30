@@ -17,6 +17,8 @@ const MANIFEST = JSON.parse(
 
 const DECLARATIONS: ComponentDeclarations = {
   Sign: declareComponent({
+    effect: "测试用",
+    suitedFor: "测试用",
     props: z.strictObject({
       text: displayText(z.string()),
       items: displayText(z.array(z.string())).optional(),

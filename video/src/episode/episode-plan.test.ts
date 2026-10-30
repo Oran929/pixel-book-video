@@ -144,6 +144,8 @@ describe("planEpisode", () => {
 // 假的组件声明：只关心状态和默认动画
 const DECLARATIONS = {
   Lamp: declareComponent({
+    effect: "测试用",
+    suitedFor: "测试用",
     props: z.strictObject({}),
     states: ["off", "on", "broken"],
     cells: () => [1, 1],
@@ -331,6 +333,8 @@ describe("planEpisode: enter, exit and state", () => {
 // 假的组件声明：占几格由参数 `w`、`h` 决定
 const BOXES = {
   Box: declareComponent({
+    effect: "测试用",
+    suitedFor: "测试用",
     props: z.strictObject({ w: z.number().int(), h: z.number().int() }),
     states: ["normal"],
     cells: ({ w, h }) => [w, h],
@@ -575,6 +579,8 @@ describe("planEpisode: knowledge block color and states", () => {
 // 假的组件声明：每个动作、每个状态都有不同的默认音效，便于分辨响的是哪一个
 const NOISY = {
   Lamp: declareComponent({
+    effect: "测试用",
+    suitedFor: "测试用",
     props: z.strictObject({}),
     states: ["off", "on", "broken"],
     cells: () => [1, 1],
@@ -588,6 +594,8 @@ const NOISY = {
     },
   }),
   Quiet: declareComponent({
+    effect: "测试用",
+    suitedFor: "测试用",
     props: z.strictObject({}),
     states: ["normal"],
     cells: () => [1, 1],
@@ -822,6 +830,8 @@ describe("planEpisode: music", () => {
 const LINKED = {
   ...BOXES,
   Link: declareConnector({
+    effect: "测试用",
+    suitedFor: "测试用",
     props: z.strictObject({}),
     states: ["normal"],
     enter: "fade",
@@ -1047,6 +1057,8 @@ describe("planEpisode: a component nested in a corner of its parent", () => {
 const EFFECTS = {
   ...DECLARATIONS,
   Glow: declareComponent({
+    effect: "测试用",
+    suitedFor: "测试用",
     props: z.strictObject({}),
     states: ["normal"],
     cells: () => [1, 1],

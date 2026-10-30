@@ -9,6 +9,7 @@
     "test": "vitest run",
     "render": "remotion render Episode",
     "timeline": "tsx src/episode/timeline-cli.ts",
+    "catalog": "tsx src/components/catalog-cli.ts",
     "sfx": "tsx src/sound/generate-sfx.ts",
     "music:intake": "tsx src/music/intake-music.ts",
     "music:seams": "tsx src/music/check-seams.ts",

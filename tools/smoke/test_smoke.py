@@ -9,7 +9,7 @@
 三个方块同时入场、各放一个音效时不削波。
 真实 TTS 和语音识别换成假引擎（静音 wav），不加载任何模型；验证的是渲染管线和
 时长，不是音质。仓库根目录、Remotion 静态目录都换成临时目录：旁白稿、配音缓存、
-锁定音色和 MP4 都在里面，不碰 `books/`、`video/public/episode/` 和 `out/`。
+锁定音色和 MP4 都在里面，不碰 `books/` 和 `video/public/episode/`。
 """
 
 import json
@@ -44,7 +44,7 @@ def repo(tmp_path, monkeypatch):
     monkeypatch.setattr("pixelbook.qwen_tts.QwenTtsEngine", FakeTtsEngine)
     monkeypatch.setattr("pixelbook.mlx_asr.MlxAsrEngine", lambda name: FakeAsrEngine())
     save_voice_config(
-        Voice(model="fake-model", speaker="Vivian"), tmp_path / "voice.yaml"
+        Voice(model="fake-model", speaker="Aria"), tmp_path / "voice.yaml"
     )
     (tmp_path / "pronunciation.yaml").write_text("{}\n")
     (tmp_path / "verification.yaml").write_text(
@@ -103,10 +103,11 @@ def test_fixed_sample_renders_with_the_computed_number_of_frames(repo, capsys):
     assert cli.main(["render", str(episode / "script.yaml")]) == 0
 
     out = capsys.readouterr().out
-    mp4 = repo / "out" / "smoke-ch01-ep01.mp4"
+    # 成片写进期目录的产物目录，文件名保留完整 ID（ADR-0013）
+    mp4 = episode / "out" / "smoke-ch01-ep01.mp4"
     assert f"成片 {mp4}" in out
     assert "复核未通过：无" in out
-    timeline = json.loads((episode / "timeline.json").read_text())
+    timeline = json.loads((episode / "out" / "timeline.json").read_text())
     # 最前面是项目配置选的片头（#50，422 帧），最后是片尾（#51，324 帧）。
     # 假 TTS 每字 0.2 秒：正文 4 句共 30 字 = 6 秒；停顿 0.5（分镜覆盖）+ 0.3（同画面）
     # + 0.8（换画面）= 1.6 秒；正文 7.6 秒，30fps 约 228 帧（逐句取整到整帧）。
@@ -129,7 +130,7 @@ def test_fixed_sample_renders_with_the_computed_number_of_frames(repo, capsys):
         in out
     )
     # 打点时间表从 00:00 的片头开始，不列片尾（每期都一样）
-    assert (episode / "segments.txt").read_text().splitlines() == [
+    assert (episode / "out" / "segments.txt").read_text().splitlines() == [
         "00:00 片头",
         "00:14 开场",
         "00:19 结尾",
@@ -174,7 +175,7 @@ def test_fixed_sample_renders_with_the_computed_number_of_frames(repo, capsys):
         total,
         fps,
         public,
-        repo / "out" / "smoke-music-reference.wav",
+        episode / "out" / "smoke-music-reference.wav",
     )
     reference = frame_levels(reference_wav, fps)[:body_end]
     assert sound_problems(mix[:body_end], reference, [s["frame"] for s in sounds]) == []

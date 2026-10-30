@@ -19,7 +19,7 @@ export type MusicTrack = {
   license: string;
   /**
    * 署名：CC-BY 必填，一行，照作品页的署名要求写（曲名、作者、作品页、许可），
-   * 用了这首的那一期在期目录里写出 `credits.txt`（#52）；CC0 不写
+   * 用了这首的那一期在期目录的 `out/` 里写出 `credits.txt`（#52）；CC0 不写
    */
   credit?: string;
   /** 在作品页上核对许可的日期 */

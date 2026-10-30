@@ -1,4 +1,4 @@
-"""语义核对结果 `factcheck.yaml` 的读写（格式见 README「语义核对」，ADR-0008）。
+"""语义核对结果 `factcheck.yaml` 的读写（格式见 `docs/reference/factcheck.md`「语义核对」，ADR-0008）。
 
 由 `pixelbook factcheck-record` 写出（`write_factcheck`）：第几轮核对 `round`，以及每个旁白句
 一条记录 `CheckedLine`：核对时的字幕 `text`、出处 `cite`（旁白句有 `speech` 时还有它），和裁判的

@@ -8,6 +8,8 @@ import { COMPONENT_DECLARATIONS } from "../../components/declarations";
 const FILLER = "TestFiller";
 
 const FILLER_DECLARATION = declareComponent({
+  effect: "测试用",
+  suitedFor: "测试用",
   props: z.strictObject({}),
   states: ["idle"],
   cells: () => [1, 1],

@@ -33,6 +33,8 @@ const MANIFEST: EpisodeManifest = {
 // 假的组件声明：只关心组件名和参数格式
 const COMPONENTS = {
   Box: declareComponent({
+    effect: "测试用",
+    suitedFor: "测试用",
     props: z.object({ label: z.string() }),
     states: ["normal"],
     cells: () => [1, 1],
