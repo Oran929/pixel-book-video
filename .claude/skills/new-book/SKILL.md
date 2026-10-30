@@ -27,13 +27,13 @@ disable-model-invocation: true
 cd tools && uv run pixelbook convert ../books/<书>
 ```
 
-规则和报错的处理见 README「原书转换」：报错时先在 `tools/src/pixelbook/convert.py` 里补规则（测试先行），再重新转换。
+规则和报错的处理见 `docs/reference/convert.md`「原书转换」：报错时先在 `tools/src/pixelbook/convert.py` 里补规则（测试先行），再重新转换。
 
 **完成**：退出码 0，`books/<书>/chapters/` 里有每章的 `chNN.md`。
 
 ### 3. 写书配置
 
-按 README「书的音色与锁定」写 `books/<书>/book.yaml`：书名 `title`、作者 `author`、出版社 `publisher`，取自 EPUB 里 OPF 的 `dc:title`、`dc:creator`、`dc:publisher`；读不到的字段省略。`voice` 只在用户明确指定 yujie 时写。
+按 `docs/reference/voice.md`「书的音色与锁定」写 `books/<书>/book.yaml`：书名 `title`、作者 `author`、出版社 `publisher`，取自 EPUB 里 OPF 的 `dc:title`、`dc:creator`、`dc:publisher`；读不到的字段省略。`voice` 只在用户明确指定 yujie 时写。
 
 **完成**：`book.yaml` 写好；`books/<书>/voice.lock` 不存在（第一次配音时才写）。
 

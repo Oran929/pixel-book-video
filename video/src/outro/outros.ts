@@ -1,4 +1,4 @@
-// 片尾登记表（#51）：ID → 标题、帧数、音轨。换片尾的步骤见 README「片头和片尾」。
+// 片尾登记表（#51）：ID → 标题、帧数、音轨。换片尾的步骤见 docs/how-to/change-bookend.md「换片头片尾」。
 import { defineBookendLibrary } from "../bookend/library";
 import byeBye from "./bye-bye/timing.json";
 

@@ -1,5 +1,5 @@
 // 片尾（#51）：用户定稿的作品，原样搬进来，只为类型检查（noUncheckedIndexedAccess）加了非空断言 `!`。
-// 配色、尺寸、时间点都是用户定的，不按组件规则改；说明见 README「片头和片尾」。
+// 配色、尺寸、时间点都是用户定的，不按组件规则改；说明见 docs/reference/video.md「片头和片尾」。
 import React from "react";
 import { AbsoluteFill, Easing, Img, interpolate, random, staticFile, useCurrentFrame } from "remotion";
 import T from "./timing.json";

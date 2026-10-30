@@ -17,7 +17,7 @@ disable-model-invocation: true
 
 ### 1. 准备
 
-- 转换结果不存在时，按 README「原书转换」跑 `pixelbook convert`。
+- 转换结果不存在时，按 `docs/reference/convert.md`「原书转换」跑 `pixelbook convert`。
 - `outline.yaml` 已经存在时，先问用户是从头重写，还是按意见修改现有大纲。
 
 **完成**：转换结果在，并且知道是新写还是修改。
